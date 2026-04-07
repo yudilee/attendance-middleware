@@ -314,17 +314,21 @@
         <!-- Create New User & User List -->
         <div style="display: flex; flex-direction: column; gap: 1.5rem;">
             <div class="card">
-                <div class="card-title">Create Admin User</div>
+                <div class="card-title" id="userFormTitle">Create Admin User</div>
                 <form id="newUserForm" style="display: flex; gap: 1rem; align-items: flex-end; margin-top: 1rem;">
+                    <input type="hidden" id="edit_user_id" value="">
                     <div class="form-group" style="margin: 0; flex: 1;">
                         <label>Username</label>
                         <input type="text" id="new_user_name" placeholder="manager1" required>
                     </div>
                     <div class="form-group" style="margin: 0; flex: 1;">
                         <label>Password</label>
-                        <input type="password" id="new_user_pwd" placeholder="••••••••" required>
+                        <input type="password" id="new_user_pwd" placeholder="Leave blank to keep" required>
                     </div>
-                    <button type="button" onclick="createUser()">Add</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="button" id="saveUserBtn" onclick="saveUser()">Add</button>
+                        <button type="button" id="cancelUserEditBtn" onclick="cancelUserEdit()" style="display: none; background: #64748b; color: white;">Cancel</button>
+                    </div>
                 </form>
             </div>
 
@@ -606,38 +610,75 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
     }
 
     // ── Admin User Management ──────────────────────────────────────────────────
+    let currentUsers = [];
+
     async function loadUsers() {
         const res = await fetch('/ui/users');
-        const users = await res.json();
+        currentUsers = await res.json();
         const tbody = document.getElementById('usersTableBody');
-        tbody.innerHTML = users.map(u => `
+        tbody.innerHTML = currentUsers.map(u => `
             <tr>
                 <td><strong>${u.username}</strong></td>
                 <td style="font-size:0.8rem;color:var(--text-muted);">${new Date(u.created_at).toLocaleDateString()}</td>
                 <td style="text-align:right;">
+                    <button class="btn-danger-sm" style="background:#e0e7ff; color:#4338ca; border-color:#c7d2fe;" onclick="editUser(${u.id})">Edit</button>
                     ${u.username !== 'admin' ? `<button class="btn-danger-sm" onclick="deleteUser(${u.id})">Delete</button>` : '<span style="font-size:0.75rem; color:var(--text-muted);">Root User</span>'}
                 </td>
             </tr>`).join('');
     }
 
-    async function createUser() {
-        const username = document.getElementById('new_user_name').value.trim();
-        const pwd = document.getElementById('new_user_pwd').value;
-        if (!username || pwd.length < 5) {
-            notify('Need username and >=5 char password', 'error'); return;
+    function editUser(id) {
+        const user = currentUsers.find(u => u.id === id);
+        if (!user) return;
+        
+        document.getElementById('edit_user_id').value = user.id;
+        document.getElementById('new_user_name').value = user.username;
+        document.getElementById('new_user_pwd').value = '';
+        document.getElementById('new_user_pwd').placeholder = 'Keep blank to stay same';
+        
+        document.getElementById('userFormTitle').innerText = 'Edit Admin User';
+        document.getElementById('cancelUserEditBtn').style.display = 'inline-block';
+        document.getElementById('saveUserBtn').innerText = 'Save';
+    }
+
+    function cancelUserEdit() {
+        document.getElementById('edit_user_id').value = '';
+        document.getElementById('newUserForm').reset();
+        document.getElementById('new_user_pwd').placeholder = '••••••••';
+        document.getElementById('userFormTitle').innerText = 'Create Admin User';
+        document.getElementById('cancelUserEditBtn').style.display = 'none';
+        document.getElementById('saveUserBtn').innerText = 'Add';
+    }
+
+    async function saveUser() {
+        const userId = document.getElementById('edit_user_id').value;
+        const payload = {
+            username: document.getElementById('new_user_name').value.trim(),
+            password: document.getElementById('new_user_pwd').value
+        };
+
+        if (!payload.username) {
+            notify('Username is required', 'error'); return;
         }
-        const res = await fetch('/ui/users', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username: username, password: pwd})
+        if (!userId && payload.password.length < 5) {
+            notify('Password must be >= 5 chars', 'error'); return;
+        }
+
+        const url = userId ? `/ui/users/${userId}` : '/ui/users';
+        const method = userId ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method: method, headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
         });
+
         if (res.ok) {
-            notify(`User ${username} created!`);
-            document.getElementById('new_user_name').value = '';
-            document.getElementById('new_user_pwd').value = '';
+            notify(userId ? 'User updated!' : 'User created!');
+            cancelUserEdit();
             await loadUsers();
         } else {
             const err = await res.json();
-            notify(err.detail || 'Failed to create user', 'error');
+            notify(err.detail || 'Failed to save user', 'error');
         }
     }
 

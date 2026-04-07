@@ -218,6 +218,30 @@ async def create_user(req: CreateUserRequest, db: Session = Depends(get_db), adm
     logger.info(f"Admin '{admin.username}' created new user '{req.username}'")
     return {"status": "success"}
 
+@app.put("/ui/users/{user_id}")
+async def update_user(user_id: int, req: CreateUserRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    target_user = db.query(AdminUser).filter(AdminUser.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # Logic to update password (and optionally username if it's not the root admin)
+    if req.username != target_user.username:
+        if target_user.username == "admin":
+             raise HTTPException(status_code=400, detail="Cannot rename the root admin user")
+        # Check if new username is taken
+        existing = db.query(AdminUser).filter(AdminUser.username == req.username).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        target_user.username = req.username
+        
+    if req.password: # Only update password if provided
+        target_user.hashed_password = get_password_hash(req.password)
+        
+    db.add(target_user)
+    db.commit()
+    logger.info(f"Admin '{admin.username}' updated user '{target_user.username}'")
+    return {"status": "success"}
+
 @app.delete("/ui/users/{user_id}")
 async def delete_user(user_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
     user_to_delete = db.query(AdminUser).filter(AdminUser.id == user_id).first()
