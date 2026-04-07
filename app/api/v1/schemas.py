@@ -20,3 +20,10 @@ class PunchResponse(BaseModel):
     message: str
     server_time: datetime
     log_id: int
+
+class DeviceConfigResponse(BaseModel):
+    status: str # "assigned" or "pending"
+    branch_name: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    radius_meters: float | None = None

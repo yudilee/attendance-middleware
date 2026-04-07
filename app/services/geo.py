@@ -15,21 +15,14 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return c * 6371000  # Earth radius in meters
 
 
-def is_within_fence(lat: float, lon: float, db: Session):
+def is_within_fence(lat: float, lon: float, active_branch) -> tuple[bool, float]:
     """
-    Check if the given coordinates are within the configured geofence zone.
-    Loads the active zone from the database, so updates through the UI take
-    effect immediately without a server restart.
-
+    Check if the given coordinates are within the specified branch's geofence.
     Returns: (is_within: bool, distance_meters: float)
     """
-    from app.database.models import GeofenceZone
-
-    zone = db.query(GeofenceZone).filter(GeofenceZone.is_active == True).first()
-
-    if not zone:
-        # If no zone is configured, fail-safe: reject all punches
+    if not active_branch:
+        # If no branch is passed, reject the punch
         return False, float("inf")
 
-    distance = haversine(lat, lon, zone.latitude, zone.longitude)
-    return distance <= zone.radius_meters, distance
+    distance = haversine(lat, lon, active_branch.latitude, active_branch.longitude)
+    return distance <= active_branch.radius_meters, distance

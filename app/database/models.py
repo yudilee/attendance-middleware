@@ -11,6 +11,7 @@ class DeviceBinding(Base):
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(String, unique=True, index=True)
     device_uuid = Column(String, index=True)
+    branch_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -31,12 +32,12 @@ class AdminUser(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
-class GeofenceZone(Base):
-    """Configurable geofence zone. Single active zone is enforced by the UI."""
-    __tablename__ = "geofence_zones"
+class Branch(Base):
+    """Configurable branch site for geofencing."""
+    __tablename__ = "branches"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, default="Office / Site")
-    latitude = Column(Float, default=-6.175392)       # Default: Monas, Jakarta
+    name = Column(String, default="Main Office")
+    latitude = Column(Float, default=-6.175392)
     longitude = Column(Float, default=106.827153)
     radius_meters = Column(Float, default=50.0)
     is_active = Column(Boolean, default=True)
@@ -87,9 +88,9 @@ def init_db():
 
     db = SessionLocal()
     try:
-        # Seed default geofence zone
-        if db.query(GeofenceZone).count() == 0:
-            db.add(GeofenceZone())
+        # Seed default Branch
+        if db.query(Branch).count() == 0:
+            db.add(Branch())
             db.commit()
 
         # Seed default ADMS target

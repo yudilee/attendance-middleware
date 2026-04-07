@@ -20,8 +20,8 @@ from fastapi import Response
 from app.services.auth import verify_api_key, generate_api_key
 from app.services.auth_ui import get_password_hash, verify_password, create_access_token, get_current_admin
 
-from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, GeofenceZone, ApiKey, ADMSRegisteredEmployee, AdminUser
-from app.api.v1.schemas import PunchRequest, PunchResponse
+from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser
+from app.api.v1.schemas import PunchRequest, PunchResponse, DeviceConfigResponse
 from app.services.geo import is_within_fence
 from app.services.adms_service import push_to_adms, adms_heartbeat_loop, retry_failed_pushes, get_adms_config, test_adms_connection
 
@@ -130,8 +130,8 @@ async def dashboard_root(request: Request, db: Session = Depends(get_db), admin:
 
     server_url, sn, device_name = get_adms_config()
 
-    # Geofence zone
-    zone = db.query(GeofenceZone).filter(GeofenceZone.is_active == True).first()
+    # Branches
+    branches = db.query(Branch).all()
 
     return templates.TemplateResponse(
         request=request,
@@ -147,7 +147,7 @@ async def dashboard_root(request: Request, db: Session = Depends(get_db), admin:
             "server_url": server_url,
             "sn": sn,
             "device_name": device_name,
-            "zone": zone,
+            "branches": branches,
             "admin": admin,
         }
     )
@@ -247,46 +247,79 @@ async def unbind_device(employee_id: str, db: Session = Depends(get_db), admin: 
         db.commit()
     return {"status": "success"}
 
+@app.post("/ui/devices/{employee_id}/bind-branch")
+async def bind_device_to_branch(employee_id: str, req: dict, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="Device not found")
+        
+    branch_id = req.get("branch_id")
+    if branch_id == "" or branch_id is None:
+        binding.branch_id = None
+    else:
+        binding.branch_id = int(branch_id)
+        
+    db.commit()
+    logger.info(f"Assigned device {employee_id} to branch {branch_id}")
+    return {"status": "success"}
 
-# ─── Geofence CRUD ────────────────────────────────────────────────────────────
 
-class GeofenceRequest(BaseModel):
+# ─── Branch CRUD ────────────────────────────────────────────────────────────
+
+class BranchRequest(BaseModel):
     name: str
     latitude: float
     longitude: float
     radius_meters: float
 
+@app.get("/ui/branches")
+async def get_branches(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    branches = db.query(Branch).all()
+    return [{
+        "id": b.id,
+        "name": b.name,
+        "latitude": b.latitude,
+        "longitude": b.longitude,
+        "radius_meters": b.radius_meters,
+        "is_active": b.is_active
+    } for b in branches]
 
-@app.get("/ui/geofence")
-async def get_geofence(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    zone = db.query(GeofenceZone).filter(GeofenceZone.is_active == True).first()
-    if not zone:
-        return {"zone": None}
-    return {
-        "zone": {
-            "id": zone.id,
-            "name": zone.name,
-            "latitude": zone.latitude,
-            "longitude": zone.longitude,
-            "radius_meters": zone.radius_meters,
-        }
-    }
-
-
-@app.post("/ui/geofence")
-async def update_geofence(req: GeofenceRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    zone = db.query(GeofenceZone).filter(GeofenceZone.is_active == True).first()
-    if not zone:
-        zone = GeofenceZone()
-        db.add(zone)
-
-    zone.name = req.name
-    zone.latitude = req.latitude
-    zone.longitude = req.longitude
-    zone.radius_meters = req.radius_meters
-    zone.is_active = True
+@app.post("/ui/branches")
+async def create_branch(req: BranchRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    new_branch = Branch(
+        name=req.name,
+        latitude=req.latitude,
+        longitude=req.longitude,
+        radius_meters=req.radius_meters,
+        is_active=True
+    )
+    db.add(new_branch)
     db.commit()
-    logger.info(f"Geofence updated: {req.name} @ ({req.latitude}, {req.longitude}) r={req.radius_meters}m")
+    return {"status": "success"}
+
+@app.put("/ui/branches/{branch_id}")
+async def update_branch(branch_id: int, req: BranchRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    branch = db.query(Branch).filter(Branch.id == branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+        
+    branch.name = req.name
+    branch.latitude = req.latitude
+    branch.longitude = req.longitude
+    branch.radius_meters = req.radius_meters
+    db.commit()
+    return {"status": "success"}
+
+@app.delete("/ui/branches/{branch_id}")
+async def delete_branch(branch_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    branch = db.query(Branch).filter(Branch.id == branch_id).first()
+    if branch:
+        # Prevent deletion if it's currently bound
+        in_use = db.query(DeviceBinding).filter(DeviceBinding.branch_id == branch_id).first()
+        if in_use:
+            raise HTTPException(status_code=400, detail="Cannot delete branch while it is assigned to devices.")
+        db.delete(branch)
+        db.commit()
     return {"status": "success"}
 
 
@@ -331,6 +364,41 @@ async def revoke_api_key(key_id: int, db: Session = Depends(get_db), admin: Admi
 
 # ─── API V1 ROUTES ───────────────────────────────────────────────────────────
 
+@app.get("/api/v1/device-config", response_model=DeviceConfigResponse)
+async def get_device_config(
+    device_uuid: str, 
+    employee_id: str, 
+    db: Session = Depends(get_db),
+    _: ApiKey = Depends(verify_api_key)
+):
+    """
+    Mobile app calls this on boot. 
+    Auto-registers device if missing. 
+    Returns pending status or assigned branch config.
+    """
+    binding = db.query(DeviceBinding).filter(DeviceBinding.device_uuid == device_uuid).first()
+    if not binding:
+        binding = DeviceBinding(employee_id=employee_id, device_uuid=device_uuid)
+        db.add(binding)
+        db.commit()
+        db.refresh(binding)
+    
+    if not binding.branch_id:
+        return DeviceConfigResponse(status="pending")
+    
+    assigned_branch = db.query(Branch).filter(Branch.id == binding.branch_id).first()
+    if not assigned_branch or not assigned_branch.is_active:
+        return DeviceConfigResponse(status="pending")
+        
+    return DeviceConfigResponse(
+        status="assigned",
+        branch_name=assigned_branch.name,
+        latitude=assigned_branch.latitude,
+        longitude=assigned_branch.longitude,
+        radius_meters=assigned_branch.radius_meters
+    )
+
+
 @app.post("/api/v1/punch", response_model=PunchResponse)
 async def create_punch(
     request: PunchRequest,
@@ -344,12 +412,27 @@ async def create_punch(
     if not request.biometric_verified:
         raise HTTPException(status_code=400, detail="Biometric verification failed.")
 
-    # 2. Geofencing check
-    in_fence, distance = is_within_fence(request.latitude, request.longitude, db)
-    if not in_fence:
-        raise HTTPException(status_code=400, detail=f"Outside allowed zone ({distance:.0f}m from office). Must be within fence.")
+    # 2. Device binding and Branch assignment check
+    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == request.employee_id).first()
+    if not binding:
+        binding = DeviceBinding(employee_id=request.employee_id, device_uuid=request.device_uuid)
+        db.add(binding)
+        db.commit()
+    else:
+        if binding.device_uuid != request.device_uuid:
+            raise HTTPException(status_code=400, detail="Unauthorized device. Use your registered handset.")
+            
+    if not binding.branch_id:
+        raise HTTPException(status_code=403, detail="Device not assigned to any branch. Please contact Admin.")
+        
+    assigned_branch = db.query(Branch).filter(Branch.id == binding.branch_id).first()
 
-    # 3. Duplicate punch prevention (block same punch_type within 5 minutes)
+    # 3. Geofencing check
+    in_fence, distance = is_within_fence(request.latitude, request.longitude, assigned_branch)
+    if not in_fence:
+        raise HTTPException(status_code=400, detail=f"Outside assigned branch ({distance:.0f}m away). Must be within fence.")
+
+    # 4. Duplicate punch prevention (block same punch_type within 5 minutes)
     from sqlalchemy import and_
     from datetime import timedelta
     recent_cutoff = datetime.utcnow() - timedelta(minutes=5)
@@ -366,16 +449,6 @@ async def create_punch(
             status_code=400,
             detail=f"Duplicate punch detected. You already clocked {request.punch_type} {elapsed} minute(s) ago."
         )
-
-    # 4. Device binding
-    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == request.employee_id).first()
-    if not binding:
-        binding = DeviceBinding(employee_id=request.employee_id, device_uuid=request.device_uuid)
-        db.add(binding)
-        db.commit()
-    else:
-        if binding.device_uuid != request.device_uuid:
-            raise HTTPException(status_code=400, detail="Unauthorized device. Use your registered handset.")
 
     # 5. Record punch using the offline-ready, GPS-validated time from the mobile app
     try:
