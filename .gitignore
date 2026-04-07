@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+attendance.db
+.pytest_cache/

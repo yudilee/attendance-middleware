@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  attendance_middleware:
+    build: .
+    container_name: attendance_middleware
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the SQLite database file to persist data across container restarts
+      - ./attendance.db:/app/attendance.db
+      # Optional: Mount the data folder if you move the DB there, or if you need to access static files easily
+    environment:
+      # Set timezone to GMT+7
+      - TZ=Asia/Jakarta 
