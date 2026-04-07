@@ -8,9 +8,8 @@ services:
     ports:
       - "8999:8999"
     volumes:
-      # Mount the SQLite database file to persist data across container restarts
-      - ./attendance.db:/app/attendance.db
-      # Optional: Mount the data folder if you move the DB there, or if you need to access static files easily
+      # Mount the data folder to persist the SQLite database and internal files
+      - ./data:/app/data
     environment:
       # Set timezone to GMT+7
       - TZ=Asia/Jakarta 

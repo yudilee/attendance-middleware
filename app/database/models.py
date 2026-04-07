@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
+import os
 
 Base = declarative_base()
 
@@ -78,7 +79,11 @@ class PunchLog(Base):
     adms_status = Column(String, default="pending")  # pending / uploaded / failed
 
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./attendance.db"
+# Ensure the data directory exists for SQLite
+if not os.path.exists("./data"):
+    os.makedirs("./data")
+
+SQLALCHEMY_DATABASE_URL = "sqlite:///./data/attendance.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
