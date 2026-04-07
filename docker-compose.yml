@@ -6,7 +6,7 @@ services:
     container_name: attendance_middleware
     restart: always
     ports:
-      - "8000:8000"
+      - "8999:8999"
     volumes:
       # Mount the SQLite database file to persist data across container restarts
       - ./attendance.db:/app/attendance.db
