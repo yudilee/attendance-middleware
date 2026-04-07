@@ -33,7 +33,13 @@ def get_adms_config():
             db.add(config)
             db.commit()
             db.refresh(config)
-        return config.server_url, config.serial_number, config.device_name
+        
+        # Normalize URL: strip trailing slashes and ensure protocol
+        url = config.server_url.strip().rstrip('/')
+        if url and not url.startswith(('http://', 'https://')):
+            url = f"http://{url}"
+            
+        return url, config.serial_number, config.device_name
     finally:
         db.close()
 
@@ -125,7 +131,7 @@ async def test_adms_connection(server_url: str, serial_number: str, device_name:
         "DeviceName": device_name,
         "options": "all",
         "language": "69",
-        "pushver": "2.4.0",
+        "pushver": "2.4.1",
         "PushOptionsFlag": "1"
     }
     try:
@@ -137,7 +143,8 @@ async def test_adms_connection(server_url: str, serial_number: str, device_name:
                 stamp = parsed.get("ATTLOGStamp", "?")
                 server_ver = parsed.get("ServerVer", "?")
                 return True, f"Handshake OK! ServerVer={server_ver} | ATTLOGStamp={stamp}"
-            return False, f"Server returned HTTP {response.status_code}: {response.text[:150]}"
+            # Capture more of the error body to diagnose BioTime specific crashes
+            return False, f"Server returned HTTP {response.status_code}: {response.text[:500]}"
     except Exception as e:
         return False, f"Connection error: {str(e)}"
 
@@ -327,7 +334,7 @@ async def adms_heartbeat_loop():
                         "DeviceName": device_name,
                         "options": "all",
                         "language": "69",
-                        "pushver": "2.4.0",
+                        "pushver": "2.4.1",
                         "PushOptionsFlag": "1"
                     }
 
