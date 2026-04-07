@@ -184,9 +184,12 @@ async def update_admin_profile(
     if req.username != admin.username:
         raise HTTPException(status_code=403, detail="Cannot change another user's profile")
     
+    logger.info(f"Admin '{admin.username}' is updating password...")
     admin.hashed_password = get_password_hash(req.new_password)
+    db.add(admin)
     db.commit()
-    logger.info(f"Admin '{admin.username}' updated their password.")
+    db.refresh(admin)
+    logger.info(f"Admin '{admin.username}' updated their password successfully.")
     return {"status": "success"}
 
 # ─── User Management Routes ──────────────────────────────────────────────────

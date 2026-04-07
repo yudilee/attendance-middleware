@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.database.models import AdminUser, SessionLocal
 
 # Security Config
-SECRET_KEY = "super-secret-dashboard-key-please-change-in-prod"
+# IMPORTANT: In production, change this to a unique random string (e.g. openssl rand -hex 32)
+SECRET_KEY = "CHANGE_THIS_IN_PRODUCTION_FOR_SECURITY"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 Day
 

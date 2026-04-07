@@ -19,9 +19,9 @@ class DeviceBinding(Base):
 class ADMSTarget(Base):
     __tablename__ = "adms_targets"
     id = Column(Integer, primary_key=True, index=True)
-    server_url = Column(String, default="https://adms.hartonomotor-group.com")
-    serial_number = Column(String, default="VIRTUAL_MOBILE_01")
-    device_name = Column(String, default="Mobile Gateway")  # Added device_name alias
+    server_url = Column(String, default="")
+    serial_number = Column(String, default="")
+    device_name = Column(String, default="Mobile Gateway")
     is_active = Column(Boolean, default=True)
     last_contact = Column(DateTime, nullable=True)
 
@@ -37,10 +37,10 @@ class Branch(Base):
     """Configurable branch site for geofencing."""
     __tablename__ = "branches"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, default="Main Office")
-    latitude = Column(Float, default=-6.175392)
-    longitude = Column(Float, default=106.827153)
-    radius_meters = Column(Float, default=50.0)
+    name = Column(String, default="Default Office")
+    latitude = Column(Float, default=0.0)
+    longitude = Column(Float, default=0.0)
+    radius_meters = Column(Float, default=100.0)
     is_active = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
