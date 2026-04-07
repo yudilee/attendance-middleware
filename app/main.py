@@ -262,7 +262,7 @@ async def delete_user(user_id: int, db: Session = Depends(get_db), admin: AdminU
 
 @app.post("/ui/test-connection")
 async def ui_test_connection(config: ADMSConfigRequest, admin: AdminUser = Depends(get_current_admin)):
-    success, message = await test_adms_connection(config.server_url, config.serial_number)
+    success, message = await test_adms_connection(config.server_url, config.serial_number, config.device_name)
     return {"success": success, "message": message}
 
 

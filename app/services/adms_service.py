@@ -6,6 +6,9 @@ from datetime import datetime, timedelta, timezone
 
 from app.database.models import ADMSTarget, PunchLog, ADMSRegisteredEmployee, SessionLocal
 
+# Standard ZKTeco iClock User-Agent - BioTime/ADMS servers often reject other agents with 500 errors
+ICLOCK_USER_AGENT = "iClock Proxy/1.0"
+
 logger = logging.getLogger(__name__)
 
 # ─── Shared state for heartbeat ───────────────────────────────────────────────
@@ -86,8 +89,11 @@ async def _acknowledge_command(client: httpx.AsyncClient, server_url: str, sn: s
     # Standard acknowledgment payload
     payload = f"ID={cmd_id}&Return=0&CMD={cmd_name}\r\n"
     try:
-        resp = await client.post(url, params=params, content=payload,
-                                  headers={"Content-Type": "text/plain"})
+        headers = {
+            "Content-Type": "text/plain",
+            "User-Agent": ICLOCK_USER_AGENT
+        }
+        resp = await client.post(url, params=params, content=payload, headers=headers)
         logger.debug(f"CMD ACK for {cmd_name} (ID={cmd_id}): {resp.status_code}")
     except Exception as e:
         logger.warning(f"Failed to acknowledge command {cmd_name}: {e}")
@@ -111,25 +117,27 @@ def _parse_getrequest_commands(body: str):
     return commands
 
 
-async def test_adms_connection(server_url: str, serial_number: str):
+async def test_adms_connection(server_url: str, serial_number: str, device_name: str = "Mobile Gateway"):
     """Test handshake with a specific server config."""
     url = f"{server_url}/iclock/cdata"
     params = {
         "SN": serial_number,
+        "DeviceName": device_name,
         "options": "all",
         "language": "69",
         "pushver": "2.4.0",
         "PushOptionsFlag": "1"
     }
     try:
+        headers = {"User-Agent": ICLOCK_USER_AGENT}
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-            response = await client.get(url, params=params)
+            response = await client.get(url, params=params, headers=headers)
             if response.status_code == 200:
                 parsed = _parse_handshake_response(response.text)
                 stamp = parsed.get("ATTLOGStamp", "?")
                 server_ver = parsed.get("ServerVer", "?")
                 return True, f"Handshake OK! ServerVer={server_ver} | ATTLOGStamp={stamp}"
-            return False, f"Server returned HTTP {response.status_code}: {response.text[:100]}"
+            return False, f"Server returned HTTP {response.status_code}: {response.text[:150]}"
     except Exception as e:
         return False, f"Connection error: {str(e)}"
 
@@ -168,9 +176,13 @@ async def register_employee_on_adms(client: httpx.AsyncClient, server_url: str, 
         url = f"{server_url}/iclock/cdata"
         params = {"SN": sn, "table": "OPERLOG", "Stamp": "0"}
 
+        headers = {
+            "Content-Type": "text/plain",
+            "User-Agent": ICLOCK_USER_AGENT
+        }
         resp = await client.post(
             url, params=params, content=user_line,
-            headers={"Content-Type": "text/plain"}
+            headers=headers
         )
 
         if resp.status_code == 200:
@@ -225,11 +237,15 @@ async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch
         try:
             async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
                 # ── Push attendance record ──
+                headers = {
+                    "Content-Type": "text/plain",
+                    "User-Agent": ICLOCK_USER_AGENT
+                }
                 response = await client.post(
                     url,
                     params=params,
                     content=log_line,
-                    headers={"Content-Type": "text/plain"}
+                    headers=headers
                 )
                 if response.status_code == 200 and response.text.strip().startswith("OK"):
                     logger.info(f"✅ ADMS push success for {employee_id}: {response.text.strip()}")
@@ -315,7 +331,8 @@ async def adms_heartbeat_loop():
                         "PushOptionsFlag": "1"
                     }
 
-                    hs_resp = await client.get(handshake_url, params=handshake_params)
+                    headers = {"User-Agent": ICLOCK_USER_AGENT}
+                    hs_resp = await client.get(handshake_url, params=handshake_params, headers=headers)
                     logger.info(f"Handshake response: HTTP {hs_resp.status_code}")
 
                     if hs_resp.status_code == 200:
@@ -364,7 +381,7 @@ async def adms_heartbeat_loop():
                                 handshake_url, 
                                 params={"SN": sn, "table": "options", "Stamp": _handshake_state['attlog_stamp']},
                                 content=options_payload,
-                                headers={"Content-Type": "text/plain"}
+                                headers={"Content-Type": "text/plain", "User-Agent": ICLOCK_USER_AGENT}
                             )
                             logger.info(f"📊 Pushed Device Stats (Users={unique_users}, Trans={total_punches}) - Status {opt_resp.status_code}")
                         except Exception as e:
@@ -381,7 +398,8 @@ async def adms_heartbeat_loop():
                 poll_url = f"{server_url}/iclock/getrequest"
                 poll_params = {"SN": sn}
 
-                poll_resp = await client.get(poll_url, params=poll_params)
+                headers = {"User-Agent": ICLOCK_USER_AGENT}
+                poll_resp = await client.get(poll_url, params=poll_params, headers=headers)
 
                 if poll_resp.status_code == 200:
                     body = poll_resp.text.strip()
