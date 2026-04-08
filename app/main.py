@@ -129,6 +129,8 @@ async def dashboard_root(request: Request, db: Session = Depends(get_db), admin:
     devices = db.query(DeviceBinding).all()
 
     server_url, sn, device_name = get_adms_config()
+    db_target = db.query(ADMSTarget).filter(ADMSTarget.is_active == True).first()
+    timezone_offset = db_target.timezone_offset if db_target else 7
 
     # Branches
     branches = db.query(Branch).all()
@@ -147,6 +149,7 @@ async def dashboard_root(request: Request, db: Session = Depends(get_db), admin:
             "server_url": server_url,
             "sn": sn,
             "device_name": device_name,
+            "timezone_offset": timezone_offset,
             "branches": branches,
             "admin": admin,
         }
@@ -156,6 +159,7 @@ class ADMSConfigRequest(BaseModel):
     server_url: str
     serial_number: str
     device_name: str
+    timezone_offset: int
 
 @app.post("/ui/settings")
 async def update_settings(config: ADMSConfigRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
@@ -167,8 +171,9 @@ async def update_settings(config: ADMSConfigRequest, db: Session = Depends(get_d
     target.server_url = config.server_url
     target.serial_number = config.serial_number
     target.device_name = config.device_name
+    target.timezone_offset = config.timezone_offset
     db.commit()
-    logger.info(f"ADMS Config updated: {config.server_url} SN={config.serial_number} Alias={config.device_name}")
+    logger.info(f"ADMS Config updated: {config.server_url} SN={config.serial_number} Alias={config.device_name} (TZ={config.timezone_offset})")
     return {"status": "success"}
 
 class ProfileUpdateRequest(BaseModel):
@@ -504,6 +509,7 @@ async def create_punch(
         is_mock_location=request.is_mock_location,
         biometric_verified=request.biometric_verified,
         punch_type=request.punch_type,
+        tz_offset_minutes=request.tz_offset_minutes,
         adms_status="pending",
     )
     db.add(log)
@@ -511,7 +517,7 @@ async def create_punch(
     db.refresh(log)
 
     # 6. Background push to ADMS (now with log_id for status tracking)
-    background_tasks.add_task(push_to_adms, log.id, request.employee_id, server_time_utc, request.punch_type)
+    background_tasks.add_task(push_to_adms, log.id, request.employee_id, server_time_utc, request.punch_type, request.tz_offset_minutes)
 
     return {
         "status": "success",

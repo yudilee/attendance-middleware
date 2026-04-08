@@ -208,21 +208,36 @@ async def register_employee_on_adms(client: httpx.AsyncClient, server_url: str, 
         db.close()
 
 
-async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch_type: str):
+async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch_type: str, tz_offset_minutes: int = None):
     """
     Format and push a single attendance log to the ADMS Server.
     Auto-registers the employee on the ADMS server if not already registered.
     Updates PunchLog.adms_status to 'uploaded' or 'failed'.
     """
     server_url, sn, _ = get_adms_config()
+    
+    # Fetch global config for fallback offset
+    db = SessionLocal()
+    global_offset = 7
+    try:
+        config = db.query(ADMSTarget).filter(ADMSTarget.is_active == True).first()
+        if config:
+            global_offset = config.timezone_offset
+    finally:
+        db.close()
 
     # Punch status mapping
     status = "0" if punch_type.lower() in ["in", "check in"] else "1"
 
-    # Convert UTC timestamp to ADMS local timezone
+    # Convert UTC timestamp to local timezone for ADMS
     # Real ZKTeco machines always push local time; ADMS stores it as-is
-    tz_offset = _handshake_state.get("timezone_offset", 7)
-    local_time = timestamp + timedelta(hours=tz_offset)
+    if tz_offset_minutes is not None:
+        # Use punch-specific offset (highest priority)
+        local_time = timestamp + timedelta(hours=tz_offset_minutes / 60.0)
+    else:
+        # Fallback to global config offset
+        local_time = timestamp + timedelta(hours=global_offset)
+        
     formatted_time = local_time.strftime("%Y-%m-%d %H:%M:%S")
 
     # Use the stamp from the handshake
@@ -297,7 +312,7 @@ async def retry_failed_pushes():
             if pending:
                 logger.info(f"🔄 Retrying {len(pending)} failed/pending ADMS pushes...")
                 for log in pending:
-                    await push_to_adms(log.id, log.employee_id, log.timestamp, log.punch_type)
+                    await push_to_adms(log.id, log.employee_id, log.timestamp, log.punch_type, log.tz_offset_minutes)
                     await asyncio.sleep(0.5)  # Small delay between retries
         except Exception as e:
             logger.error(f"Retry sweep error: {e}")

@@ -23,6 +23,7 @@ class ADMSTarget(Base):
     serial_number = Column(String, default="")
     device_name = Column(String, default="Mobile Gateway")
     is_active = Column(Boolean, default=True)
+    timezone_offset = Column(Integer, default=7)   # Default GMT+7 (WIB)
     last_contact = Column(DateTime, nullable=True)
 
 class AdminUser(Base):
@@ -76,6 +77,7 @@ class PunchLog(Base):
     is_mock_location = Column(Boolean)
     biometric_verified = Column(Boolean)
     punch_type = Column(String)                   # "In" or "Out"
+    tz_offset_minutes = Column(Integer, default=420)  # Offset from UTC in minutes
     adms_status = Column(String, default="pending")  # pending / uploaded / failed
 
 
