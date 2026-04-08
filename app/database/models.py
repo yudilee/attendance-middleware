@@ -93,6 +93,22 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     Base.metadata.create_all(bind=engine)
 
+    # ── Auto-Migration for SQLite ───────────────────────────────────────────
+    # SQLAlchemy create_all() does not add new columns to existing tables.
+    # We manually add them here via raw SQL for production self-healing.
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE adms_targets ADD COLUMN timezone_offset INTEGER DEFAULT 7;"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE punch_logs ADD COLUMN tz_offset_minutes INTEGER DEFAULT 420;"))
+            conn.commit()
+        except Exception:
+            pass
+
     db = SessionLocal()
     try:
         # Seed default Branch
