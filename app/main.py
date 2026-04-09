@@ -410,6 +410,14 @@ async def get_device_config(
     """
     binding = db.query(DeviceBinding).filter(DeviceBinding.device_uuid == device_uuid).first()
     if not binding:
+        # Check if another device claims the same employee_id
+        existing_emp = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+        if existing_emp:
+            raise HTTPException(
+                status_code=400, 
+                detail="Employee ID is already registered to another device. Please Unbind it from the dashboard first."
+            )
+        
         binding = DeviceBinding(employee_id=employee_id, device_uuid=device_uuid)
         db.add(binding)
         db.commit()
