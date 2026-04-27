@@ -2,10 +2,18 @@ import requests
 import re
 import json
 import logging
+import datetime
 from sqlalchemy.orm import Session
-from app.database.models import Employee, ADMSCredential
+from app.database.models import Employee, ADMSCredential, AppConfig
 
 logger = logging.getLogger(__name__)
+
+def _set_config(db: Session, key: str, value: str):
+    config = db.query(AppConfig).filter(AppConfig.key == key).first()
+    if config:
+        config.value = value
+    else:
+        db.add(AppConfig(key=key, value=value))
 
 def sync_employees_from_adms(db: Session):
     """
@@ -96,13 +104,25 @@ def sync_employees_from_adms(db: Session):
             
             synced_count += 1
 
+        # Update sync stats
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _set_config(db, "last_adms_sync_time", now)
+        _set_config(db, "last_adms_sync_count", str(synced_count))
+        _set_config(db, "last_adms_sync_status", "success")
+
         db.commit()
         logger.info(f"Successfully synced {synced_count} employees from ADMS.")
         return True, f"Successfully synced {synced_count} employees."
 
     except requests.exceptions.RequestException as e:
+        error_msg = f"Network error: {str(e)}"
         logger.error(f"Network error communicating with ADMS: {e}")
-        return False, f"Network error: {str(e)}"
+        _set_config(db, "last_adms_sync_status", f"failed: {error_msg}")
+        db.commit()
+        return False, error_msg
     except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
         logger.error(f"Unexpected error during ADMS sync: {e}")
-        return False, f"Unexpected error: {str(e)}"
+        _set_config(db, "last_adms_sync_status", f"failed: {error_msg}")
+        db.commit()
+        return False, error_msg

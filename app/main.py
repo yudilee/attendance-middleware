@@ -557,6 +557,21 @@ async def get_employee_count(db: Session = Depends(get_db), admin: AdminUser = D
     return {"count": count}
 
 
+@app.get("/ui/adms-sync-info")
+async def get_adms_sync_info(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Fetch the latest sync status and stats."""
+    def get_val(key):
+        cfg = db.query(AppConfig).filter(AppConfig.key == key).first()
+        return cfg.value if cfg else "Never"
+    
+    return {
+        "last_sync": get_val("last_adms_sync_time"),
+        "last_count": get_val("last_adms_sync_count"),
+        "last_status": get_val("last_adms_sync_status"),
+        "total_employees": db.query(Employee).count()
+    }
+
+
 # ─── API V1 ROUTES ───────────────────────────────────────────────────────────
 
 @app.get("/api/v1/app-status", response_model=AppStatusResponse)

@@ -343,6 +343,28 @@
                 <button type="button" class="secondary" onclick="triggerAdmsSync()" id="btnSyncNow">🔄 Sync Now</button>
             </div>
         </form>
+
+        <!-- Sync History / Status -->
+        <div id="syncStatus" style="margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                <div>
+                    <span style="color: var(--text-muted); display: block;">Last Sync</span>
+                    <strong id="statLastSync">Loading...</strong>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted); display: block;">Employees Found</span>
+                    <strong id="statLastCount">-</strong>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted); display: block;">Database Total</span>
+                    <strong id="statTotalEmployees">-</strong>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted); display: block;">Latest Status</span>
+                    <span id="statStatus" class="badge" style="font-size: 0.75rem;">-</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -594,6 +616,27 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
             document.getElementById('sync_username').value = data.username || '';
             document.getElementById('sync_password').value = data.password || '';
         }
+        updateSyncInfo();
+    }
+
+    async function updateSyncInfo() {
+        try {
+            const res = await fetch('/ui/adms-sync-info');
+            const data = await res.json();
+            document.getElementById('statLastSync').innerText = data.last_sync;
+            document.getElementById('statLastCount').innerText = data.last_count;
+            document.getElementById('statTotalEmployees').innerText = data.total_employees;
+            
+            const statusEl = document.getElementById('statStatus');
+            statusEl.innerText = data.last_status.toUpperCase();
+            if (data.last_status === 'success') {
+                statusEl.style.background = '#d1fae5'; statusEl.style.color = '#065f46';
+            } else if (data.last_status.startsWith('failed')) {
+                statusEl.style.background = '#fee2e2'; statusEl.style.color = '#991b1b';
+            } else {
+                statusEl.style.background = '#f1f5f9'; statusEl.style.color = '#475569';
+            }
+        } catch(e) {}
     }
 
     async function saveAdmsSyncSettings() {
@@ -617,10 +660,12 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
             if (res.ok) {
                 const data = await res.json();
                 notify(data.message);
+                updateSyncInfo();
                 if (document.getElementById('profile').style.display === 'block') loadUsers();
             } else {
                 const e = await res.json();
                 notify(e.detail || 'Sync failed', 'error');
+                updateSyncInfo();
             }
         } catch(e) {
             notify('Server error during sync', 'error');
