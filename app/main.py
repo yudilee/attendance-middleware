@@ -28,7 +28,7 @@ from app.api.v1.schemas import (
 )
 from app.services.adms_scraper import sync_employees_from_adms
 from app.services.geo import is_within_fence
-from app.services.adms_service import push_to_adms, adms_heartbeat_loop, retry_failed_pushes, get_adms_config, test_adms_connection
+from app.services.adms_service import push_to_adms, adms_heartbeat_loop, retry_failed_pushes, get_adms_config, test_adms_connection, _handshake_state
 
 # Logging setup
 logging.basicConfig(
