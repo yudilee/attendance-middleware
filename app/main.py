@@ -163,13 +163,15 @@ async def dashboard_root(request: Request, db: Session = Depends(get_db), admin:
         log.employee_name = name or "Unknown"
         logs.append(log)
 
-    # Fetch devices with employee names
-    devices_raw = db.query(DeviceBinding, Employee.full_name).\
-        outerjoin(Employee, DeviceBinding.employee_id == Employee.employee_id).all()
+    # Fetch devices with employee names and API key labels
+    devices_raw = db.query(DeviceBinding, Employee.full_name, ApiKey.label).\
+        outerjoin(Employee, DeviceBinding.employee_id == Employee.employee_id).\
+        outerjoin(ApiKey, DeviceBinding.api_key_id == ApiKey.id).all()
     
     devices = []
-    for device, name in devices_raw:
-        device.employee_name = name or "Unknown"
+    for device, emp_name, key_label in devices_raw:
+        device.employee_name = emp_name or "Unknown"
+        device.api_key_label = key_label or "Legacy/Unknown"
         devices.append(device)
 
     server_url, sn, device_name = get_adms_config()
@@ -603,7 +605,7 @@ async def get_device_config(
     employee_id: str,
     device_label: str = None,
     db: Session = Depends(get_db),
-    _: ApiKey = Depends(verify_api_key)
+    api_key: ApiKey = Depends(verify_api_key)
 ):
     """
     Mobile app calls this on boot. Auto-registers device if missing.
@@ -624,15 +626,23 @@ async def get_device_config(
             registration_status="pending_approval",
             device_role=role,
             is_active_device=(role == "primary"),
+            api_key_id=api_key.id,
         )
         db.add(binding)
         db.commit()
         db.refresh(binding)
         logger.info(f"New {role} device registered for {employee_id} (UUID: {device_uuid[:8]}...)")
 
-    # Update label if provided and not yet set
+    # Update label or API key association if missing
+    needs_commit = False
     if device_label and not binding.device_label:
         binding.device_label = device_label
+        needs_commit = True
+    if not binding.api_key_id:
+        binding.api_key_id = api_key.id
+        needs_commit = True
+    
+    if needs_commit:
         db.commit()
 
     status = binding.registration_status

@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create_engine
+from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create_engine, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 import datetime
 import os
 
@@ -14,6 +14,11 @@ class DeviceBinding(Base):
     device_uuid = Column(String, index=True)
     branch_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    # Track which API key was used for registration
+    api_key_id = Column(Integer, ForeignKey("api_keys.id"), nullable=True)
+    api_key = relationship("ApiKey")
+
     # ── Registration workflow ──────────────────────────────────────────────
     device_label = Column(String, nullable=True)                    # e.g. "John's Samsung A55"
     registration_status = Column(String, default="pending_approval")

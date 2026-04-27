@@ -124,6 +124,9 @@
                             <strong>{{ device.employee_name }}</strong><br>
                             <span style="font-size: 0.75rem; color: var(--text-muted);">
                                 ID: {{ device.employee_id }} | {{ device.device_label or '(no label)' }}
+                            </span><br>
+                            <span style="font-size: 0.7rem; color: #6366f1; font-weight: 600;">
+                                🔑 Key: {{ device.api_key_label }}
                             </span>
                         </td>
                         <td style="font-family: monospace; font-size: 0.72rem; color: var(--primary);">
