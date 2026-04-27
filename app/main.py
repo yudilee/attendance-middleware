@@ -451,6 +451,25 @@ async def delete_branch(branch_id: int, db: Session = Depends(get_db), admin: Ad
     return {"status": "success"}
 
 
+@app.post("/ui/devices/{binding_id}/assign")
+async def assign_device_employee(binding_id: int, employee_id: str, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="Binding not found")
+    
+    # Check if this employee already has a primary device
+    existing = db.query(DeviceBinding).filter(
+        DeviceBinding.employee_id == employee_id,
+        DeviceBinding.device_role == "primary"
+    ).first()
+    
+    binding.employee_id = employee_id
+    binding.device_role = "backup" if existing else "primary"
+    binding.is_active_device = (binding.device_role == "primary")
+    db.commit()
+    return {"status": "success"}
+
+
 # ─── API Key Management UI Routes ────────────────────────────────────────────
 
 @app.post("/ui/api-keys")
@@ -576,6 +595,12 @@ async def get_employee_count(db: Session = Depends(get_db), admin: AdminUser = D
     return {"count": count}
 
 
+@app.get("/ui/employees/list")
+async def list_employees(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    emps = db.query(Employee).order_by(Employee.full_name).all()
+    return [{"id": e.employee_id, "name": e.full_name, "dept": e.department} for e in emps]
+
+
 @app.get("/ui/adms-sync-info")
 async def get_adms_sync_info(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
     """Fetch the latest sync status and stats."""
@@ -602,7 +627,7 @@ async def get_app_status(db: Session = Depends(get_db)):
 @app.get("/api/v1/device-config", response_model=DeviceConfigResponse)
 async def get_device_config(
     device_uuid: str,
-    employee_id: str,
+    employee_id: Optional[str] = None,
     device_label: str = None,
     db: Session = Depends(get_db),
     api_key: ApiKey = Depends(verify_api_key)
@@ -613,25 +638,29 @@ async def get_device_config(
     """
     binding = db.query(DeviceBinding).filter(DeviceBinding.device_uuid == device_uuid).first()
     if not binding:
-        # New device — check if employee already has a primary device
-        existing = db.query(DeviceBinding).filter(
-            DeviceBinding.employee_id == employee_id,
-            DeviceBinding.device_role == "primary"
-        ).first()
-        role = "backup" if existing else "primary"
+        # New device registration request
+        role = "primary"
+        if employee_id:
+            # check if employee already has a primary device
+            existing = db.query(DeviceBinding).filter(
+                DeviceBinding.employee_id == employee_id,
+                DeviceBinding.device_role == "primary"
+            ).first()
+            role = "backup" if existing else "primary"
+        
         binding = DeviceBinding(
             employee_id=employee_id,
             device_uuid=device_uuid,
             device_label=device_label,
             registration_status="pending_approval",
             device_role=role,
-            is_active_device=(role == "primary"),
+            is_active_device=(role == "primary" and employee_id is not None),
             api_key_id=api_key.id,
         )
         db.add(binding)
         db.commit()
         db.refresh(binding)
-        logger.info(f"New {role} device registered for {employee_id} (UUID: {device_uuid[:8]}...)")
+        logger.info(f"New {role} device request registered (UUID: {device_uuid[:8]}...)")
 
     # Update label or API key association if missing
     needs_commit = False
@@ -709,13 +738,19 @@ async def create_punch(
     if not valid_type:
         raise HTTPException(status_code=400, detail=f"Invalid punch type: '{request.punch_type}'")
 
-    # 3. Device binding check
+    # 3. Device binding check (Enforce server-side identity)
     binding = db.query(DeviceBinding).filter(
-        DeviceBinding.employee_id == request.employee_id,
         DeviceBinding.device_uuid == request.device_uuid
     ).first()
+    
     if not binding:
         raise HTTPException(status_code=403, detail="Device not registered. Please register in the app settings first.")
+    if not binding.employee_id:
+        raise HTTPException(status_code=403, detail="Device not yet assigned to an employee by administrator.")
+    
+    # Securely use the server-side bound employee_id
+    effective_employee_id = binding.employee_id
+    
     if binding.registration_status == "pending_approval":
         raise HTTPException(status_code=403, detail="Device pending admin approval.")
     if binding.registration_status == "suspended":
@@ -738,7 +773,7 @@ async def create_punch(
     recent_cutoff = datetime.utcnow() - timedelta(minutes=5)
     recent_punch = db.query(PunchLog).filter(
         and_(
-            PunchLog.employee_id == request.employee_id,
+            PunchLog.employee_id == effective_employee_id,
             PunchLog.punch_type == request.punch_type,
             PunchLog.timestamp >= recent_cutoff
         )
@@ -769,7 +804,7 @@ async def create_punch(
         server_time_utc = datetime.utcnow()
 
     log = PunchLog(
-        employee_id=request.employee_id,
+        employee_id=effective_employee_id,
         device_uuid=request.device_uuid,
         timestamp=server_time_utc,
         latitude=request.latitude,
@@ -786,7 +821,7 @@ async def create_punch(
     db.refresh(log)
 
     # 6. Background push to ADMS
-    background_tasks.add_task(push_to_adms, log.id, request.employee_id, server_time_utc, request.punch_type, request.tz_offset_minutes)
+    background_tasks.add_task(push_to_adms, log.id, effective_employee_id, server_time_utc, request.punch_type, request.tz_offset_minutes)
 
     return {
         "status": "success",
@@ -829,19 +864,31 @@ async def create_batch_punch(
                     synced += 1
                     continue
 
-            # Validate device
+            # Validate device (Enforce server-side identity)
             binding = db.query(DeviceBinding).filter(
-                DeviceBinding.employee_id == punch.employee_id,
                 DeviceBinding.device_uuid == punch.device_uuid,
             ).first()
-            if not binding or binding.registration_status not in ("approved", "active") or not binding.is_active_device:
+            
+            if not binding or not binding.employee_id:
                 results.append(BatchPunchResult(
                     client_punch_id=punch.client_punch_id,
                     status="error",
-                    error="Device not authorized",
+                    error="Device not authorized or unassigned",
                 ))
                 failed += 1
                 continue
+                
+            if binding.registration_status not in ("approved", "active") or not binding.is_active_device:
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error="Device not active",
+                ))
+                failed += 1
+                continue
+
+            # Securely use the server-side bound employee_id
+            effective_employee_id = binding.employee_id
 
             if not binding.branch_id:
                 results.append(BatchPunchResult(
@@ -875,7 +922,7 @@ async def create_batch_punch(
                 server_time_utc = datetime.utcnow()
 
             log = PunchLog(
-                employee_id=punch.employee_id,
+                employee_id=effective_employee_id,
                 device_uuid=punch.device_uuid,
                 timestamp=server_time_utc,
                 latitude=punch.latitude,
@@ -890,7 +937,7 @@ async def create_batch_punch(
             db.add(log)
             db.commit()
             db.refresh(log)
-            background_tasks.add_task(push_to_adms, log.id, punch.employee_id, server_time_utc, punch.punch_type, punch.tz_offset_minutes)
+            background_tasks.add_task(push_to_adms, log.id, effective_employee_id, server_time_utc, punch.punch_type, punch.tz_offset_minutes)
 
             results.append(BatchPunchResult(
                 client_punch_id=punch.client_punch_id,

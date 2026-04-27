@@ -121,13 +121,20 @@
                     {% for device in devices %}
                     <tr style="{% if device.registration_status == 'pending_approval' %}background: #fffbeb;{% elif device.registration_status == 'suspended' %}background: #fef2f2; opacity: 0.8;{% endif %}">
                         <td>
-                            <strong>{{ device.employee_name }}</strong><br>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);">
-                                ID: {{ device.employee_id }} | {{ device.device_label or '(no label)' }}
-                            </span><br>
-                            <span style="font-size: 0.7rem; color: #6366f1; font-weight: 600;">
-                                🔑 Key: {{ device.api_key_label }}
-                            </span>
+                            {% if device.employee_id %}
+                                <strong>{{ device.employee_name }}</strong><br>
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">
+                                    ID: {{ device.employee_id }} | {{ device.device_label or '(no label)' }}
+                                </span><br>
+                                <span style="font-size: 0.7rem; color: #6366f1; font-weight: 600;">
+                                    🔑 Key: {{ device.api_key_label }}
+                                </span>
+                            {% else %}
+                                <div style="background: #fffbeb; padding: 0.5rem; border: 1px dashed #f59e0b; border-radius: 0.5rem;">
+                                    <span style="font-size: 0.75rem; color: #b45309; display: block; margin-bottom: 0.25rem;">⚠️ No Employee Assigned</span>
+                                    <button type="button" class="badge" style="background: #f59e0b; color: white; border: none; cursor: pointer;" onclick="openAssignDialog({{ device.id }}, '{{ device.device_label or 'New Device' }}')">➕ Assign Employee</button>
+                                </div>
+                            {% endif %}
                         </td>
                         <td style="font-family: monospace; font-size: 0.72rem; color: var(--primary);">
                             {{ device.device_uuid[:20] }}...
@@ -1060,5 +1067,114 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         if (res.ok) { notify('User deleted'); await loadUsers(); }
         else { const err = await res.json(); notify(err.detail || 'Failed to delete', 'error'); }
     }
+
+    // --- Employee Assignment Logic ---
+    let allEmployees = [];
+    async function openAssignDialog(bindingId, label) {
+        document.getElementById('assignBindingId').value = bindingId;
+        document.getElementById('assignModalTitle').innerText = `Assign: ${label}`;
+        document.getElementById('assignModal').style.display = 'flex';
+        document.getElementById('employeeList').innerHTML = '<div style="padding:1rem; text-align:center;">Loading Employees...</div>';
+        
+        try {
+            const res = await fetch('/ui/employees/list');
+            allEmployees = await res.json();
+            renderEmployeeList(allEmployees);
+        } catch(e) {
+            notify('Failed to load employees', 'error');
+        }
+    }
+
+    function renderEmployeeList(list) {
+        const container = document.getElementById('employeeList');
+        if (list.length === 0) {
+            container.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--text-muted);">No employees found.</div>';
+            return;
+        }
+        container.innerHTML = list.map(e => `
+            <div class="employee-item" onclick="selectEmployee('${e.id}', this)">
+                <strong>${e.name}</strong><br>
+                <span style="font-size:0.7rem; color:var(--text-muted);">PIN: ${e.id} | ${e.dept}</span>
+            </div>
+        `).join('');
+    }
+
+    function filterEmployees() {
+        const q = document.getElementById('employeeSearch').value.toLowerCase();
+        const filtered = allEmployees.filter(e => 
+            e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)
+        );
+        renderEmployeeList(filtered);
+    }
+
+    function selectEmployee(id, el) {
+        document.querySelectorAll('.employee-item').forEach(item => item.classList.remove('selected'));
+        el.classList.add('selected');
+        document.getElementById('selectedEmployeeId').value = id;
+        document.getElementById('btnConfirmAssign').disabled = false;
+    }
+
+    function closeAssignModal() {
+        document.getElementById('assignModal').style.display = 'none';
+        document.getElementById('employeeSearch').value = '';
+        document.getElementById('selectedEmployeeId').value = '';
+        document.getElementById('btnConfirmAssign').disabled = true;
+    }
+
+    async function confirmAssign() {
+        const bindingId = document.getElementById('assignBindingId').value;
+        const employeeId = document.getElementById('selectedEmployeeId').value;
+        const btn = document.getElementById('btnConfirmAssign');
+        btn.innerText = 'Binding...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(`/ui/devices/${bindingId}/assign?employee_id=${employeeId}`, { method: 'POST' });
+            if (res.ok) {
+                notify('Employee assigned successfully!');
+                closeAssignModal();
+                location.reload();
+            } else {
+                const err = await res.json();
+                notify(err.detail || 'Assignment failed', 'error');
+            }
+        } catch(e) {
+            notify('Server error during assignment', 'error');
+        } finally {
+            btn.innerText = 'Confirm Binding';
+            btn.disabled = false;
+        }
+    }
 </script>
+
+<!-- ═══════════════════ MODALS ═══════════════════ -->
+<div id="assignModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="card" style="width: 400px; margin: 0; animation: slideUp 0.3s ease-out;">
+        <div class="card-title" id="assignModalTitle">Assign Employee</div>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Select an employee to bind this device to. Only bound employees can punch.</p>
+        
+        <input type="hidden" id="assignBindingId">
+        <input type="hidden" id="selectedEmployeeId">
+        <div class="form-group">
+            <label>Search Employee</label>
+            <input type="text" id="employeeSearch" placeholder="Type name or PIN..." oninput="filterEmployees()">
+        </div>
+        <div id="employeeList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 0.5rem; margin-top: 0.5rem; background: white;">
+            <!-- Employees injected here -->
+        </div>
+        
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+            <button type="button" class="secondary" style="flex: 1;" onclick="closeAssignModal()">Cancel</button>
+            <button type="button" id="btnConfirmAssign" style="flex: 1;" disabled onclick="confirmAssign()">Confirm Binding</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .employee-item { padding: 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s; font-size: 0.875rem; }
+    .employee-item:hover { background: #f8fafc; }
+    .employee-item.selected { background: #e0f2fe; border-left: 4px solid var(--primary); }
+    .employee-item:last-child { border-bottom: none; }
+</style>
 {% endblock %}

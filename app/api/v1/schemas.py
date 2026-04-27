@@ -4,7 +4,7 @@ from typing import Optional
 
 
 class PunchRequest(BaseModel):
-    employee_id: str
+    employee_id: Optional[str] = None
     device_uuid: str
     timestamp: str                      # ISO 8601 in device local time
     latitude: float

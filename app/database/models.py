@@ -10,7 +10,7 @@ Base = declarative_base()
 class DeviceBinding(Base):
     __tablename__ = "device_bindings"
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(String, unique=True, index=True)
+    employee_id = Column(String, unique=True, index=True, nullable=True)
     device_uuid = Column(String, index=True)
     branch_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
