@@ -447,6 +447,46 @@ async def revoke_api_key(key_id: int, db: Session = Depends(get_db), admin: Admi
     return {"status": "revoked"}
 
 
+class PunchTypePayload(BaseModel):
+    code: str
+    label: str
+    adms_status_code: str
+    icon: str = "circle"
+    color_hex: str = "#000000"
+    display_order: int = 0
+    requires_geofence: bool = True
+    is_active: bool = True
+
+@app.post("/ui/punch-types")
+async def create_punch_type(payload: PunchTypePayload, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    existing = db.query(PunchType).filter(PunchType.code == payload.code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Code already exists")
+    pt = PunchType(**payload.dict())
+    db.add(pt)
+    db.commit()
+    return {"status": "created"}
+
+@app.put("/ui/punch-types/{code}")
+async def update_punch_type(code: str, payload: PunchTypePayload, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    pt = db.query(PunchType).filter(PunchType.code == code).first()
+    if not pt:
+        raise HTTPException(status_code=404, detail="Punch type not found")
+    for key, value in payload.dict().items():
+        setattr(pt, key, value)
+    db.commit()
+    return {"status": "updated"}
+
+@app.delete("/ui/punch-types/{code}")
+async def delete_punch_type(code: str, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    pt = db.query(PunchType).filter(PunchType.code == code).first()
+    if not pt:
+        raise HTTPException(status_code=404, detail="Punch type not found")
+    db.delete(pt)
+    db.commit()
+    return {"status": "deleted"}
+
+
 # ─── API V1 ROUTES ───────────────────────────────────────────────────────────
 
 @app.get("/api/v1/device-config", response_model=DeviceConfigResponse)

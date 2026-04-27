@@ -322,6 +322,87 @@
     </div>
 </div>
 
+<!-- ═══════════════════ PUNCH TYPES TAB ═══════════════════ -->
+<div id="punch-types" class="tab-content" style="display: none;">
+    <div class="card" style="margin-bottom: 2rem;">
+        <h2 class="card-title">Manage Punch Types</h2>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.875rem;">
+            Configure the types of punches available to mobile app users. Mobile users must tap "Sync Offline Data" in the app to see updates.
+        </p>
+        
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Label</th>
+                        <th>ADMS Code</th>
+                        <th>Icon</th>
+                        <th>Color</th>
+                        <th>Geo?</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="punchTypesTbody">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card" style="max-width: 600px;">
+        <h2 class="card-title" id="ptFormTitle">Create New Punch Type</h2>
+        <form id="ptForm" onsubmit="event.preventDefault(); savePunchType();">
+            <input type="hidden" id="edit_pt_id">
+            <div class="grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="form-group">
+                    <label class="form-label">Code</label>
+                    <input type="text" id="pt_code" class="form-control" placeholder="e.g., In, Out, Break_Start" required>
+                    <div class="form-help">Unique identifier</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Display Label</label>
+                    <input type="text" id="pt_label" class="form-control" placeholder="e.g., Clock In" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ADMS Status Code</label>
+                    <input type="text" id="pt_adms_code" class="form-control" placeholder="e.g., 0, 1, 4" required>
+                    <div class="form-help">ZKTeco code (0=In, 1=Out)</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Icon Name</label>
+                    <input type="text" id="pt_icon" class="form-control" placeholder="e.g., login, logout" required>
+                    <div class="form-help">Material icon name</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Color (Hex)</label>
+                    <input type="color" id="pt_color" class="form-control" value="#16a34a" style="height: 42px; padding: 0.25rem;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Display Order</label>
+                    <input type="number" id="pt_order" class="form-control" value="0" required>
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-top: 1rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="pt_requires_geo" checked style="width: 1.25rem; height: 1.25rem; accent-color: var(--primary);">
+                    <span style="font-weight: 500; color: var(--text-main);">Requires Geofence Validation</span>
+                </label>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                <button type="submit" class="btn btn-primary" id="savePtBtn">
+                    <i class="ph ph-plus"></i> Add Punch Type
+                </button>
+                <button type="button" class="btn btn-secondary" id="cancelPtEditBtn" style="display: none;" onclick="cancelPtEdit()">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- ═══════════════════ USERS TAB ═══════════════════ -->
 <div id="profile" class="tab-content" style="display: none;">
     <div class="grid" style="grid-template-columns: 1fr 1fr; align-items: start;">
@@ -439,6 +520,7 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
             if (targetTab === 'security') loadApiKeys();
             if (targetTab === 'geofence') loadBranches();
             if (targetTab === 'profile') loadUsers();
+            if (targetTab === 'punch-types') loadPunchTypes();
         });
     });
 
@@ -680,6 +762,103 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         } else {
             notify('Failed to update password', 'error');
         }
+    }
+
+    // ── Punch Type Management ──────────────────────────────────────────────────
+    let currentPunchTypes = [];
+
+    async function loadPunchTypes() {
+        const res = await fetch('/api/v1/punch-types');
+        currentPunchTypes = await res.json();
+        const tbody = document.getElementById('punchTypesTbody');
+        tbody.innerHTML = currentPunchTypes.map(pt => `
+            <tr>
+                <td><strong>${pt.code}</strong></td>
+                <td>${pt.label}</td>
+                <td><span style="font-family:monospace; background:#f1f5f9; padding:2px 6px; border-radius:4px;">${pt.adms_status_code}</span></td>
+                <td><i class="ph ph-${pt.icon}"></i> ${pt.icon}</td>
+                <td>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <div style="width:16px;height:16px;border-radius:4px;background-color:${pt.color_hex};"></div>
+                        ${pt.color_hex}
+                    </div>
+                </td>
+                <td>${pt.requires_geofence ? '✅' : '❌'}</td>
+                <td style="text-align:right;">
+                    <button class="btn-danger-sm" style="background:#e0e7ff; color:#4338ca; border-color:#c7d2fe;" onclick="editPunchType('${pt.code}')">Edit</button>
+                    <button class="btn-danger-sm" onclick="deletePunchType('${pt.code}')">Delete</button>
+                </td>
+            </tr>`).join('');
+    }
+
+    function editPunchType(code) {
+        const pt = currentPunchTypes.find(p => p.code === code);
+        if (!pt) return;
+        
+        document.getElementById('edit_pt_id').value = pt.code;
+        document.getElementById('pt_code').value = pt.code;
+        document.getElementById('pt_code').readOnly = true; // Code shouldn't change easily
+        document.getElementById('pt_label').value = pt.label;
+        document.getElementById('pt_adms_code').value = pt.adms_status_code;
+        document.getElementById('pt_icon').value = pt.icon || 'circle';
+        document.getElementById('pt_color').value = pt.color_hex || '#000000';
+        document.getElementById('pt_order').value = pt.display_order;
+        document.getElementById('pt_requires_geo').checked = pt.requires_geofence;
+        
+        document.getElementById('ptFormTitle').innerText = 'Edit Punch Type';
+        document.getElementById('cancelPtEditBtn').style.display = 'inline-block';
+        document.getElementById('savePtBtn').innerHTML = '<i class="ph ph-floppy-disk"></i> Save Changes';
+    }
+
+    function cancelPtEdit() {
+        document.getElementById('edit_pt_id').value = '';
+        document.getElementById('ptForm').reset();
+        document.getElementById('pt_code').readOnly = false;
+        document.getElementById('ptFormTitle').innerText = 'Create New Punch Type';
+        document.getElementById('cancelPtEditBtn').style.display = 'none';
+        document.getElementById('savePtBtn').innerHTML = '<i class="ph ph-plus"></i> Add Punch Type';
+    }
+
+    async function savePunchType() {
+        const editId = document.getElementById('edit_pt_id').value;
+        const payload = {
+            code: document.getElementById('pt_code').value.trim(),
+            label: document.getElementById('pt_label').value.trim(),
+            adms_status_code: document.getElementById('pt_adms_code').value.trim(),
+            icon: document.getElementById('pt_icon').value.trim(),
+            color_hex: document.getElementById('pt_color').value,
+            display_order: parseInt(document.getElementById('pt_order').value),
+            requires_geofence: document.getElementById('pt_requires_geo').checked,
+            is_active: true
+        };
+
+        if (!payload.code || !payload.label) {
+            notify('Code and Label are required', 'error'); return;
+        }
+
+        const url = editId ? `/ui/punch-types/${editId}` : '/ui/punch-types';
+        const method = editId ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method: method, headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            notify(editId ? 'Punch Type updated!' : 'Punch Type created!');
+            cancelPtEdit();
+            await loadPunchTypes();
+        } else {
+            const err = await res.json();
+            notify(err.detail || 'Failed to save punch type', 'error');
+        }
+    }
+
+    async function deletePunchType(code) {
+        if (!confirm(`Are you sure you want to delete Punch Type '${code}'?`)) return;
+        const res = await fetch(`/ui/punch-types/${code}`, {method: 'DELETE'});
+        if (res.ok) { notify('Punch Type deleted'); await loadPunchTypes(); }
+        else { const err = await res.json(); notify(err.detail || 'Failed to delete', 'error'); }
     }
 
     // ── Admin User Management ──────────────────────────────────────────────────
