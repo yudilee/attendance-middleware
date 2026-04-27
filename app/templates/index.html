@@ -46,7 +46,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Employee ID</th>
+                        <th>Employee</th>
                         <th>Timestamp (UTC)</th>
                         <th>Type</th>
                         <th>GPS Coordinates</th>
@@ -56,7 +56,10 @@
                 <tbody>
                     {% for log in logs %}
                     <tr>
-                        <td><strong>{{ log.employee_id }}</strong></td>
+                        <td>
+                            <strong>{{ log.employee_name }}</strong><br>
+                            <span style="font-size: 0.7rem; color: var(--text-muted);">ID: {{ log.employee_id }}</span>
+                        </td>
                         <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                         <td>
                             <span class="badge {{ 'badge-success' if log.punch_type == 'In' else 'badge-danger' }}">
@@ -118,9 +121,9 @@
                     {% for device in devices %}
                     <tr style="{% if device.registration_status == 'pending_approval' %}background: #fffbeb;{% elif device.registration_status == 'suspended' %}background: #fef2f2; opacity: 0.8;{% endif %}">
                         <td>
-                            <strong>{{ device.employee_id }}</strong><br>
+                            <strong>{{ device.employee_name }}</strong><br>
                             <span style="font-size: 0.75rem; color: var(--text-muted);">
-                                {{ device.device_label or '(no label)' }}
+                                ID: {{ device.employee_id }} | {{ device.device_label or '(no label)' }}
                             </span>
                         </td>
                         <td style="font-family: monospace; font-size: 0.72rem; color: var(--primary);">

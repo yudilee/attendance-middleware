@@ -152,8 +152,25 @@ async def dashboard_root(request: Request, db: Session = Depends(get_db), admin:
     uploaded_count = db.query(PunchLog).filter(PunchLog.adms_status == "uploaded").count()
     failed_count = db.query(PunchLog).filter(PunchLog.adms_status == "failed").count()
     pending_count = db.query(PunchLog).filter(PunchLog.adms_status == "pending").count()
-    logs = db.query(PunchLog).order_by(PunchLog.timestamp.desc()).limit(20).all()
-    devices = db.query(DeviceBinding).all()
+    # Fetch logs with employee names
+    logs_raw = db.query(PunchLog, Employee.full_name).\
+        outerjoin(Employee, PunchLog.employee_id == Employee.employee_id).\
+        order_by(PunchLog.timestamp.desc()).limit(20).all()
+    
+    # Format logs for template
+    logs = []
+    for log, name in logs_raw:
+        log.employee_name = name or "Unknown"
+        logs.append(log)
+
+    # Fetch devices with employee names
+    devices_raw = db.query(DeviceBinding, Employee.full_name).\
+        outerjoin(Employee, DeviceBinding.employee_id == Employee.employee_id).all()
+    
+    devices = []
+    for device, name in devices_raw:
+        device.employee_name = name or "Unknown"
+        devices.append(device)
 
     server_url, sn, device_name = get_adms_config()
     db_target = db.query(ADMSTarget).filter(ADMSTarget.is_active == True).first()
