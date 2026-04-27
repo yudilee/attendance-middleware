@@ -20,11 +20,13 @@ from fastapi import Response
 from app.services.auth import verify_api_key, generate_api_key
 from app.services.auth_ui import get_password_hash, verify_password, create_access_token, get_current_admin
 
-from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser, PunchType
+from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser, PunchType, Employee, AppConfig, ADMSCredential
 from app.api.v1.schemas import (
     PunchRequest, PunchResponse, DeviceConfigResponse,
-    BatchPunchRequest, BatchPunchResponse, BatchPunchResult, PunchTypeResponse
+    BatchPunchRequest, BatchPunchResponse, BatchPunchResult, PunchTypeResponse,
+    ADMSCredentialPayload, AppStatusResponse
 )
+from app.services.adms_scraper import sync_employees_from_adms
 from app.services.geo import is_within_fence
 from app.services.adms_service import push_to_adms, adms_heartbeat_loop, retry_failed_pushes, get_adms_config, test_adms_connection
 
@@ -34,6 +36,25 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+async def adms_sync_loop():
+    """Background task to sync ADMS employees daily at 2:00 AM (or whatever internal interval we set).
+       For simplicity, we'll run it once every 24 hours."""
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                logger.info("Running scheduled ADMS employee sync...")
+                success, msg = sync_employees_from_adms(db)
+                if not success:
+                    logger.warning(f"ADMS Sync failed: {msg}")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error in adms_sync_loop: {e}")
+        
+        await asyncio.sleep(86400) # Sleep 24 hours
 
 
 # ─── Lifespan (replaces deprecated @app.on_event) ────────────────────────────
@@ -58,12 +79,15 @@ async def lifespan(app: FastAPI):
     heartbeat_task = asyncio.create_task(adms_heartbeat_loop())
     logger.info("Starting ADMS push retry loop...")
     retry_task = asyncio.create_task(retry_failed_pushes())
+    logger.info("Starting ADMS employee sync loop...")
+    sync_task = asyncio.create_task(adms_sync_loop())
     yield
     # Graceful shutdown
     heartbeat_task.cancel()
     retry_task.cancel()
+    sync_task.cancel()
     try:
-        await asyncio.gather(heartbeat_task, retry_task, return_exceptions=True)
+        await asyncio.gather(heartbeat_task, retry_task, sync_task, return_exceptions=True)
     except Exception:
         pass
     logger.info("ADMS background tasks stopped.")
@@ -498,7 +522,48 @@ async def delete_punch_type(code: str, db: Session = Depends(get_db), admin: Adm
     return {"status": "deleted"}
 
 
+# ─── ADMS Sync Configuration (UI) ──────────────────────────────────────────
+
+@app.get("/ui/adms-credentials", response_model=ADMSCredentialPayload)
+async def get_adms_credentials(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    creds = db.query(ADMSCredential).filter(ADMSCredential.is_active == True).first()
+    if not creds:
+        return ADMSCredentialPayload(url="", username="", password="")
+    return ADMSCredentialPayload(url=creds.url, username=creds.username, password=creds.password)
+
+@app.post("/ui/adms-credentials")
+async def save_adms_credentials(payload: ADMSCredentialPayload, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    creds = db.query(ADMSCredential).filter(ADMSCredential.is_active == True).first()
+    if creds:
+        creds.url = payload.url
+        creds.username = payload.username
+        creds.password = payload.password
+    else:
+        creds = ADMSCredential(url=payload.url, username=payload.username, password=payload.password)
+        db.add(creds)
+    db.commit()
+    return {"status": "success", "message": "ADMS credentials saved."}
+
+@app.post("/ui/adms-sync")
+async def trigger_adms_sync(background_tasks: BackgroundTasks, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    success, msg = sync_employees_from_adms(db)
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "success", "message": msg}
+
+@app.get("/ui/employees/count")
+async def get_employee_count(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    count = db.query(Employee).count()
+    return {"count": count}
+
+
 # ─── API V1 ROUTES ───────────────────────────────────────────────────────────
+
+@app.get("/api/v1/app-status", response_model=AppStatusResponse)
+async def get_app_status(db: Session = Depends(get_db)):
+    config = db.query(AppConfig).filter(AppConfig.key == "min_app_version").first()
+    min_ver = config.value if config else "1.0.0"
+    return AppStatusResponse(status="ok", min_version=min_ver)
 
 @app.get("/api/v1/device-config", response_model=DeviceConfigResponse)
 async def get_device_config(

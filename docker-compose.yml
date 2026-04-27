@@ -13,9 +13,29 @@ services:
       - TZ=Asia/Jakarta
       # Generate with: openssl rand -hex 32
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE_THIS_IN_PRODUCTION}
+      - DATABASE_URL=postgresql://attendance:secret_db_password@attendance_db:5432/attendance_db
+    depends_on:
+      attendance_db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8999/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  attendance_db:
+    image: postgres:15-alpine
+    container_name: attendance_db
+    restart: always
+    environment:
+      - POSTGRES_USER=attendance
+      - POSTGRES_PASSWORD=secret_db_password
+      - POSTGRES_DB=attendance_db
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U attendance -d attendance_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

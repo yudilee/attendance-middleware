@@ -60,3 +60,15 @@ class PunchTypeResponse(BaseModel):
     icon: Optional[str] = None
     color_hex: Optional[str] = None
     requires_geofence: bool
+
+
+class ADMSCredentialPayload(BaseModel):
+    url: str
+    username: str
+    password: str
+
+
+class AppStatusResponse(BaseModel):
+    status: str
+    min_version: str
+    message: Optional[str] = None

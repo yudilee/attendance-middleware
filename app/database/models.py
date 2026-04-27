@@ -96,6 +96,35 @@ class PunchType(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class Employee(Base):
+    __tablename__ = "employees"
+    id = Column(Integer, primary_key=True, index=True)
+    adms_id = Column(String, index=True)
+    employee_id = Column(String, unique=True, index=True)  # This is the PIN
+    full_name = Column(String)
+    department = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    last_synced = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class AppConfig(Base):
+    """Global configuration settings for the middleware."""
+    __tablename__ = "app_configs"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True)
+    value = Column(String)
+    description = Column(String, nullable=True)
+
+
+class ADMSCredential(Base):
+    __tablename__ = "adms_credentials"
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String)
+    username = Column(String)
+    password = Column(String)
+    is_active = Column(Boolean, default=True)
+
+
 class PunchLog(Base):
     __tablename__ = "punch_logs"
     id = Column(Integer, primary_key=True, index=True)
@@ -118,8 +147,12 @@ class PunchLog(Base):
 if not os.path.exists("./data"):
     os.makedirs("./data")
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./data/attendance.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SQLALCHEMY_DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./data/attendance.db")
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(SQLALCHEMY_DATABASE_URL)
+    
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
