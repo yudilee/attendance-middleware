@@ -767,7 +767,7 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
     let currentPunchTypes = [];
 
     async function loadPunchTypes() {
-        const res = await fetch('/api/v1/punch-types');
+        const res = await fetch('/ui/punch-types');
         currentPunchTypes = await res.json();
         const tbody = document.getElementById('punchTypesTbody');
         tbody.innerHTML = currentPunchTypes.map(pt => `

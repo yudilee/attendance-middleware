@@ -457,6 +457,17 @@ class PunchTypePayload(BaseModel):
     requires_geofence: bool = True
     is_active: bool = True
 
+@app.get("/ui/punch-types", response_model=list[PunchTypeResponse])
+async def get_ui_punch_types(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    types = db.query(PunchType).order_by(PunchType.display_order).all()
+    return [
+        PunchTypeResponse(
+            code=t.code, label=t.label, adms_status_code=t.adms_status_code,
+            display_order=t.display_order, icon=t.icon, color_hex=t.color_hex,
+            requires_geofence=t.requires_geofence,
+        ) for t in types
+    ]
+
 @app.post("/ui/punch-types")
 async def create_punch_type(payload: PunchTypePayload, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
     existing = db.query(PunchType).filter(PunchType.code == payload.code).first()
