@@ -1,6 +1,6 @@
 import os
 import sys
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from app.database.models import Base
 
@@ -27,6 +27,16 @@ tables = Base.metadata.sorted_tables
 with sqlite_engine.connect() as sqlite_conn, pg_engine.connect() as pg_conn:
     for table in tables:
         print(f"Migrating table {table.name}...")
+        
+        # Check if table exists in source SQLite
+        check_table = sqlite_conn.execute(
+            text(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table.name}'")
+        ).fetchone()
+        
+        if not check_table:
+            print(f"  Table {table.name} does not exist in source SQLite. Skipping.")
+            continue
+
         # Clear existing data in PG table just in case
         pg_conn.execute(table.delete())
         pg_conn.commit()
