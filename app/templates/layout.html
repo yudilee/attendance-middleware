@@ -5,31 +5,67 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Virtual Attendance{% endblock %}</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="/static/css/styles.css">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <header>
-        <div class="logo">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            Virtual Attendance
-        </div>
-        <div style="color: white; font-weight: 500;">
-            Middleware v1.0
-        </div>
-    </header>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="ph-fill ph-fingerprint logo-icon"></i>
+                <div class="logo-text">Virtual<br>Attendance</div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <!-- Navigation items will be injected or handled by JS/templating depending on active page -->
+                <!-- We will manage the active states in index.html, but let's provide a structure -->
+                <a href="#dashboard" class="nav-item active" data-tab="dashboard">
+                    <i class="ph ph-squares-four"></i> Overview
+                </a>
+                <a href="#devices" class="nav-item" data-tab="devices">
+                    <i class="ph ph-devices"></i> Devices
+                </a>
+                <a href="#security" class="nav-item" data-tab="security">
+                    <i class="ph ph-key"></i> API Keys
+                </a>
+                <a href="#geofence" class="nav-item" data-tab="geofence">
+                    <i class="ph ph-map-pin"></i> Branches
+                </a>
+                <a href="#settings" class="nav-item" data-tab="settings">
+                    <i class="ph ph-gear"></i> ADMS Config
+                </a>
+                <a href="#profile" class="nav-item" data-tab="profile">
+                    <i class="ph ph-users"></i> Users
+                </a>
+            </nav>
 
-    <main class="container">
-        {% block content %}{% endblock %}
-    </main>
+            <div class="sidebar-footer">
+                <a href="/logout" class="nav-item text-danger" style="color: var(--danger); margin-bottom: 1rem;">
+                    <i class="ph ph-sign-out"></i> Logout
+                </a>
+                <div class="version-badge">Middleware v1.0</div>
+            </div>
+        </aside>
 
-    <footer style="text-align: center; color: rgba(255,255,255,0.5); padding: 2rem; font-size: 0.8rem;">
-        &copy; 2026 Attendance Aggregator Middleware. Securely bridging modern mobility with legacy ADMS.
-    </footer>
+        <!-- Main Content -->
+        <div class="main-wrapper">
+            <header class="top-header">
+                <div class="header-title" id="page-title">Dashboard Overview</div>
+                <div class="header-actions">
+                    <div class="admin-profile">
+                        <i class="ph-fill ph-user-circle"></i>
+                        <span>Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="content-area">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
 
     <script>
         // Simple notification helper

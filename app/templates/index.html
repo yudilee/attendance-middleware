@@ -1,20 +1,7 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="tabs" style="display: flex; justify-content: space-between; align-items: center;">
-    <div style="display: flex; gap: 1rem;">
-        <div class="tab active" data-tab="dashboard">📊 Dashboard</div>
-        <div class="tab" data-tab="devices">📱 Devices</div>
-        <div class="tab" data-tab="security">🔑 API Keys</div>
-        <div class="tab" data-tab="geofence">📍 Branches</div>
-        <div class="tab" data-tab="settings">⚙️ ADMS Config</div>
-        <div class="tab" data-tab="profile">👥 Users</div>
-    </div>
-    <div style="font-size: 0.875rem; color: var(--text-muted); display: flex; align-items: center; gap: 1rem;">
-        <span>Hi, {{ admin.username }}</span>
-        <a href="/logout" style="color: #ef4444; font-weight: 500; text-decoration: none;">🚪 Logout</a>
-    </div>
-</div>
+<!-- Content is handled via sidebar tabs defined in layout.html -->
 
 <!-- ═══════════════════ DASHBOARD TAB ═══════════════════ -->
 <div id="dashboard" class="tab-content">
@@ -434,16 +421,24 @@
 code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875em; }
 </style>
 <script>
-    // Tab switching
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    // Navigation switching
+    document.querySelectorAll('.nav-item[data-tab]').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
             tab.classList.add('active');
-            document.getElementById(tab.dataset.tab).style.display = 'block';
-            if (tab.dataset.tab === 'security') loadApiKeys();
-            if (tab.dataset.tab === 'geofence') loadBranches();
-            if (tab.dataset.tab === 'profile') loadUsers();
+            
+            const targetTab = tab.dataset.tab;
+            document.getElementById(targetTab).style.display = 'block';
+            
+            // Update Header Title
+            document.getElementById('page-title').innerText = tab.innerText.trim();
+            
+            // Trigger load data
+            if (targetTab === 'security') loadApiKeys();
+            if (targetTab === 'geofence') loadBranches();
+            if (targetTab === 'profile') loadUsers();
         });
     });
 
