@@ -105,16 +105,23 @@
 <!-- ═══════════════════ DEVICES TAB ═══════════════════ -->
 <div id="devices" class="tab-content" style="display: none;">
     <div class="card">
-        <div class="card-title">Hardware Identity Bindings</div>
-        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
-            Each employee is locked to a specific physical handset UUID. This prevents "buddy punching". Unbinding allows re-registration on next punch.
-        </p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div>
+                <div class="card-title">Device Registration & Approval</div>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">
+                    Review and approve employee devices. Each employee may have a primary and a backup device.
+                    New devices start as <strong>Pending Approval</strong> until an admin approves them.
+                </p>
+            </div>
+        </div>
         <div class="table-container">
             <table>
                 <thead>
                     <tr>
-                        <th>Employee ID</th>
-                        <th>Device Hardware UUID</th>
+                        <th>Employee ID / Label</th>
+                        <th>Device UUID</th>
+                        <th>Role</th>
+                        <th>Status</th>
                         <th>Registered On</th>
                         <th>Assigned Branch</th>
                         <th style="text-align: right;">Actions</th>
@@ -122,27 +129,67 @@
                 </thead>
                 <tbody>
                     {% for device in devices %}
-                    <tr>
-                        <td><strong>{{ device.employee_id }}</strong></td>
-                        <td style="font-family: monospace; font-size: 0.75rem; color: var(--primary);">{{ device.device_uuid }}</td>
-                        <td>{{ device.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <tr style="{% if device.registration_status == 'pending_approval' %}background: #fffbeb;{% elif device.registration_status == 'suspended' %}background: #fef2f2; opacity: 0.8;{% endif %}">
                         <td>
-                            <select onchange="bindBranch('{{ device.employee_id }}', this.value)" style="padding: 0.25rem; font-size: 0.8rem; border-radius: 4px; border: 1px solid var(--border);">
-                                <option value="">-- Pending Assignment --</option>
+                            <strong>{{ device.employee_id }}</strong><br>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">
+                                {{ device.device_label or '(no label)' }}
+                            </span>
+                        </td>
+                        <td style="font-family: monospace; font-size: 0.72rem; color: var(--primary);">
+                            {{ device.device_uuid[:20] }}...
+                        </td>
+                        <td>
+                            {% if device.device_role == 'primary' %}
+                                <span class="badge badge-success">Primary</span>
+                            {% else %}
+                                <span class="badge" style="background:#e0e7ff;color:#4338ca;">Backup</span>
+                            {% endif %}
+                            {% if device.is_active_device %}
+                                <span class="badge badge-success" style="font-size:0.65rem;">Active</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if device.registration_status == 'pending_approval' %}
+                                <span class="badge badge-warning">⏳ Pending</span>
+                            {% elif device.registration_status == 'approved' or device.registration_status == 'active' %}
+                                <span class="badge badge-success">✅ Approved</span>
+                            {% elif device.registration_status == 'suspended' %}
+                                <span class="badge badge-danger">🚫 Suspended</span>
+                            {% else %}
+                                <span class="badge">{{ device.registration_status }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size: 0.8rem;">{{ device.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            <select onchange="bindBranch('{{ device.employee_id }}', this.value)"
+                                    style="padding: 0.25rem; font-size: 0.8rem; border-radius: 4px; border: 1px solid var(--border);"
+                                    {% if device.registration_status == 'pending_approval' %}disabled{% endif %}>
+                                <option value="">-- Pending --</option>
                                 {% for b in branches %}
                                 <option value="{{ b.id }}" {% if device.branch_id == b.id %}selected{% endif %}>{{ b.name }}</option>
                                 {% endfor %}
                             </select>
                         </td>
-                        <td style="text-align: right;">
-                            <button class="btn-danger-sm" onclick="unbindDevice('{{ device.employee_id }}')">
-                                Unbind
-                            </button>
+                        <td style="text-align: right; white-space: nowrap;">
+                            {% if device.registration_status == 'pending_approval' %}
+                                <button class="btn-danger-sm" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
+                                        onclick="approveDevice('{{ device.employee_id }}')">✅ Approve</button>
+                            {% elif device.registration_status in ('approved', 'active') %}
+                                <button class="btn-danger-sm" style="background:#fee2e2;color:#991b1b;"
+                                        onclick="suspendDevice('{{ device.employee_id }}')">🚫 Suspend</button>
+                            {% elif device.registration_status == 'suspended' %}
+                                <button class="btn-danger-sm" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
+                                        onclick="approveDevice('{{ device.employee_id }}')">↩ Re-approve</button>
+                            {% endif %}
+                            <button class="btn-danger-sm" onclick="editDeviceLabel('{{ device.employee_id }}', '{{ device.device_label or '' }}')"
+                                    style="background:#e0e7ff;color:#4338ca;border-color:#c7d2fe;">Label</button>
+                            <button class="btn-danger-sm" onclick="unbindDevice('{{ device.employee_id }}')">Unbind</button>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
                             No devices registered yet.
                         </td>
                     </tr>
@@ -152,6 +199,7 @@
         </div>
     </div>
 </div>
+
 
 <!-- ═══════════════════ API KEYS TAB ═══════════════════ -->
 <div id="security" class="tab-content" style="display: none;">
@@ -436,12 +484,36 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         }
     }
 
-    // ── Device Unbind ──────────────────────────────────────────────────────────
+    // ── Device Actions ─────────────────────────────────────────────────────────
     async function unbindDevice(empId) {
         if (!confirm(`Unbind hardware ID for ${empId}? They can re-register on next punch.`)) return;
         const res = await fetch(`/ui/unbind/${empId}`, {method: 'DELETE'});
         if (res.ok) { notify('Device unbound'); location.reload(); }
         else notify('Action failed', 'error');
+    }
+
+    async function approveDevice(empId) {
+        const res = await fetch(`/ui/devices/${empId}/approve`, {method: 'POST'});
+        if (res.ok) { notify(`Device for ${empId} approved ✅`); location.reload(); }
+        else { const e = await res.json(); notify(e.detail || 'Failed', 'error'); }
+    }
+
+    async function suspendDevice(empId) {
+        if (!confirm(`Suspend device for ${empId}? They will not be able to punch.`)) return;
+        const res = await fetch(`/ui/devices/${empId}/suspend`, {method: 'POST'});
+        if (res.ok) { notify(`Device for ${empId} suspended`); location.reload(); }
+        else { const e = await res.json(); notify(e.detail || 'Failed', 'error'); }
+    }
+
+    async function editDeviceLabel(empId, currentLabel) {
+        const label = prompt(`Enter label for ${empId}'s device:`, currentLabel || '');
+        if (label === null) return;
+        const res = await fetch(`/ui/devices/${empId}/label`, {
+            method: 'PUT', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({label: label.trim(), notes: ''})
+        });
+        if (res.ok) { notify('Label updated'); location.reload(); }
+        else notify('Failed to update label', 'error');
     }
 
     // ── Branches ───────────────────────────────────────────────────────────────

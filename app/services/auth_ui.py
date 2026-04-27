@@ -5,9 +5,10 @@ from fastapi import Request, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database.models import AdminUser, SessionLocal
 
-# Security Config
-# IMPORTANT: In production, change this to a unique random string (e.g. openssl rand -hex 32)
-SECRET_KEY = "CHANGE_THIS_IN_PRODUCTION_FOR_SECURITY"
+# Security Config — load from environment in production
+# Generate a strong key: openssl rand -hex 32
+import os
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "CHANGE_THIS_IN_PRODUCTION_FOR_SECURITY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 Day
 

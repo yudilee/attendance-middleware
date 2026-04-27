@@ -20,8 +20,11 @@ from fastapi import Response
 from app.services.auth import verify_api_key, generate_api_key
 from app.services.auth_ui import get_password_hash, verify_password, create_access_token, get_current_admin
 
-from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser
-from app.api.v1.schemas import PunchRequest, PunchResponse, DeviceConfigResponse
+from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser, PunchType
+from app.api.v1.schemas import (
+    PunchRequest, PunchResponse, DeviceConfigResponse,
+    BatchPunchRequest, BatchPunchResponse, BatchPunchResult, PunchTypeResponse
+)
 from app.services.geo import is_within_fence
 from app.services.adms_service import push_to_adms, adms_heartbeat_loop, retry_failed_pushes, get_adms_config, test_adms_connection
 
@@ -271,6 +274,56 @@ async def ui_test_connection(config: ADMSConfigRequest, admin: AdminUser = Depen
     return {"success": success, "message": message}
 
 
+# ─── Device Approval Workflow ─────────────────────────────────────────────────
+
+class DeviceLabelRequest(BaseModel):
+    label: str
+    notes: str = ""
+
+@app.post("/ui/devices/{employee_id}/approve")
+async def approve_device(employee_id: str, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="Device not found")
+    binding.registration_status = "approved"
+    binding.approved_at = datetime.utcnow()
+    binding.approved_by = admin.username
+    db.commit()
+    logger.info(f"Admin '{admin.username}' approved device for {employee_id}")
+    return {"status": "approved"}
+
+@app.post("/ui/devices/{employee_id}/suspend")
+async def suspend_device(employee_id: str, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="Device not found")
+    binding.registration_status = "suspended"
+    db.commit()
+    logger.info(f"Admin '{admin.username}' suspended device for {employee_id}")
+    return {"status": "suspended"}
+
+@app.put("/ui/devices/{employee_id}/label")
+async def update_device_label(employee_id: str, req: DeviceLabelRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="Device not found")
+    binding.device_label = req.label
+    binding.notes = req.notes
+    db.commit()
+    return {"status": "updated"}
+
+@app.post("/ui/devices/{employee_id}/set-active")
+async def set_active_device(employee_id: str, req: dict, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Flip which device is the active one for this employee (primary/backup)."""
+    device_uuid = req.get("device_uuid")
+    # Deactivate all devices for this employee first
+    bindings = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).all()
+    for b in bindings:
+        b.is_active_device = (b.device_uuid == device_uuid)
+    db.commit()
+    return {"status": "updated"}
+
+
 @app.delete("/ui/unbind/{employee_id}")
 async def unbind_device(employee_id: str, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
     binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
@@ -398,44 +451,69 @@ async def revoke_api_key(key_id: int, db: Session = Depends(get_db), admin: Admi
 
 @app.get("/api/v1/device-config", response_model=DeviceConfigResponse)
 async def get_device_config(
-    device_uuid: str, 
-    employee_id: str, 
+    device_uuid: str,
+    employee_id: str,
+    device_label: str = None,
     db: Session = Depends(get_db),
     _: ApiKey = Depends(verify_api_key)
 ):
     """
-    Mobile app calls this on boot. 
-    Auto-registers device if missing. 
-    Returns pending status or assigned branch config.
+    Mobile app calls this on boot. Auto-registers device if missing.
+    Returns registration status and branch config when approved.
     """
     binding = db.query(DeviceBinding).filter(DeviceBinding.device_uuid == device_uuid).first()
     if not binding:
-        # Check if another device claims the same employee_id
-        existing_emp = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
-        if existing_emp:
-            raise HTTPException(
-                status_code=400, 
-                detail="Employee ID is already registered to another device. Please Unbind it from the dashboard first."
-            )
-        
-        binding = DeviceBinding(employee_id=employee_id, device_uuid=device_uuid)
+        # New device — check if employee already has a primary device
+        existing = db.query(DeviceBinding).filter(
+            DeviceBinding.employee_id == employee_id,
+            DeviceBinding.device_role == "primary"
+        ).first()
+        role = "backup" if existing else "primary"
+        binding = DeviceBinding(
+            employee_id=employee_id,
+            device_uuid=device_uuid,
+            device_label=device_label,
+            registration_status="pending_approval",
+            device_role=role,
+            is_active_device=(role == "primary"),
+        )
         db.add(binding)
         db.commit()
         db.refresh(binding)
-    
+        logger.info(f"New {role} device registered for {employee_id} (UUID: {device_uuid[:8]}...)")
+
+    # Update label if provided and not yet set
+    if device_label and not binding.device_label:
+        binding.device_label = device_label
+        db.commit()
+
+    status = binding.registration_status
+    if status == "pending_approval":
+        return DeviceConfigResponse(
+            status="pending_approval",
+            message="Your device is pending admin approval. Please contact your HR Administrator."
+        )
+    if status == "suspended":
+        raise HTTPException(status_code=403, detail="Device suspended. Please contact your HR Administrator.")
+    if not binding.is_active_device:
+        raise HTTPException(status_code=403, detail="This is not the active device for your account.")
+
     if not binding.branch_id:
-        return DeviceConfigResponse(status="pending")
-    
+        return DeviceConfigResponse(
+            status="pending_branch",
+            message="Device approved. Waiting for branch assignment by admin."
+        )
+
     assigned_branch = db.query(Branch).filter(Branch.id == binding.branch_id).first()
     if not assigned_branch or not assigned_branch.is_active:
-        return DeviceConfigResponse(status="pending")
-        
+        return DeviceConfigResponse(status="pending_branch", message="Branch is inactive.")
+
     return DeviceConfigResponse(
-        status="assigned",
+        status="active",
         branch_name=assigned_branch.name,
         latitude=assigned_branch.latitude,
         longitude=assigned_branch.longitude,
-        radius_meters=assigned_branch.radius_meters
+        radius_meters=assigned_branch.radius_meters,
     )
 
 
@@ -446,22 +524,46 @@ async def create_punch(
     db: Session = Depends(get_db),
     _: ApiKey = Depends(verify_api_key),   # Enforce API key auth
 ):
-    # 1. Validation
+    # 1. Idempotency check — if we already have this client_punch_id, return the existing record
+    if request.client_punch_id:
+        existing = db.query(PunchLog).filter(
+            PunchLog.client_punch_id == request.client_punch_id
+        ).first()
+        if existing:
+            return {
+                "status": "success",
+                "message": f"Punch already recorded (duplicate): {existing.punch_type}",
+                "server_time": existing.timestamp,
+                "log_id": existing.id,
+            }
+
+    # 2. Basic validation
     if request.is_mock_location:
         raise HTTPException(status_code=400, detail="Mock location detected. Punch rejected.")
     if not request.biometric_verified:
         raise HTTPException(status_code=400, detail="Biometric verification failed.")
 
-    # 2. Device binding and Branch assignment check
-    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == request.employee_id).first()
+    # 2b. Validate punch_type against registry
+    valid_type = db.query(PunchType).filter(
+        PunchType.code == request.punch_type,
+        PunchType.is_active == True
+    ).first()
+    if not valid_type:
+        raise HTTPException(status_code=400, detail=f"Invalid punch type: '{request.punch_type}'")
+
+    # 3. Device binding check
+    binding = db.query(DeviceBinding).filter(
+        DeviceBinding.employee_id == request.employee_id,
+        DeviceBinding.device_uuid == request.device_uuid
+    ).first()
     if not binding:
-        binding = DeviceBinding(employee_id=request.employee_id, device_uuid=request.device_uuid)
-        db.add(binding)
-        db.commit()
-    else:
-        if binding.device_uuid != request.device_uuid:
-            raise HTTPException(status_code=400, detail="Unauthorized device. Use your registered handset.")
-            
+        raise HTTPException(status_code=403, detail="Device not registered. Please register in the app settings first.")
+    if binding.registration_status == "pending_approval":
+        raise HTTPException(status_code=403, detail="Device pending admin approval.")
+    if binding.registration_status == "suspended":
+        raise HTTPException(status_code=403, detail="Device suspended. Contact admin.")
+    if not binding.is_active_device:
+        raise HTTPException(status_code=403, detail="Not the active device for this account.")
     if not binding.branch_id:
         raise HTTPException(status_code=403, detail="Device not assigned to any branch. Please contact Admin.")
         
@@ -519,17 +621,166 @@ async def create_punch(
         punch_type=request.punch_type,
         tz_offset_minutes=request.tz_offset_minutes,
         adms_status="pending",
+        client_punch_id=request.client_punch_id,
     )
     db.add(log)
     db.commit()
     db.refresh(log)
 
-    # 6. Background push to ADMS (now with log_id for status tracking)
+    # 6. Background push to ADMS
     background_tasks.add_task(push_to_adms, log.id, request.employee_id, server_time_utc, request.punch_type, request.tz_offset_minutes)
 
     return {
         "status": "success",
         "message": f"Punch recorded: {request.punch_type}",
         "server_time": server_time_utc,
-        "log_id": log.id
+        "log_id": log.id,
+    }
+
+
+# ─── Batch Punch Endpoint ────────────────────────────────────────────────────
+
+@app.post("/api/v1/punch/batch", response_model=BatchPunchResponse)
+async def create_batch_punch(
+    request: BatchPunchRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _: ApiKey = Depends(verify_api_key),
+):
+    """Accept up to 50 offline punches in one request for efficient sync."""
+    if len(request.punches) > 50:
+        raise HTTPException(status_code=400, detail="Batch size limit is 50 punches.")
+
+    results = []
+    synced = 0
+    failed = 0
+
+    for punch in request.punches:
+        try:
+            # Idempotency check
+            if punch.client_punch_id:
+                existing = db.query(PunchLog).filter(
+                    PunchLog.client_punch_id == punch.client_punch_id
+                ).first()
+                if existing:
+                    results.append(BatchPunchResult(
+                        client_punch_id=punch.client_punch_id,
+                        status="duplicate",
+                        log_id=existing.id,
+                    ))
+                    synced += 1
+                    continue
+
+            # Validate device
+            binding = db.query(DeviceBinding).filter(
+                DeviceBinding.employee_id == punch.employee_id,
+                DeviceBinding.device_uuid == punch.device_uuid,
+            ).first()
+            if not binding or binding.registration_status not in ("approved", "active") or not binding.is_active_device:
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error="Device not authorized",
+                ))
+                failed += 1
+                continue
+
+            if not binding.branch_id:
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error="No branch assigned",
+                ))
+                failed += 1
+                continue
+
+            assigned_branch = db.query(Branch).filter(Branch.id == binding.branch_id).first()
+            in_fence, distance = is_within_fence(punch.latitude, punch.longitude, assigned_branch)
+            if not in_fence:
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error=f"Outside assigned branch ({distance:.0f}m away)",
+                ))
+                failed += 1
+                continue
+
+            # Parse timestamp
+            try:
+                device_time_str = punch.timestamp.replace("Z", "")
+                if "." in device_time_str:
+                    device_time_str = device_time_str.split(".")[0]
+                device_local_time = datetime.fromisoformat(device_time_str)
+                from datetime import timedelta
+                server_time_utc = device_local_time - timedelta(minutes=punch.tz_offset_minutes)
+            except Exception:
+                server_time_utc = datetime.utcnow()
+
+            log = PunchLog(
+                employee_id=punch.employee_id,
+                device_uuid=punch.device_uuid,
+                timestamp=server_time_utc,
+                latitude=punch.latitude,
+                longitude=punch.longitude,
+                is_mock_location=punch.is_mock_location,
+                biometric_verified=punch.biometric_verified,
+                punch_type=punch.punch_type,
+                tz_offset_minutes=punch.tz_offset_minutes,
+                adms_status="pending",
+                client_punch_id=punch.client_punch_id,
+            )
+            db.add(log)
+            db.commit()
+            db.refresh(log)
+            background_tasks.add_task(push_to_adms, log.id, punch.employee_id, server_time_utc, punch.punch_type, punch.tz_offset_minutes)
+
+            results.append(BatchPunchResult(
+                client_punch_id=punch.client_punch_id,
+                status="success",
+                log_id=log.id,
+            ))
+            synced += 1
+
+        except Exception as e:
+            results.append(BatchPunchResult(
+                client_punch_id=punch.client_punch_id,
+                status="error",
+                error=str(e),
+            ))
+            failed += 1
+
+    return BatchPunchResponse(synced=synced, failed=failed, results=results)
+
+
+# ─── Punch Types Endpoint ────────────────────────────────────────────────────
+
+@app.get("/api/v1/punch-types", response_model=list[PunchTypeResponse])
+async def get_punch_types(
+    db: Session = Depends(get_db),
+    _: ApiKey = Depends(verify_api_key),
+):
+    """Mobile app fetches available punch types on startup."""
+    types = db.query(PunchType).filter(PunchType.is_active == True).order_by(PunchType.display_order).all()
+    return [
+        PunchTypeResponse(
+            code=t.code, label=t.label, adms_status_code=t.adms_status_code,
+            display_order=t.display_order, icon=t.icon, color_hex=t.color_hex,
+            requires_geofence=t.requires_geofence,
+        ) for t in types
+    ]
+
+
+# ─── Health Check ─────────────────────────────────────────────────────────────
+
+@app.get("/health")
+async def health_check(db: Session = Depends(get_db)):
+    try:
+        db.execute(__import__('sqlalchemy').text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "db": "ok" if db_ok else "error",
+        "adms_connected": _handshake_state.get("handshake_done", False),
     }

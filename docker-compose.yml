@@ -8,8 +8,14 @@ services:
     ports:
       - "8999:8999"
     volumes:
-      # Mount the data folder to persist the SQLite database and internal files
       - ./data:/app/data
     environment:
-      # Set timezone to GMT+7
-      - TZ=Asia/Jakarta 
+      - TZ=Asia/Jakarta
+      # Generate with: openssl rand -hex 32
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE_THIS_IN_PRODUCTION}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8999/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
