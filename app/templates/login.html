@@ -1,10 +1,24 @@
-{% extends "layout.html" %}
-
-{% block title %}Login - Attendance Aggregator{% endblock %}
-
-{% block content %}
-<div style="display: flex; justify-content: center; align-items: center; min-height: 70vh;">
-    <div class="card" style="width: 100%; max-width: 400px; padding: 2.5rem 2rem;">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Attendance Aggregator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css?v=2">
+    <style>
+        body {
+            background-color: var(--bg-base);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="card" style="width: 100%; max-width: 400px; padding: 2.5rem 2rem; box-shadow: var(--shadow-md);">
         <div style="text-align: center; margin-bottom: 2rem;">
             <div style="width: 64px; height: 64px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border-radius: 1rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; color: white;">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -12,8 +26,8 @@
                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                 </svg>
             </div>
-            <h2 style="font-size: 1.5rem; color: var(--text-dark);">Admin Login</h2>
-            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Access the secure middleware dashboard</p>
+            <h2 style="font-size: 1.5rem; color: var(--text-dark); margin-bottom: 0.5rem;">Admin Login</h2>
+            <p style="color: var(--text-muted); font-size: 0.875rem;">Access the secure middleware dashboard</p>
         </div>
 
         {% if error %}
@@ -24,14 +38,14 @@
 
         <form method="POST" action="/login">
             <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" required autofocus placeholder="admin">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" id="username" name="username" class="form-control" required autofocus placeholder="admin">
             </div>
             <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required placeholder="••••••••">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" id="password" name="password" class="form-control" required placeholder="••••••••">
             </div>
-            <button type="submit" style="width: 100%; margin-top: 1rem; padding: 0.875rem; display: flex; justify-content: center; align-items: center; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; display: flex; justify-content: center; align-items: center; gap: 0.5rem;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
                     <polyline points="10 17 15 12 10 7"></polyline>
@@ -41,5 +55,5 @@
             </button>
         </form>
     </div>
-</div>
-{% endblock %}
+</body>
+</html>
