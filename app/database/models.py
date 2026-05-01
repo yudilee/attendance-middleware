@@ -195,6 +195,7 @@ def init_db():
                 conn.execute(text(sql))
                 conn.commit()
             except Exception:
+                conn.rollback()  # Required for Postgres to clear aborted transaction state
                 pass  # Column already exists — safe to ignore
 
         # Migrate existing branch_id to device_branch_assignments
@@ -228,6 +229,7 @@ def init_db():
                 """))
             conn.commit()
         except Exception:
+            conn.rollback()
             pass  # Table or data already migrated
 
     db = SessionLocal()
