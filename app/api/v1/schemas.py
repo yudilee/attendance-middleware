@@ -45,11 +45,20 @@ class BatchPunchResponse(BaseModel):
 
 class DeviceConfigResponse(BaseModel):
     status: str             # "pending_approval" | "pending_branch" | "active" | "suspended"
-    branch_name: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    radius_meters: Optional[float] = None
-    message: Optional[str] = None      # Human-readable status message
+    branches: list["BranchInfo"] = []       # All branches assigned to this device
+    message: Optional[str] = None           # Human-readable status message
+    device_count: int = 1                   # How many devices registered for this employee
+    max_devices: int = 5                    # System-wide max
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BranchInfo(BaseModel):
+    id: int
+    name: str
+    latitude: float
+    longitude: float
+    radius_meters: float
 
 
 class PunchTypeResponse(BaseModel):

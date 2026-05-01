@@ -215,6 +215,18 @@ async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch
     Updates PunchLog.adms_status to 'uploaded' or 'failed'.
     """
     server_url, sn, _ = get_adms_config()
+
+    if not server_url:
+        logger.warning(f"ADMS push skipped for {employee_id}: No server URL configured")
+        db = SessionLocal()
+        try:
+            log = db.query(PunchLog).filter(PunchLog.id == log_id).first()
+            if log:
+                log.adms_status = "pending"
+                db.commit()
+        finally:
+            db.close()
+        return False
     
     # Fetch global config for fallback offset
     db = SessionLocal()
@@ -335,6 +347,11 @@ async def adms_heartbeat_loop():
 
     while True:
         server_url, sn, device_name = get_adms_config()
+
+        if not server_url:
+            logger.debug("No ADMS server configured. Sleeping for 60 seconds.")
+            await asyncio.sleep(60)
+            continue
 
         try:
             async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:

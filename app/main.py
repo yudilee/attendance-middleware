@@ -1,9 +1,10 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from typing import Optional
 import sys
 import os
@@ -12,7 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from starlette.requests import Request
 from pydantic import BaseModel
 from fastapi.security import OAuth2PasswordRequestForm
@@ -21,14 +22,14 @@ from fastapi import Response
 from app.services.auth import verify_api_key, generate_api_key
 from app.services.auth_ui import get_password_hash, verify_password, create_access_token, get_current_admin
 
-from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser, PunchType, Employee, AppConfig, ADMSCredential
+from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser, PunchType, Employee, AppConfig, ADMSCredential, BindingBranch
 from app.api.v1.schemas import (
     PunchRequest, PunchResponse, DeviceConfigResponse,
     BatchPunchRequest, BatchPunchResponse, BatchPunchResult, PunchTypeResponse,
-    ADMSCredentialPayload, AppStatusResponse
+    ADMSCredentialPayload, AppStatusResponse, BranchInfo
 )
 from app.services.adms_scraper import sync_employees_from_adms
-from app.services.geo import is_within_fence
+from app.services.geo import is_within_fence, is_within_any_fence
 from app.services.adms_service import push_to_adms, adms_heartbeat_loop, retry_failed_pushes, get_adms_config, test_adms_connection, _handshake_state
 
 # Logging setup
@@ -173,6 +174,20 @@ async def dashboard_root(request: Request, db: Session = Depends(get_db), admin:
     for device, emp_name, key_label in devices_raw:
         device.employee_name = emp_name or "Unknown"
         device.api_key_label = key_label or "Legacy/Unknown"
+        # Attach branch assignments from new junction table
+        branch_assignments = db.query(BindingBranch).filter(
+            BindingBranch.binding_id == device.id,
+        ).all()
+        device.branch_list = []
+        for ba in branch_assignments:
+            branch = db.query(Branch).filter(Branch.id == ba.branch_id).first()
+            if branch:
+                device.branch_list.append({"id": branch.id, "name": branch.name, "binding_branch_id": ba.id})
+        # Fallback to legacy branch_id if no junction entries
+        if not device.branch_list and device.branch_id:
+            branch = db.query(Branch).filter(Branch.id == device.branch_id).first()
+            if branch:
+                device.branch_list.append({"id": branch.id, "name": branch.name, "binding_branch_id": None})
         devices.append(device)
 
     server_url, sn, device_name = get_adms_config()
@@ -181,6 +196,32 @@ async def dashboard_root(request: Request, db: Session = Depends(get_db), admin:
 
     # Branches
     branches = db.query(Branch).all()
+
+    # App config
+    max_devices_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
+    max_devices = int(max_devices_cfg.value) if max_devices_cfg else 5
+
+    # Today's punch stats
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_in = db.query(PunchLog).filter(
+        PunchLog.timestamp >= today_start,
+        PunchLog.punch_type.ilike('%in%')
+    ).count()
+    today_out = db.query(PunchLog).filter(
+        PunchLog.timestamp >= today_start,
+        PunchLog.punch_type.ilike('%out%')
+    ).count()
+
+    # Device count per employee
+    employee_device_counts = {}
+    for d in devices:
+        if d.employee_id not in employee_device_counts:
+            count = db.query(DeviceBinding).filter(
+                DeviceBinding.employee_id == d.employee_id,
+                DeviceBinding.is_active == True,
+            ).count()
+            employee_device_counts[d.employee_id] = count if d.employee_id else 0
+        d.device_count_for_employee = employee_device_counts.get(d.employee_id, 0) if d.employee_id else 0
 
     return templates.TemplateResponse(
         request=request,
@@ -199,6 +240,9 @@ async def dashboard_root(request: Request, db: Session = Depends(get_db), admin:
             "timezone_offset": timezone_offset,
             "branches": branches,
             "admin": admin,
+            "max_devices": max_devices,
+            "today_in": today_in,
+            "today_out": today_out,
         }
     )
 
@@ -221,6 +265,36 @@ async def update_settings(config: ADMSConfigRequest, db: Session = Depends(get_d
     target.timezone_offset = config.timezone_offset
     db.commit()
     logger.info(f"ADMS Config updated: {config.server_url} SN={config.serial_number} Alias={config.device_name} (TZ={config.timezone_offset})")
+    return {"status": "success"}
+
+
+# ─── App Config Settings ────────────────────────────────────────────────────
+
+class AppConfigRequest(BaseModel):
+    max_devices_per_employee: int = 5
+
+@app.get("/ui/app-settings")
+async def get_app_settings(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Return current app config values."""
+    max_devices = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
+    return {
+        "max_devices_per_employee": int(max_devices.value) if max_devices else 5,
+    }
+
+@app.post("/ui/app-settings")
+async def update_app_settings(config: AppConfigRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Update app config values."""
+    entry = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
+    if entry:
+        entry.value = str(config.max_devices_per_employee)
+    else:
+        db.add(AppConfig(
+            key="max_devices_per_employee",
+            value=str(config.max_devices_per_employee),
+            description="Maximum number of devices an employee can register",
+        ))
+    db.commit()
+    logger.info(f"App config updated: max_devices_per_employee={config.max_devices_per_employee}")
     return {"status": "success"}
 
 class ProfileUpdateRequest(BaseModel):
@@ -358,12 +432,11 @@ async def update_device_label(employee_id: str, req: DeviceLabelRequest, db: Ses
 
 @app.post("/ui/devices/{employee_id}/set-active")
 async def set_active_device(employee_id: str, req: dict, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    """Flip which device is the active one for this employee (primary/backup)."""
+    """Toggle which device is active for this employee (multi-device: deactivate others)."""
     device_uuid = req.get("device_uuid")
-    # Deactivate all devices for this employee first
     bindings = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).all()
     for b in bindings:
-        b.is_active_device = (b.device_uuid == device_uuid)
+        b.is_active = (b.device_uuid == device_uuid)
     db.commit()
     return {"status": "updated"}
 
@@ -385,11 +458,83 @@ async def bind_device_to_branch(employee_id: str, req: dict, db: Session = Depen
     branch_id = req.get("branch_id")
     if branch_id == "" or branch_id is None:
         binding.branch_id = None
+        # Also clear from new junction table
+        db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).delete()
     else:
         binding.branch_id = int(branch_id)
+        # Mirror to new junction table
+        existing = db.query(BindingBranch).filter(
+            BindingBranch.binding_id == binding.id,
+            BindingBranch.branch_id == int(branch_id),
+        ).first()
+        if not existing:
+            db.add(BindingBranch(binding_id=binding.id, branch_id=int(branch_id)))
         
     db.commit()
     logger.info(f"Assigned device {employee_id} to branch {branch_id}")
+    return {"status": "success"}
+
+
+# ─── Multi-Branch Assignment CRUD (new junction table) ──────────────────────
+
+@app.get("/ui/devices/{binding_id}/branches")
+async def get_device_branches(binding_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """List all branches assigned to a device."""
+    assignments = db.query(BindingBranch).filter(
+        BindingBranch.binding_id == binding_id,
+    ).join(Branch, BindingBranch.branch_id == Branch.id).all()
+    result = []
+    for ba in assignments:
+        branch = db.query(Branch).filter(Branch.id == ba.branch_id).first()
+        if branch:
+            result.append({
+                "binding_branch_id": ba.id,
+                "branch_id": branch.id,
+                "branch_name": branch.name,
+                "latitude": branch.latitude,
+                "longitude": branch.longitude,
+                "radius_meters": branch.radius_meters,
+                "is_active": branch.is_active,
+                "assigned_at": ba.assigned_at.isoformat() if ba.assigned_at else None,
+            })
+    return result
+
+
+@app.post("/ui/devices/{binding_id}/branches/{branch_id}")
+async def assign_branch_to_device(binding_id: int, branch_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Add a branch to a device's authorized branches."""
+    binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="Device binding not found")
+    branch = db.query(Branch).filter(Branch.id == branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    existing = db.query(BindingBranch).filter(
+        BindingBranch.binding_id == binding_id,
+        BindingBranch.branch_id == branch_id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Branch already assigned to this device")
+
+    db.add(BindingBranch(binding_id=binding_id, branch_id=branch_id))
+    db.commit()
+    logger.info(f"Assigned branch {branch.name} to device binding {binding_id}")
+    return {"status": "success"}
+
+
+@app.delete("/ui/devices/{binding_id}/branches/{branch_id}")
+async def remove_branch_from_device(binding_id: int, branch_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Remove a branch from a device's authorized branches."""
+    assignment = db.query(BindingBranch).filter(
+        BindingBranch.binding_id == binding_id,
+        BindingBranch.branch_id == branch_id,
+    ).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Branch not assigned to this device")
+    db.delete(assignment)
+    db.commit()
+    logger.info(f"Removed branch {branch_id} from device binding {binding_id}")
     return {"status": "success"}
 
 
@@ -458,15 +603,8 @@ async def assign_device_employee(binding_id: int, employee_id: str, db: Session 
     if not binding:
         raise HTTPException(status_code=404, detail="Binding not found")
     
-    # Check if this employee already has a primary device
-    existing = db.query(DeviceBinding).filter(
-        DeviceBinding.employee_id == employee_id,
-        DeviceBinding.device_role == "primary"
-    ).first()
-    
     binding.employee_id = employee_id
-    binding.device_role = "backup" if existing else "primary"
-    binding.is_active_device = (binding.device_role == "primary")
+    binding.is_active = True  # All assigned devices start active
     db.commit()
     return {"status": "success"}
 
@@ -485,28 +623,56 @@ async def create_api_key(label: str = "Mobile Client", db: Session = Depends(get
 
 @app.get("/ui/api-keys")
 async def list_api_keys(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    """List all API keys (values truncated for security)."""
+    """List all API keys with usage statistics (values truncated for security)."""
     keys = db.query(ApiKey).order_by(ApiKey.created_at.desc()).all()
-    return [
-        {
+    result = []
+    for k in keys:
+        device_count = db.query(DeviceBinding).filter(
+            DeviceBinding.api_key_id == k.id,
+        ).count()
+
+        result.append({
             "id": k.id,
             "label": k.label,
             "key_preview": k.key_value[:12] + "...",
             "is_active": k.is_active,
-            "created_at": k.created_at,
-            "last_used_at": k.last_used_at,
-        }
-        for k in keys
-    ]
+            "created_at": k.created_at.isoformat() if k.created_at else None,
+            "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            "device_count": device_count,
+        })
+    return result
+
+
+@app.put("/ui/api-keys/{key_id}")
+async def rename_api_key(key_id: int, label: str = "", db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Rename an API key's label."""
+    key = db.query(ApiKey).filter(ApiKey.id == key_id).first()
+    if not key:
+        raise HTTPException(status_code=404, detail="API key not found")
+    if label.strip():
+        key.label = label.strip()
+        db.commit()
+    return {"status": "success", "label": key.label}
 
 
 @app.delete("/ui/api-keys/{key_id}")
-async def revoke_api_key(key_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    """Revoke (deactivate) an API key."""
+async def revoke_api_key(key_id: int, hard: bool = False, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Revoke (deactivate) an API key, or permanently delete if already revoked and hard=true."""
     key = db.query(ApiKey).filter(ApiKey.id == key_id).first()
-    if key:
-        key.is_active = False
+    if not key:
+        raise HTTPException(status_code=404, detail="API key not found")
+    if hard:
+        if key.is_active:
+            raise HTTPException(status_code=400, detail="Cannot permanently delete an active key. Revoke it first.")
+        # Check if any devices still reference this key
+        bindings = db.query(DeviceBinding).filter(DeviceBinding.api_key_id == key_id).all()
+        if bindings:
+            raise HTTPException(status_code=400, detail=f"Cannot delete: {len(bindings)} device(s) still bound to this key. Soft-revoke instead.")
+        db.delete(key)
         db.commit()
+        return {"status": "deleted"}
+    key.is_active = False
+    db.commit()
     return {"status": "revoked"}
 
 
@@ -635,33 +801,47 @@ async def get_device_config(
 ):
     """
     Mobile app calls this on boot. Auto-registers device if missing.
-    Returns registration status and branch config when approved.
+    Returns registration status and branch config(s) when approved.
+    Multi-device: checks max_devices_per_employee before allowing registration.
+    Multi-branch: returns ALL branches assigned to this device.
     """
+    # ── Get max-devices config ──────────────────────────────────────────────
+    max_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
+    max_devices = int(max_cfg.value) if max_cfg else 5
+
     binding = db.query(DeviceBinding).filter(DeviceBinding.device_uuid == device_uuid).first()
+
     if not binding:
-        # New device registration request
-        role = "primary"
+        # ── New device registration ─────────────────────────────────────────
         if employee_id:
-            # check if employee already has a primary device
-            existing = db.query(DeviceBinding).filter(
+            # Check how many active devices this employee already has
+            existing_count = db.query(DeviceBinding).filter(
                 DeviceBinding.employee_id == employee_id,
-                DeviceBinding.device_role == "primary"
-            ).first()
-            role = "backup" if existing else "primary"
-        
+                DeviceBinding.is_active == True,
+                DeviceBinding.registration_status.in_(["approved", "active"]),
+            ).count()
+
+            if existing_count >= max_devices:
+                return DeviceConfigResponse(
+                    status="max_devices_reached",
+                    message=f"Maximum devices reached ({existing_count}/{max_devices}). "
+                            f"Please contact admin to remove an old device.",
+                    device_count=existing_count,
+                    max_devices=max_devices,
+                )
+
         binding = DeviceBinding(
             employee_id=employee_id,
             device_uuid=device_uuid,
             device_label=device_label,
             registration_status="pending_approval",
-            device_role=role,
-            is_active_device=(role == "primary" and employee_id is not None),
+            is_active=True,  # All new devices start active
             api_key_id=api_key.id,
         )
         db.add(binding)
         db.commit()
         db.refresh(binding)
-        logger.info(f"New {role} device request registered (UUID: {device_uuid[:8]}...)")
+        logger.info(f"New device registered (UUID: {device_uuid[:8]}...) for employee {employee_id}")
 
     # Update label or API key association if missing
     needs_commit = False
@@ -671,37 +851,74 @@ async def get_device_config(
     if not binding.api_key_id:
         binding.api_key_id = api_key.id
         needs_commit = True
-    
     if needs_commit:
         db.commit()
 
+    # ── Device count for this employee ───────────────────────────────────────
+    device_count = 0
+    if binding.employee_id:
+        device_count = db.query(DeviceBinding).filter(
+            DeviceBinding.employee_id == binding.employee_id,
+            DeviceBinding.is_active == True,
+            DeviceBinding.registration_status.in_(["approved", "active"]),
+        ).count()
+
+    # ── Status checks ───────────────────────────────────────────────────────
     status = binding.registration_status
     if status == "pending_approval":
         return DeviceConfigResponse(
             status="pending_approval",
-            message="Your device is pending admin approval. Please contact your HR Administrator."
+            message="Your device is pending admin approval. Please contact your HR Administrator.",
+            device_count=device_count,
+            max_devices=max_devices,
         )
     if status == "suspended":
         raise HTTPException(status_code=403, detail="Device suspended. Please contact your HR Administrator.")
-    if not binding.is_active_device:
-        raise HTTPException(status_code=403, detail="This is not the active device for your account.")
+    if not binding.is_active:
+        raise HTTPException(status_code=403, detail="This device has been deactivated. Contact admin.")
 
-    if not binding.branch_id:
+    # ── Branch assignments ──────────────────────────────────────────────────
+    branch_assignments = db.query(BindingBranch).filter(
+        BindingBranch.binding_id == binding.id,
+    ).all()
+
+    if not branch_assignments:
         return DeviceConfigResponse(
             status="pending_branch",
-            message="Device approved. Waiting for branch assignment by admin."
+            message="Device approved. Waiting for branch assignment by admin.",
+            device_count=device_count,
+            max_devices=max_devices,
         )
 
-    assigned_branch = db.query(Branch).filter(Branch.id == binding.branch_id).first()
-    if not assigned_branch or not assigned_branch.is_active:
-        return DeviceConfigResponse(status="pending_branch", message="Branch is inactive.")
+    # Collect all active branches
+    branches = []
+    for ba in branch_assignments:
+        branch = db.query(Branch).filter(
+            Branch.id == ba.branch_id,
+            Branch.is_active == True,
+        ).first()
+        if branch:
+            branches.append(BranchInfo(
+                id=branch.id,
+                name=branch.name,
+                latitude=branch.latitude,
+                longitude=branch.longitude,
+                radius_meters=branch.radius_meters,
+            ))
+
+    if not branches:
+        return DeviceConfigResponse(
+            status="pending_branch",
+            message="All assigned branches are inactive.",
+            device_count=device_count,
+            max_devices=max_devices,
+        )
 
     return DeviceConfigResponse(
         status="active",
-        branch_name=assigned_branch.name,
-        latitude=assigned_branch.latitude,
-        longitude=assigned_branch.longitude,
-        radius_meters=assigned_branch.radius_meters,
+        branches=branches,
+        device_count=device_count,
+        max_devices=max_devices,
     )
 
 
@@ -756,21 +973,39 @@ async def create_punch(
         raise HTTPException(status_code=403, detail="Device pending admin approval.")
     if binding.registration_status == "suspended":
         raise HTTPException(status_code=403, detail="Device suspended. Contact admin.")
-    if not binding.is_active_device:
-        raise HTTPException(status_code=403, detail="Not the active device for this account.")
-    if not binding.branch_id:
-        raise HTTPException(status_code=403, detail="Device not assigned to any branch. Please contact Admin.")
-        
-    assigned_branch = db.query(Branch).filter(Branch.id == binding.branch_id).first()
+    if not binding.is_active:
+        raise HTTPException(status_code=403, detail="Device has been deactivated. Contact admin.")
 
-    # 3. Geofencing check
-    in_fence, distance = is_within_fence(request.latitude, request.longitude, assigned_branch)
+    # 3b. Get all assigned branches for this device
+    branch_assignments = db.query(BindingBranch).filter(
+        BindingBranch.binding_id == binding.id,
+    ).all()
+    if not branch_assignments:
+        raise HTTPException(status_code=403, detail="Device not assigned to any branch. Please contact Admin.")
+
+    assigned_branches = []
+    for ba in branch_assignments:
+        branch = db.query(Branch).filter(
+            Branch.id == ba.branch_id,
+            Branch.is_active == True,
+        ).first()
+        if branch:
+            assigned_branches.append(branch)
+
+    if not assigned_branches:
+        raise HTTPException(status_code=403, detail="All assigned branches are inactive. Please contact Admin.")
+
+    # 3c. Multi-branch geofencing check
+    in_fence, distance, best_branch = is_within_any_fence(
+        request.latitude, request.longitude, assigned_branches
+    )
     if not in_fence:
-        raise HTTPException(status_code=400, detail=f"Outside assigned branch ({distance:.0f}m away). Must be within fence.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Outside assigned branches. Nearest: {best_branch} ({distance:.0f}m away)."
+        )
 
     # 4. Duplicate punch prevention (block same punch_type within 5 minutes)
-    from sqlalchemy import and_
-    from datetime import timedelta
     recent_cutoff = datetime.utcnow() - timedelta(minutes=5)
     recent_punch = db.query(PunchLog).filter(
         and_(
@@ -865,6 +1100,38 @@ async def create_batch_punch(
                     synced += 1
                     continue
 
+            # Basic validation (parity with single-punch endpoint)
+            if punch.is_mock_location:
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error="Mock location detected. Punch rejected.",
+                ))
+                failed += 1
+                continue
+            if not punch.biometric_verified:
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error="Biometric verification failed.",
+                ))
+                failed += 1
+                continue
+
+            # Validate punch_type against registry
+            valid_type = db.query(PunchType).filter(
+                PunchType.code == punch.punch_type,
+                PunchType.is_active == True
+            ).first()
+            if not valid_type:
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error=f"Invalid punch type: '{punch.punch_type}'",
+                ))
+                failed += 1
+                continue
+
             # Validate device (Enforce server-side identity)
             binding = db.query(DeviceBinding).filter(
                 DeviceBinding.device_uuid == punch.device_uuid,
@@ -879,7 +1146,7 @@ async def create_batch_punch(
                 failed += 1
                 continue
                 
-            if binding.registration_status not in ("approved", "active") or not binding.is_active_device:
+            if binding.registration_status not in ("approved", "active") or not binding.is_active:
                 results.append(BatchPunchResult(
                     client_punch_id=punch.client_punch_id,
                     status="error",
@@ -891,7 +1158,11 @@ async def create_batch_punch(
             # Securely use the server-side bound employee_id
             effective_employee_id = binding.employee_id
 
-            if not binding.branch_id:
+            # Multi-branch: get all assigned branches
+            branch_assignments = db.query(BindingBranch).filter(
+                BindingBranch.binding_id == binding.id,
+            ).all()
+            if not branch_assignments:
                 results.append(BatchPunchResult(
                     client_punch_id=punch.client_punch_id,
                     status="error",
@@ -900,13 +1171,51 @@ async def create_batch_punch(
                 failed += 1
                 continue
 
-            assigned_branch = db.query(Branch).filter(Branch.id == binding.branch_id).first()
-            in_fence, distance = is_within_fence(punch.latitude, punch.longitude, assigned_branch)
+            assigned_branches = []
+            for ba in branch_assignments:
+                branch = db.query(Branch).filter(
+                    Branch.id == ba.branch_id,
+                    Branch.is_active == True,
+                ).first()
+                if branch:
+                    assigned_branches.append(branch)
+
+            if not assigned_branches:
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error="All assigned branches inactive",
+                ))
+                failed += 1
+                continue
+
+            in_fence, distance, best_branch = is_within_any_fence(
+                punch.latitude, punch.longitude, assigned_branches
+            )
             if not in_fence:
                 results.append(BatchPunchResult(
                     client_punch_id=punch.client_punch_id,
                     status="error",
-                    error=f"Outside assigned branch ({distance:.0f}m away)",
+                    error=f"Outside assigned branches. Nearest: {best_branch} ({distance:.0f}m away)",
+                ))
+                failed += 1
+                continue
+
+            # Duplicate punch prevention (block same punch_type within 5 minutes)
+            recent_cutoff = datetime.utcnow() - timedelta(minutes=5)
+            recent_punch = db.query(PunchLog).filter(
+                and_(
+                    PunchLog.employee_id == effective_employee_id,
+                    PunchLog.punch_type == punch.punch_type,
+                    PunchLog.timestamp >= recent_cutoff
+                )
+            ).first()
+            if recent_punch:
+                elapsed = int((datetime.utcnow() - recent_punch.timestamp).total_seconds() / 60)
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error=f"Duplicate punch detected. Already clocked {punch.punch_type} {elapsed} minute(s) ago.",
                 ))
                 failed += 1
                 continue
@@ -917,7 +1226,6 @@ async def create_batch_punch(
                 if "." in device_time_str:
                     device_time_str = device_time_str.split(".")[0]
                 device_local_time = datetime.fromisoformat(device_time_str)
-                from datetime import timedelta
                 server_time_utc = device_local_time - timedelta(minutes=punch.tz_offset_minutes)
             except Exception:
                 server_time_utc = datetime.utcnow()
@@ -974,6 +1282,58 @@ async def get_punch_types(
             requires_geofence=t.requires_geofence,
         ) for t in types
     ]
+
+
+# ─── Punch Log Export ────────────────────────────────────────────────────────
+
+@app.get("/ui/logs/export")
+async def export_punch_logs(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """Export punch logs as CSV."""
+    import csv
+    import io
+    
+    query = db.query(PunchLog, Employee.full_name).\
+        outerjoin(Employee, PunchLog.employee_id == Employee.employee_id)
+    
+    if from_date:
+        query = query.filter(PunchLog.timestamp >= datetime.fromisoformat(from_date))
+    if to_date:
+        query = query.filter(PunchLog.timestamp <= datetime.fromisoformat(to_date))
+    
+    logs = query.order_by(PunchLog.timestamp.desc()).limit(10000).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Log ID", "Employee", "Employee ID", "Timestamp (UTC)", "Punch Type",
+                      "Latitude", "Longitude", "Mock Location", "Biometric",
+                      "ADMS Status", "TZ Offset"])
+    
+    for log, name in logs:
+        writer.writerow([
+            log.id,
+            name or "Unknown",
+            log.employee_id,
+            log.timestamp.isoformat() if log.timestamp else "",
+            log.punch_type,
+            log.latitude,
+            log.longitude,
+            log.is_mock_location,
+            log.biometric_verified,
+            log.adms_status,
+            log.tz_offset_minutes,
+        ])
+    
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=attendance_export_{datetime.utcnow().strftime('%Y%m%d')}.csv"}
+    )
 
 
 # ─── Health Check ─────────────────────────────────────────────────────────────

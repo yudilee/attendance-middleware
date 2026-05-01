@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create_engine, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create_engine, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 import datetime
@@ -10,9 +10,9 @@ Base = declarative_base()
 class DeviceBinding(Base):
     __tablename__ = "device_bindings"
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(String, unique=True, index=True, nullable=True)
+    employee_id = Column(String, index=True, nullable=True)
     device_uuid = Column(String, index=True)
-    branch_id = Column(Integer, nullable=True)
+    branch_id = Column(Integer, nullable=True)                      # Deprecated — migrated to BindingBranch
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     # Track which API key was used for registration
@@ -27,8 +27,7 @@ class DeviceBinding(Base):
     approved_by = Column(String, nullable=True)                     # admin username
     notes = Column(String, nullable=True)
     # ── Multi-device support ───────────────────────────────────────────────
-    device_role = Column(String, default="primary")                 # primary | backup
-    is_active_device = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)                       # Admin can toggle per-device
 
 
 class ADMSTarget(Base):
@@ -60,6 +59,16 @@ class Branch(Base):
     radius_meters = Column(Float, default=100.0)
     is_active = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class BindingBranch(Base):
+    """Many-to-many: which branches a device binding is authorized to clock in from."""
+    __tablename__ = "device_branch_assignments"
+    __table_args__ = (UniqueConstraint("binding_id", "branch_id"),)
+    id = Column(Integer, primary_key=True, index=True)
+    binding_id = Column(Integer, ForeignKey("device_bindings.id"), index=True, nullable=False)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=False)
+    assigned_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 class ApiKey(Base):
@@ -165,8 +174,6 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
     # ── Auto-Migration for SQLite ───────────────────────────────────────────
-    # SQLAlchemy create_all() does not add new columns to existing tables.
-    # We manually add them here for production self-healing.
     from sqlalchemy import text
     migrations = [
         "ALTER TABLE adms_targets ADD COLUMN timezone_offset INTEGER DEFAULT 7;",
@@ -179,6 +186,8 @@ def init_db():
         "ALTER TABLE device_bindings ADD COLUMN notes TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN device_role TEXT DEFAULT 'primary';",
         "ALTER TABLE device_bindings ADD COLUMN is_active_device INTEGER DEFAULT 1;",
+        # Multi-device / multi-branch migration
+        "ALTER TABLE device_bindings ADD COLUMN is_active INTEGER DEFAULT 1;",
     ]
     with engine.connect() as conn:
         for sql in migrations:
@@ -187,6 +196,21 @@ def init_db():
                 conn.commit()
             except Exception:
                 pass  # Column already exists — safe to ignore
+
+        # Migrate existing branch_id to device_branch_assignments
+        try:
+            conn.execute(text("""
+                INSERT OR IGNORE INTO device_branch_assignments (binding_id, branch_id, assigned_at)
+                SELECT id, branch_id, created_at FROM device_bindings
+                WHERE branch_id IS NOT NULL
+                  AND branch_id NOT IN (
+                    SELECT branch_id FROM device_branch_assignments
+                    WHERE device_branch_assignments.binding_id = device_bindings.id
+                  )
+            """))
+            conn.commit()
+        except Exception:
+            pass  # Table or data already migrated
 
     db = SessionLocal()
     try:
@@ -209,6 +233,15 @@ def init_db():
             db.add(PunchType(
                 code="Out", label="Clock Out", adms_status_code="1",
                 display_order=1, icon="logout", color_hex="#dc2626",
+            ))
+            db.commit()
+
+        # Seed max_devices_per_employee config
+        if not db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first():
+            db.add(AppConfig(
+                key="max_devices_per_employee",
+                value="5",
+                description="Maximum number of devices an employee can register",
             ))
             db.commit()
     finally:

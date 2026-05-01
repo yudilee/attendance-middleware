@@ -21,8 +21,32 @@ def is_within_fence(lat: float, lon: float, active_branch) -> tuple[bool, float]
     Returns: (is_within: bool, distance_meters: float)
     """
     if not active_branch:
-        # If no branch is passed, reject the punch
         return False, float("inf")
 
     distance = haversine(lat, lon, active_branch.latitude, active_branch.longitude)
     return distance <= active_branch.radius_meters, distance
+
+
+def is_within_any_fence(lat: float, lon: float, branches: list) -> tuple[bool, float, str | None]:
+    """
+    Check if GPS coordinates are within ANY of the given branches.
+    Returns: (is_within: bool, best_distance_meters: float, best_branch_name: str | None)
+    
+    Short-circuits on first match for performance.
+    If no match, returns the closest branch and distance (for error messages).
+    """
+    if not branches:
+        return False, float("inf"), None
+
+    best_dist = float("inf")
+    best_branch = None
+    for branch in branches:
+        if not branch.is_active:
+            continue
+        dist = haversine(lat, lon, branch.latitude, branch.longitude)
+        if dist <= branch.radius_meters:
+            return True, dist, branch.name  # Short-circuit on first match
+        if dist < best_dist:
+            best_dist, best_branch = dist, branch.name
+
+    return False, best_dist, best_branch
