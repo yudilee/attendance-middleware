@@ -35,7 +35,7 @@ def get_adms_config():
             db.refresh(config)
         
         # Normalize URL: strip trailing slashes and ensure protocol
-        url = config.server_url.strip().rstrip('/')
+        url = (config.server_url or "").strip().rstrip('/')
         if url and not url.startswith(('http://', 'https://')):
             url = f"http://{url}"
             

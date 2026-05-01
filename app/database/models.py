@@ -188,6 +188,9 @@ def init_db():
         "ALTER TABLE device_bindings ADD COLUMN is_active_device INTEGER DEFAULT 1;",
         # Multi-device / multi-branch migration
         "ALTER TABLE device_bindings ADD COLUMN is_active INTEGER DEFAULT 1;",
+        # Branch & ApiKey updates
+        "ALTER TABLE branches ADD COLUMN updated_at TIMESTAMP;",
+        "ALTER TABLE api_keys ADD COLUMN last_used_at TIMESTAMP;",
     ]
     with engine.connect() as conn:
         for sql in migrations:
