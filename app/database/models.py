@@ -27,7 +27,7 @@ class DeviceBinding(Base):
     approved_by = Column(String, nullable=True)                     # admin username
     notes = Column(String, nullable=True)
     # ── Multi-device support ───────────────────────────────────────────────
-    is_active = Column(Boolean, default=True)                       # Admin can toggle per-device
+    is_active = Column('is_active_device', Boolean, default=True)  # Admin can toggle per-device
 
 
 class ADMSTarget(Base):
@@ -186,8 +186,6 @@ def init_db():
         "ALTER TABLE device_bindings ADD COLUMN notes TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN device_role TEXT DEFAULT 'primary';",
         "ALTER TABLE device_bindings ADD COLUMN is_active_device INTEGER DEFAULT 1;",
-        # Multi-device / multi-branch migration
-        "ALTER TABLE device_bindings ADD COLUMN is_active INTEGER DEFAULT 1;",
         # Branch & ApiKey updates
         "ALTER TABLE branches ADD COLUMN updated_at TIMESTAMP;",
         "ALTER TABLE api_keys ADD COLUMN last_used_at TIMESTAMP;",

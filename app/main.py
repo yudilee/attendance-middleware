@@ -149,102 +149,106 @@ async def logout():
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_root(request: Request, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    punch_count = db.query(PunchLog).count()
-    device_count = db.query(DeviceBinding).count()
-    uploaded_count = db.query(PunchLog).filter(PunchLog.adms_status == "uploaded").count()
-    failed_count = db.query(PunchLog).filter(PunchLog.adms_status == "failed").count()
-    pending_count = db.query(PunchLog).filter(PunchLog.adms_status == "pending").count()
-    # Fetch logs with employee names
-    logs_raw = db.query(PunchLog, Employee.full_name).\
-        outerjoin(Employee, PunchLog.employee_id == Employee.employee_id).\
-        order_by(PunchLog.timestamp.desc()).limit(20).all()
-    
-    # Format logs for template
-    logs = []
-    for log, name in logs_raw:
-        log.employee_name = name or "Unknown"
-        logs.append(log)
+    import traceback
+    try:
+        punch_count = db.query(PunchLog).count()
+        device_count = db.query(DeviceBinding).count()
+        uploaded_count = db.query(PunchLog).filter(PunchLog.adms_status == "uploaded").count()
+        failed_count = db.query(PunchLog).filter(PunchLog.adms_status == "failed").count()
+        pending_count = db.query(PunchLog).filter(PunchLog.adms_status == "pending").count()
+        # Fetch logs with employee names
+        logs_raw = db.query(PunchLog, Employee.full_name).\
+            outerjoin(Employee, PunchLog.employee_id == Employee.employee_id).\
+            order_by(PunchLog.timestamp.desc()).limit(20).all()
+        
+        # Format logs for template
+        logs = []
+        for log, name in logs_raw:
+            log.employee_name = name or "Unknown"
+            logs.append(log)
 
-    # Fetch devices with employee names and API key labels
-    devices_raw = db.query(DeviceBinding, Employee.full_name, ApiKey.label).\
-        outerjoin(Employee, DeviceBinding.employee_id == Employee.employee_id).\
-        outerjoin(ApiKey, DeviceBinding.api_key_id == ApiKey.id).all()
-    
-    devices = []
-    for device, emp_name, key_label in devices_raw:
-        device.employee_name = emp_name or "Unknown"
-        device.api_key_label = key_label or "Legacy/Unknown"
-        # Attach branch assignments from new junction table
-        branch_assignments = db.query(BindingBranch).filter(
-            BindingBranch.binding_id == device.id,
-        ).all()
-        device.branch_list = []
-        for ba in branch_assignments:
-            branch = db.query(Branch).filter(Branch.id == ba.branch_id).first()
-            if branch:
-                device.branch_list.append({"id": branch.id, "name": branch.name, "binding_branch_id": ba.id})
-        # Fallback to legacy branch_id if no junction entries
-        if not device.branch_list and device.branch_id:
-            branch = db.query(Branch).filter(Branch.id == device.branch_id).first()
-            if branch:
-                device.branch_list.append({"id": branch.id, "name": branch.name, "binding_branch_id": None})
-        devices.append(device)
+        # Fetch devices with employee names and API key labels
+        devices_raw = db.query(DeviceBinding, Employee.full_name, ApiKey.label).\
+            outerjoin(Employee, DeviceBinding.employee_id == Employee.employee_id).\
+            outerjoin(ApiKey, DeviceBinding.api_key_id == ApiKey.id).all()
+        
+        devices = []
+        for device, emp_name, key_label in devices_raw:
+            device.employee_name = emp_name or "Unknown"
+            device.api_key_label = key_label or "Legacy/Unknown"
+            # Attach branch assignments from new junction table
+            branch_assignments = db.query(BindingBranch).filter(
+                BindingBranch.binding_id == device.id,
+            ).all()
+            device.branch_list = []
+            for ba in branch_assignments:
+                branch = db.query(Branch).filter(Branch.id == ba.branch_id).first()
+                if branch:
+                    device.branch_list.append({"id": branch.id, "name": branch.name, "binding_branch_id": ba.id})
+            # Fallback to legacy branch_id if no junction entries
+            if not device.branch_list and device.branch_id:
+                branch = db.query(Branch).filter(Branch.id == device.branch_id).first()
+                if branch:
+                    device.branch_list.append({"id": branch.id, "name": branch.name, "binding_branch_id": None})
+            devices.append(device)
 
-    server_url, sn, device_name = get_adms_config()
-    db_target = db.query(ADMSTarget).filter(ADMSTarget.is_active == True).first()
-    timezone_offset = db_target.timezone_offset if db_target else 7
+        server_url, sn, device_name = get_adms_config()
+        db_target = db.query(ADMSTarget).filter(ADMSTarget.is_active == True).first()
+        timezone_offset = db_target.timezone_offset if db_target else 7
 
-    # Branches
-    branches = db.query(Branch).all()
+        # Branches
+        branches = db.query(Branch).all()
 
-    # App config
-    max_devices_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
-    max_devices = int(max_devices_cfg.value) if max_devices_cfg else 5
+        # App config
+        max_devices_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
+        max_devices = int(max_devices_cfg.value) if max_devices_cfg else 5
 
-    # Today's punch stats
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_in = db.query(PunchLog).filter(
-        PunchLog.timestamp >= today_start,
-        PunchLog.punch_type.ilike('%in%')
-    ).count()
-    today_out = db.query(PunchLog).filter(
-        PunchLog.timestamp >= today_start,
-        PunchLog.punch_type.ilike('%out%')
-    ).count()
+        # Today's punch stats
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_in = db.query(PunchLog).filter(
+            PunchLog.timestamp >= today_start,
+            PunchLog.punch_type.ilike('%in%')
+        ).count()
+        today_out = db.query(PunchLog).filter(
+            PunchLog.timestamp >= today_start,
+            PunchLog.punch_type.ilike('%out%')
+        ).count()
 
-    # Device count per employee
-    employee_device_counts = {}
-    for d in devices:
-        if d.employee_id not in employee_device_counts:
-            count = db.query(DeviceBinding).filter(
-                DeviceBinding.employee_id == d.employee_id,
-                DeviceBinding.is_active == True,
-            ).count()
-            employee_device_counts[d.employee_id] = count if d.employee_id else 0
-        d.device_count_for_employee = employee_device_counts.get(d.employee_id, 0) if d.employee_id else 0
+        # Device count per employee
+        employee_device_counts = {}
+        for d in devices:
+            if d.employee_id not in employee_device_counts:
+                count = db.query(DeviceBinding).filter(
+                    DeviceBinding.employee_id == d.employee_id,
+                    DeviceBinding.is_active == True,
+                ).count()
+                employee_device_counts[d.employee_id] = count if d.employee_id else 0
+            d.device_count_for_employee = employee_device_counts.get(d.employee_id, 0) if d.employee_id else 0
 
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={
-            "punch_count": punch_count,
-            "device_count": device_count,
-            "uploaded_count": uploaded_count,
-            "failed_count": failed_count,
-            "pending_count": pending_count,
-            "logs": logs,
-            "devices": devices,
-            "server_url": server_url,
-            "sn": sn,
-            "device_name": device_name,
-            "timezone_offset": timezone_offset,
-            "branches": branches,
-            "admin": admin,
-            "max_devices": max_devices,
-            "today_in": today_in,
-            "today_out": today_out,
-        }
-    )
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={
+                "punch_count": punch_count,
+                "device_count": device_count,
+                "uploaded_count": uploaded_count,
+                "failed_count": failed_count,
+                "pending_count": pending_count,
+                "logs": logs,
+                "devices": devices,
+                "server_url": server_url,
+                "sn": sn,
+                "device_name": device_name,
+                "timezone_offset": timezone_offset,
+                "branches": branches,
+                "admin": admin,
+                "max_devices": max_devices,
+                "today_in": today_in,
+                "today_out": today_out,
+            }
+        )
+    except Exception as e:
+        return HTMLResponse(content=f"<h3>Error in Dashboard:</h3><pre>{traceback.format_exc()}</pre>", status_code=500)
 
 class ADMSConfigRequest(BaseModel):
     server_url: str
