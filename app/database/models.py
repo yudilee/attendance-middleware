@@ -173,7 +173,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     Base.metadata.create_all(bind=engine)
 
-    # ── Auto-Migration for SQLite ───────────────────────────────────────────
+    # ── Auto-Migration ────────────────────────────────────────────────────────
     from sqlalchemy import text
     migrations = [
         "ALTER TABLE adms_targets ADD COLUMN timezone_offset INTEGER DEFAULT 7;",
@@ -181,7 +181,7 @@ def init_db():
         "ALTER TABLE punch_logs ADD COLUMN client_punch_id TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN device_label TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN registration_status TEXT DEFAULT 'pending_approval';",
-        "ALTER TABLE device_bindings ADD COLUMN approved_at DATETIME;",
+        "ALTER TABLE device_bindings ADD COLUMN approved_at TIMESTAMP;",
         "ALTER TABLE device_bindings ADD COLUMN approved_by TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN notes TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN device_role TEXT DEFAULT 'primary';",
@@ -199,15 +199,33 @@ def init_db():
 
         # Migrate existing branch_id to device_branch_assignments
         try:
-            conn.execute(text("""
-                INSERT OR IGNORE INTO device_branch_assignments (binding_id, branch_id, assigned_at)
-                SELECT id, branch_id, created_at FROM device_bindings
-                WHERE branch_id IS NOT NULL
-                  AND branch_id NOT IN (
-                    SELECT branch_id FROM device_branch_assignments
-                    WHERE device_branch_assignments.binding_id = device_bindings.id
-                  )
-            """))
+            if engine.name == "sqlite":
+                insert_stmt = "INSERT OR IGNORE"
+            else:
+                insert_stmt = "INSERT" # For Postgres we'll use a safer approach below without ON CONFLICT to keep it simple
+
+            if engine.name == "sqlite":
+                conn.execute(text(f"""
+                    {insert_stmt} INTO device_branch_assignments (binding_id, branch_id, assigned_at)
+                    SELECT id, branch_id, created_at FROM device_bindings
+                    WHERE branch_id IS NOT NULL
+                      AND branch_id NOT IN (
+                        SELECT branch_id FROM device_branch_assignments
+                        WHERE device_branch_assignments.binding_id = device_bindings.id
+                      )
+                """))
+            else:
+                # PostgreSQL approach without dialect specific ON CONFLICT to avoid sequence issues
+                conn.execute(text(f"""
+                    INSERT INTO device_branch_assignments (binding_id, branch_id, assigned_at)
+                    SELECT id, branch_id, created_at FROM device_bindings
+                    WHERE branch_id IS NOT NULL
+                      AND NOT EXISTS (
+                        SELECT 1 FROM device_branch_assignments
+                        WHERE device_branch_assignments.binding_id = device_bindings.id
+                          AND device_branch_assignments.branch_id = device_bindings.branch_id
+                      )
+                """))
             conn.commit()
         except Exception:
             pass  # Table or data already migrated
