@@ -1,19 +1,29 @@
 import asyncio
 import logging
+import structlog
+import json
+import csv
+import io
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request, UploadFile, File
+from fastapi.responses import StreamingResponse, HTMLResponse, RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, func, text
 from typing import Optional
 import sys
 import os
+import uuid
+
+# ── Rate Limiting (slowapi) ──────────────────────────────────────────────────
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from starlette.requests import Request
 from pydantic import BaseModel
 from fastapi.security import OAuth2PasswordRequestForm
@@ -22,22 +32,37 @@ from fastapi import Response
 from app.services.auth import verify_api_key, generate_api_key
 from app.services.auth_ui import get_password_hash, verify_password, create_access_token, get_current_admin
 
-from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser, PunchType, Employee, AppConfig, ADMSCredential, BindingBranch
+from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser, PunchType, Employee, AppConfig, ADMSCredential, BindingBranch, EmployeeSupervisor, AttendanceCorrection
+from app.cache import init_redis, close_redis, get_cache, set_cache, invalidate_cache
+from app.config import settings
 from app.api.v1.schemas import (
     PunchRequest, PunchResponse, DeviceConfigResponse,
     BatchPunchRequest, BatchPunchResponse, BatchPunchResult, PunchTypeResponse,
-    ADMSCredentialPayload, AppStatusResponse, BranchInfo
+    ADMSCredentialPayload, AppStatusResponse, BranchInfo,
+    CorrectionRequest, CorrectionReview, SupervisorAssignment
 )
 from app.services.adms_scraper import sync_employees_from_adms
 from app.services.geo import is_within_fence, is_within_any_fence
-from app.services.adms_service import push_to_adms, adms_heartbeat_loop, retry_failed_pushes, get_adms_config, test_adms_connection, _handshake_state
+from app.services.adms_service import push_to_adms, get_adms_config, test_adms_connection, _handshake_state
+from app.worker import sync_punches_to_adms
+import arq
 
-# Logging setup
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+# ── Structured Logging ────────────────────────────────────────────────────────
+structlog.configure(
+    processors=[
+        structlog.stdlib.add_log_level,
+        structlog.dev.ConsoleRenderer() if settings.env == "development"
+        else structlog.processors.JSONRenderer()
+    ],
+    wrapper_class=structlog.stdlib.BoundLogger,
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(),
+    cache_logger_on_first_use=True,
 )
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
+
+# ── ARQ Pool (global, initialized at startup) ──────────────────────────────────
+arq_pool: Optional[arq.ArqRedis] = None
 
 
 async def adms_sync_loop():
@@ -47,14 +72,16 @@ async def adms_sync_loop():
         try:
             db = SessionLocal()
             try:
-                logger.info("Running scheduled ADMS employee sync...")
+                logger.info("adms_sync_started")
                 success, msg = sync_employees_from_adms(db)
-                if not success:
-                    logger.warning(f"ADMS Sync failed: {msg}")
+                if success:
+                    logger.info("adms_sync_completed", result=msg)
+                else:
+                    logger.warning("adms_sync_failed", reason=msg)
             finally:
                 db.close()
         except Exception as e:
-            logger.error(f"Error in adms_sync_loop: {e}")
+            logger.error("adms_sync_error", exc_info=True, error=str(e))
         
         await asyncio.sleep(86400) # Sleep 24 hours
 
@@ -62,46 +89,83 @@ async def adms_sync_loop():
 # ─── Lifespan (replaces deprecated @app.on_event) ────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Initializing database...")
+    global arq_pool
+    logger.info("initializing_database")
     init_db()
     
+    logger.info("initializing_redis")
+    try:
+        await init_redis()
+        logger.info("redis_connected")
+    except Exception as e:
+        logger.warning("redis_connection_failed", error=str(e))
+
     # Auto-initialize default admin if none exists
     db = SessionLocal()
     try:
         admin = db.query(AdminUser).first()
         if not admin:
-            logger.info("Creating default admin account...")
+            logger.info("creating_default_admin")
             default_admin = AdminUser(username="admin", hashed_password=get_password_hash("admin"))
             db.add(default_admin)
             db.commit()
     finally:
         db.close()
 
-    logger.info("Starting ADMS heartbeat loop...")
-    heartbeat_task = asyncio.create_task(adms_heartbeat_loop())
-    logger.info("Starting ADMS push retry loop...")
-    retry_task = asyncio.create_task(retry_failed_pushes())
-    logger.info("Starting ADMS employee sync loop...")
-    sync_task = asyncio.create_task(adms_sync_loop())
-    yield
-    # Graceful shutdown
-    heartbeat_task.cancel()
-    retry_task.cancel()
-    sync_task.cancel()
+    # Initialize ARQ pool (replaces asyncio background tasks)
+    logger.info("initializing_arq_pool")
     try:
-        await asyncio.gather(heartbeat_task, retry_task, sync_task, return_exceptions=True)
-    except Exception:
-        pass
-    logger.info("ADMS background tasks stopped.")
+        redis_settings = arq.connections.RedisSettings(
+            host=os.getenv("REDIS_HOST", "redis"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+        )
+        arq_pool = await arq.create_pool(redis_settings)
+        logger.info("arq_pool_initialized")
+    except Exception as e:
+        logger.warning("arq_pool_initialization_failed", error=str(e))
+        arq_pool = None
+
+    yield
+
+    # Graceful shutdown: close ARQ pool
+    logger.info("shutting_down_arq_pool")
+    if arq_pool:
+        arq_pool.close()
+        await arq_pool.wait_closed()
+    logger.info("stopping_redis")
+    await close_redis()
+    logger.info("adms_background_tasks_stopped")
 
 
 app = FastAPI(title="Secure Geo-Fenced Attendance Aggregator", lifespan=lifespan)
+
+# ── Rate Limiter Setup ───────────────────────────────────────────────────────
+def api_key_identifier(request: Request):
+    """Use X-API-Key header as the rate limit key, falling back to client IP."""
+    api_key = request.headers.get("X-API-Key")
+    if api_key:
+        return api_key
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    client = request.client
+    if client:
+        return client.host
+    return "unknown"
+
+limiter = Limiter(key_func=api_key_identifier)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Mount Static Files and Templates
 static_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 app.mount("/static", StaticFiles(directory=static_path), name="static")
 templates = Jinja2Templates(directory=template_path)
+
+# ─── Selfie Upload Directory ──────────────────────────────────────────────────
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads", "selfies")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 # ─── DB Dependency ────────────────────────────────────────────────────────────
@@ -402,31 +466,33 @@ class DeviceLabelRequest(BaseModel):
     label: str
     notes: str = ""
 
-@app.post("/ui/devices/{employee_id}/approve")
-async def approve_device(employee_id: str, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+@app.post("/ui/devices/{binding_id}/approve")
+async def approve_device(binding_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
     if not binding:
         raise HTTPException(status_code=404, detail="Device not found")
     binding.registration_status = "approved"
     binding.approved_at = datetime.utcnow()
     binding.approved_by = admin.username
     db.commit()
-    logger.info(f"Admin '{admin.username}' approved device for {employee_id}")
+    logger.info("device_approved", admin=admin.username, binding_id=binding_id, employee_id=binding.employee_id)
+    await invalidate_cache("device_config:*")
     return {"status": "approved"}
 
-@app.post("/ui/devices/{employee_id}/suspend")
-async def suspend_device(employee_id: str, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+@app.post("/ui/devices/{binding_id}/suspend")
+async def suspend_device(binding_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
     if not binding:
         raise HTTPException(status_code=404, detail="Device not found")
     binding.registration_status = "suspended"
     db.commit()
-    logger.info(f"Admin '{admin.username}' suspended device for {employee_id}")
+    logger.info("device_suspended", admin=admin.username, binding_id=binding_id, employee_id=binding.employee_id)
+    await invalidate_cache("device_config:*")
     return {"status": "suspended"}
 
-@app.put("/ui/devices/{employee_id}/label")
-async def update_device_label(employee_id: str, req: DeviceLabelRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+@app.put("/ui/devices/{binding_id}/label")
+async def update_device_label(binding_id: int, req: DeviceLabelRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
     if not binding:
         raise HTTPException(status_code=404, detail="Device not found")
     binding.device_label = req.label
@@ -434,28 +500,41 @@ async def update_device_label(employee_id: str, req: DeviceLabelRequest, db: Ses
     db.commit()
     return {"status": "updated"}
 
-@app.post("/ui/devices/{employee_id}/set-active")
-async def set_active_device(employee_id: str, req: dict, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    """Toggle which device is active for this employee (multi-device: deactivate others)."""
-    device_uuid = req.get("device_uuid")
-    bindings = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).all()
-    for b in bindings:
-        b.is_active = (b.device_uuid == device_uuid)
+@app.post("/ui/devices/{binding_id}/set-active")
+async def set_active_device(binding_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Set this specific device as the primary active device for its owner."""
+    binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    # If it has an owner, deactivate their other devices
+    if binding.employee_id:
+        db.query(DeviceBinding).filter(
+            DeviceBinding.employee_id == binding.employee_id,
+            DeviceBinding.id != binding_id
+        ).update({"is_active": False})
+        
+    binding.is_active = True
     db.commit()
+    await invalidate_cache("device_config:*")
     return {"status": "updated"}
 
 
-@app.delete("/ui/unbind/{employee_id}")
-async def unbind_device(employee_id: str, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+@app.delete("/ui/devices/{binding_id}/unbind")
+async def unbind_device(binding_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
     if binding:
+        # Also clean up branch assignments
+        db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).delete()
         db.delete(binding)
         db.commit()
+        logger.info("device_deleted", admin=admin.username, binding_id=binding_id)
+    await invalidate_cache("device_config:*")
     return {"status": "success"}
 
-@app.post("/ui/devices/{employee_id}/bind-branch")
-async def bind_device_to_branch(employee_id: str, req: dict, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).first()
+@app.post("/ui/devices/{binding_id}/bind-branch")
+async def bind_device_to_branch(binding_id: int, req: dict, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
     if not binding:
         raise HTTPException(status_code=404, detail="Device not found")
         
@@ -475,7 +554,8 @@ async def bind_device_to_branch(employee_id: str, req: dict, db: Session = Depen
             db.add(BindingBranch(binding_id=binding.id, branch_id=int(branch_id)))
         
     db.commit()
-    logger.info(f"Assigned device {employee_id} to branch {branch_id}")
+    logger.info("device_branch_assigned", employee_id=binding.employee_id, branch_id=branch_id, admin=admin.username)
+    await invalidate_cache("device_config:*")
     return {"status": "success"}
 
 
@@ -523,7 +603,8 @@ async def assign_branch_to_device(binding_id: int, branch_id: int, db: Session =
 
     db.add(BindingBranch(binding_id=binding_id, branch_id=branch_id))
     db.commit()
-    logger.info(f"Assigned branch {branch.name} to device binding {binding_id}")
+    logger.info("branch_assigned_to_device", branch=branch.name, binding_id=binding_id, admin=admin.username)
+    await invalidate_cache("device_config:*")
     return {"status": "success"}
 
 
@@ -538,7 +619,8 @@ async def remove_branch_from_device(binding_id: int, branch_id: int, db: Session
         raise HTTPException(status_code=404, detail="Branch not assigned to this device")
     db.delete(assignment)
     db.commit()
-    logger.info(f"Removed branch {branch_id} from device binding {binding_id}")
+    logger.info("branch_removed_from_device", branch_id=branch_id, binding_id=binding_id, admin=admin.username)
+    await invalidate_cache("device_config:*")
     return {"status": "success"}
 
 
@@ -549,6 +631,8 @@ class BranchRequest(BaseModel):
     latitude: float
     longitude: float
     radius_meters: float
+    qr_code_enabled: bool = False
+    qr_code_data: Optional[str] = None
 
 @app.get("/ui/branches")
 async def get_branches(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
@@ -559,7 +643,9 @@ async def get_branches(db: Session = Depends(get_db), admin: AdminUser = Depends
         "latitude": b.latitude,
         "longitude": b.longitude,
         "radius_meters": b.radius_meters,
-        "is_active": b.is_active
+        "is_active": b.is_active,
+        "qr_code_enabled": b.qr_code_enabled,
+        "qr_code_data": b.qr_code_data if b.qr_code_enabled else None,
     } for b in branches]
 
 @app.post("/ui/branches")
@@ -569,10 +655,13 @@ async def create_branch(req: BranchRequest, db: Session = Depends(get_db), admin
         latitude=req.latitude,
         longitude=req.longitude,
         radius_meters=req.radius_meters,
-        is_active=True
+        is_active=True,
+        qr_code_enabled=req.qr_code_enabled,
+        qr_code_data=req.qr_code_data if req.qr_code_enabled else None,
     )
     db.add(new_branch)
     db.commit()
+    await invalidate_cache("device_config:*")
     return {"status": "success"}
 
 @app.put("/ui/branches/{branch_id}")
@@ -585,7 +674,10 @@ async def update_branch(branch_id: int, req: BranchRequest, db: Session = Depend
     branch.latitude = req.latitude
     branch.longitude = req.longitude
     branch.radius_meters = req.radius_meters
+    branch.qr_code_enabled = req.qr_code_enabled
+    branch.qr_code_data = req.qr_code_data if req.qr_code_enabled else None
     db.commit()
+    await invalidate_cache("device_config:*")
     return {"status": "success"}
 
 @app.delete("/ui/branches/{branch_id}")
@@ -598,6 +690,7 @@ async def delete_branch(branch_id: int, db: Session = Depends(get_db), admin: Ad
             raise HTTPException(status_code=400, detail="Cannot delete branch while it is assigned to devices.")
         db.delete(branch)
         db.commit()
+    await invalidate_cache("device_config:*")
     return {"status": "success"}
 
 
@@ -607,6 +700,22 @@ async def assign_device_employee(binding_id: int, employee_id: str, db: Session 
     if not binding:
         raise HTTPException(status_code=404, detail="Binding not found")
     
+    # Check how many active devices this employee already has
+    max_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
+    max_devices = int(max_cfg.value) if max_cfg else 5
+
+    existing_count = db.query(DeviceBinding).filter(
+        DeviceBinding.employee_id == employee_id,
+        DeviceBinding.is_active == True,
+        DeviceBinding.registration_status.in_(["approved", "active"]),
+    ).count()
+
+    if existing_count >= max_devices:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Maximum devices reached ({existing_count}/{max_devices}) for this employee."
+        )
+
     binding.employee_id = employee_id
     binding.is_active = True  # All assigned devices start active
     db.commit()
@@ -616,13 +725,34 @@ async def assign_device_employee(binding_id: int, employee_id: str, db: Session 
 # ─── API Key Management UI Routes ────────────────────────────────────────────
 
 @app.post("/ui/api-keys")
-async def create_api_key(label: str = "Mobile Client", db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    """Generate a new API key for a mobile device."""
-    new_key = ApiKey(key_value=generate_api_key(), label=label)
+async def create_api_key(
+    label: str = "Mobile Client",
+    expires_in_days: Optional[int] = None,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """Generate a new API key for a mobile device.
+    Optionally set expiry via expires_in_days query param.
+    """
+    expires_at = None
+    if expires_in_days is not None and expires_in_days > 0:
+        expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+
+    new_key = ApiKey(
+        key_value=generate_api_key(),
+        label=label,
+        expires_at=expires_at,
+    )
     db.add(new_key)
     db.commit()
     db.refresh(new_key)
-    return {"key": new_key.key_value, "label": new_key.label, "id": new_key.id}
+    logger.info("api_key_created", label=label, key_id=new_key.id, admin=admin.username)
+    return {
+        "key": new_key.key_value,
+        "label": new_key.label,
+        "id": new_key.id,
+        "expires_at": new_key.expires_at.isoformat() if new_key.expires_at else None,
+    }
 
 
 @app.get("/ui/api-keys")
@@ -635,6 +765,19 @@ async def list_api_keys(db: Session = Depends(get_db), admin: AdminUser = Depend
             DeviceBinding.api_key_id == k.id,
         ).count()
 
+        # Compute expiry info
+        expires_in_days = None
+        expiry_status = "none"
+        if k.expires_at:
+            remaining = (k.expires_at - datetime.utcnow()).days
+            expires_in_days = remaining
+            if remaining < 0:
+                expiry_status = "expired"
+            elif remaining < 30:
+                expiry_status = "expiring_soon"
+            else:
+                expiry_status = "valid"
+
         result.append({
             "id": k.id,
             "label": k.label,
@@ -642,6 +785,10 @@ async def list_api_keys(db: Session = Depends(get_db), admin: AdminUser = Depend
             "is_active": k.is_active,
             "created_at": k.created_at.isoformat() if k.created_at else None,
             "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            "last_used_ip": k.last_used_ip,
+            "expires_at": k.expires_at.isoformat() if k.expires_at else None,
+            "expires_in_days": expires_in_days,
+            "expiry_status": expiry_status,
             "device_count": device_count,
         })
     return result
@@ -674,10 +821,65 @@ async def revoke_api_key(key_id: int, hard: bool = False, db: Session = Depends(
             raise HTTPException(status_code=400, detail=f"Cannot delete: {len(bindings)} device(s) still bound to this key. Soft-revoke instead.")
         db.delete(key)
         db.commit()
+        logger.info("api_key_deleted", key_id=key_id, admin=admin.username)
+        await invalidate_cache("device_config:*")
         return {"status": "deleted"}
     key.is_active = False
     db.commit()
+    logger.info("api_key_revoked", key_id=key_id, admin=admin.username)
+    await invalidate_cache("device_config:*")
     return {"status": "revoked"}
+
+
+@app.post("/ui/api-keys/{key_id}/rotate")
+async def rotate_api_key(
+    key_id: int,
+    grace_period_days: int = 7,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """Rotate an API key: generate a new key and expire the old one after a grace period.
+    
+    The old key remains valid for `grace_period_days` (default 7) so mobile apps
+    can transition without disruption. The new key is returned immediately.
+    """
+    old_key = db.query(ApiKey).filter(ApiKey.id == key_id).first()
+    if not old_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+    if not old_key.is_active:
+        raise HTTPException(status_code=400, detail="Cannot rotate a revoked or expired key.")
+
+    # Set old key to expire after grace period (or keep existing expiry if sooner)
+    grace_end = datetime.utcnow() + timedelta(days=grace_period_days)
+    if old_key.expires_at and old_key.expires_at < grace_end:
+        # Existing expiry is sooner — keep it
+        pass
+    else:
+        old_key.expires_at = grace_end
+
+    # Create new key with same label
+    new_key = ApiKey(
+        key_value=generate_api_key(),
+        label=old_key.label,
+    )
+    db.add(new_key)
+    db.commit()
+    db.refresh(new_key)
+
+    logger.info(
+        f"Admin '{admin.username}' rotated API key '{old_key.label}' (id={key_id}). "
+        f"Old key expires at {old_key.expires_at}. New key id={new_key.id}."
+    )
+
+    return {
+        "status": "rotated",
+        "old_key_id": old_key.id,
+        "old_key_label": old_key.label,
+        "old_key_expires_at": old_key.expires_at.isoformat() if old_key.expires_at else None,
+        "new_key": new_key.key_value,
+        "new_key_id": new_key.id,
+        "new_key_label": new_key.label,
+    }
 
 
 class PunchTypePayload(BaseModel):
@@ -709,6 +911,7 @@ async def create_punch_type(payload: PunchTypePayload, db: Session = Depends(get
     pt = PunchType(**payload.dict())
     db.add(pt)
     db.commit()
+    await invalidate_cache("punch_types:*")
     return {"status": "created"}
 
 @app.put("/ui/punch-types/{code}")
@@ -719,6 +922,7 @@ async def update_punch_type(code: str, payload: PunchTypePayload, db: Session = 
     for key, value in payload.dict().items():
         setattr(pt, key, value)
     db.commit()
+    await invalidate_cache("punch_types:*")
     return {"status": "updated"}
 
 @app.delete("/ui/punch-types/{code}")
@@ -728,6 +932,7 @@ async def delete_punch_type(code: str, db: Session = Depends(get_db), admin: Adm
         raise HTTPException(status_code=404, detail="Punch type not found")
     db.delete(pt)
     db.commit()
+    await invalidate_cache("punch_types:*")
     return {"status": "deleted"}
 
 
@@ -755,6 +960,16 @@ async def save_adms_credentials(payload: ADMSCredentialPayload, db: Session = De
 
 @app.post("/ui/adms-sync")
 async def trigger_adms_sync(background_tasks: BackgroundTasks, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    # If ARQ pool is available, enqueue a retry of failed punches
+    if arq_pool:
+        try:
+            job = await arq_pool.enqueue_job("retry_failed_punches")
+            logger.info("adms_retry_triggered", job_id=job.job_id, admin=admin.username)
+            return {"status": "triggered", "job_id": job.job_id}
+        except Exception as e:
+            logger.warning("adms_retry_enqueue_failed", error=str(e))
+    
+    # Fallback: run employee sync directly
     success, msg = sync_employees_from_adms(db)
     if not success:
         raise HTTPException(status_code=400, detail=msg)
@@ -787,6 +1002,61 @@ async def get_adms_sync_info(db: Session = Depends(get_db), admin: AdminUser = D
     }
 
 
+@app.get("/ui/adms-sync-status")
+async def get_adms_sync_status(request: Request, db: Session = Depends(get_db), current_user: AdminUser = Depends(get_current_admin)):
+    """Get ADMS sync statistics for the dashboard."""
+    # Total records
+    total = db.query(PunchLog).count()
+    
+    # Sync status breakdown (using server_sync_status)
+    synced = db.query(PunchLog).filter(PunchLog.server_sync_status == "synced").count()
+    pending = db.query(PunchLog).filter(PunchLog.server_sync_status == "pending").count()
+    failed = db.query(PunchLog).filter(PunchLog.server_sync_status == "failed").count()
+    
+    # Recent failures (last 50)
+    recent_failures = db.query(PunchLog).filter(
+        PunchLog.server_sync_status == "failed"
+    ).order_by(PunchLog.timestamp.desc()).limit(50).all()
+    
+    # Sync activity in last 24 hours
+    last_24h = datetime.utcnow() - timedelta(hours=24)
+    synced_24h = db.query(PunchLog).filter(
+        PunchLog.server_sync_status == "synced",
+        PunchLog.synced_at >= last_24h
+    ).count()
+    
+    # ADMS connectivity status from handshake state
+    adms_connected = _handshake_state.get("handshake_done", False)
+    adms_last_handshake = _handshake_state.get("attlog_stamp", None)
+    
+    # Worker queue health
+    worker_running = arq_pool is not None
+    
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "section": "adms-dashboard",
+        "stats": {
+            "total": total,
+            "synced": synced,
+            "pending": pending,
+            "failed": failed,
+            "synced_24h": synced_24h,
+            "sync_rate": round((synced / total * 100), 1) if total > 0 else 0,
+        },
+        "recent_failures": recent_failures,
+        "adms_connected": adms_connected,
+        "adms_last_handshake": adms_last_handshake,
+        "worker_running": worker_running,
+        # Include existing context variables for the rest of the page
+        "devices": db.query(DeviceBinding).all(),
+        "branches": db.query(Branch).all(),
+        "api_keys": db.query(ApiKey).all(),
+        "punch_types": db.query(PunchType).all(),
+        "adms_targets": db.query(ADMSTarget).all(),
+        "app_settings": get_app_settings,
+    })
+
+
 # ─── API V1 ROUTES ───────────────────────────────────────────────────────────
 
 @app.get("/api/v1/app-status", response_model=AppStatusResponse)
@@ -796,7 +1066,9 @@ async def get_app_status(db: Session = Depends(get_db)):
     return AppStatusResponse(status="ok", min_version=min_ver)
 
 @app.get("/api/v1/device-config", response_model=DeviceConfigResponse)
+@limiter.limit("30/minute")
 async def get_device_config(
+    request: Request,
     device_uuid: str,
     employee_id: Optional[str] = None,
     device_label: str = None,
@@ -809,6 +1081,13 @@ async def get_device_config(
     Multi-device: checks max_devices_per_employee before allowing registration.
     Multi-branch: returns ALL branches assigned to this device.
     """
+    # ── Try cache first (only for fully approved active configs) ────────────
+    # Use api_key.id (int) as part of cache key; device_uuid identifies the binding
+    cache_key = f"device_config:{api_key.id}:{device_uuid}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return DeviceConfigResponse(**json.loads(cached))
+
     # ── Get max-devices config ──────────────────────────────────────────────
     max_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
     max_devices = int(max_cfg.value) if max_cfg else 5
@@ -845,7 +1124,7 @@ async def get_device_config(
         db.add(binding)
         db.commit()
         db.refresh(binding)
-        logger.info(f"New device registered (UUID: {device_uuid[:8]}...) for employee {employee_id}")
+        logger.info("device_registered", device_uuid=device_uuid[:8], employee_id=employee_id)
 
     # Update label or API key association if missing
     needs_commit = False
@@ -908,6 +1187,8 @@ async def get_device_config(
                 latitude=branch.latitude,
                 longitude=branch.longitude,
                 radius_meters=branch.radius_meters,
+                qr_code_enabled=branch.qr_code_enabled,
+                qr_code_data=branch.qr_code_data if branch.qr_code_enabled else None,
             ))
 
     if not branches:
@@ -918,25 +1199,50 @@ async def get_device_config(
             max_devices=max_devices,
         )
 
-    return DeviceConfigResponse(
+    response = DeviceConfigResponse(
         status="active",
         branches=branches,
         device_count=device_count,
         max_devices=max_devices,
     )
+    # Cache the successful config for 5 minutes
+    await set_cache(cache_key, response.model_dump_json(), ttl=300)
+    return response
 
 
 @app.post("/api/v1/punch", response_model=PunchResponse)
+@limiter.limit("10/minute")
 async def create_punch(
-    request: PunchRequest,
+    request: Request,
+    punch_req: PunchRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: ApiKey = Depends(verify_api_key),   # Enforce API key auth
 ):
+    # ── a) Time validation ─────────────────────────────────────────────────────
+    try:
+        device_time_str = punch_req.timestamp.replace("Z", "")
+        if "." in device_time_str:
+            device_time_str = device_time_str.split(".")[0]
+        device_local_time = datetime.fromisoformat(device_time_str)
+        tz_offset = timedelta(minutes=punch_req.tz_offset_minutes)
+        server_timestamp = device_local_time - tz_offset
+        time_diff = abs((datetime.utcnow() - server_timestamp).total_seconds())
+        if time_diff > 300:  # 5 minutes
+            raise HTTPException(
+                status_code=422,
+                detail="Timestamp deviation too large. Please sync your device time."
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.warning("Failed to parse device timestamp for time validation.")
+        server_timestamp = datetime.utcnow()
+
     # 1. Idempotency check — if we already have this client_punch_id, return the existing record
-    if request.client_punch_id:
+    if punch_req.client_punch_id:
         existing = db.query(PunchLog).filter(
-            PunchLog.client_punch_id == request.client_punch_id
+            PunchLog.client_punch_id == punch_req.client_punch_id
         ).first()
         if existing:
             return {
@@ -946,23 +1252,21 @@ async def create_punch(
                 "log_id": existing.id,
             }
 
-    # 2. Basic validation
-    if request.is_mock_location:
-        raise HTTPException(status_code=400, detail="Mock location detected. Punch rejected.")
-    if not request.biometric_verified:
+    # 2. Basic validation — allow mock location but tag it (client-reported)
+    if not punch_req.biometric_verified:
         raise HTTPException(status_code=400, detail="Biometric verification failed.")
 
     # 2b. Validate punch_type against registry
     valid_type = db.query(PunchType).filter(
-        PunchType.code == request.punch_type,
+        PunchType.code == punch_req.punch_type,
         PunchType.is_active == True
     ).first()
     if not valid_type:
-        raise HTTPException(status_code=400, detail=f"Invalid punch type: '{request.punch_type}'")
+        raise HTTPException(status_code=400, detail=f"Invalid punch type: '{punch_req.punch_type}'")
 
     # 3. Device binding check (Enforce server-side identity)
     binding = db.query(DeviceBinding).filter(
-        DeviceBinding.device_uuid == request.device_uuid
+        DeviceBinding.device_uuid == punch_req.device_uuid
     ).first()
     
     if not binding:
@@ -1001,7 +1305,7 @@ async def create_punch(
 
     # 3c. Multi-branch geofencing check
     in_fence, distance, best_branch = is_within_any_fence(
-        request.latitude, request.longitude, assigned_branches
+        punch_req.latitude, punch_req.longitude, assigned_branches
     )
     if not in_fence:
         raise HTTPException(
@@ -1009,63 +1313,89 @@ async def create_punch(
             detail=f"Outside assigned branches. Nearest: {best_branch} ({distance:.0f}m away)."
         )
 
-    # 4. Duplicate punch prevention (block same punch_type within 5 minutes)
+    # ── d) Duplicate punch detection ────────────────────────────────────────────
     recent_cutoff = datetime.utcnow() - timedelta(minutes=5)
     recent_punch = db.query(PunchLog).filter(
         and_(
             PunchLog.employee_id == effective_employee_id,
-            PunchLog.punch_type == request.punch_type,
+            PunchLog.punch_type == punch_req.punch_type,
             PunchLog.timestamp >= recent_cutoff
         )
     ).first()
     if recent_punch:
         elapsed = int((datetime.utcnow() - recent_punch.timestamp).total_seconds() / 60)
         raise HTTPException(
-            status_code=400,
-            detail=f"Duplicate punch detected. You already clocked {request.punch_type} {elapsed} minute(s) ago."
+            status_code=409,
+            detail=f"Duplicate {punch_req.punch_type} detected within 5 minutes"
         )
 
-    # 5. Record punch using the offline-ready, GPS-validated time from the mobile app
+    # ── b) Rate limit per employee per day ──────────────────────────────────────
+    MAX_DAILY_PUNCHES = settings.max_daily_punches
+    daily_count = db.query(PunchLog).filter(
+        PunchLog.employee_id == effective_employee_id,
+        func.date(PunchLog.timestamp) == func.current_date()
+    ).count()
+    if daily_count >= MAX_DAILY_PUNCHES:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum daily punches exceeded"
+        )
+
+    # ── c) Client-reported flags tagging ───────────────────────────────────────
+    notes_parts = []
+    if punch_req.is_mock_location:
+        notes_parts.append("mock_location: client-reported")
+    if not punch_req.gps_time_validated:
+        notes_parts.append("gps_time_validated: client-reported")
+    notes = "; ".join(notes_parts) if notes_parts else None
+
+    # 5. Record punch
     try:
-        # Dart's toIso8601String() for local time omits the offset. Strip 'Z' just in case.
-        device_time_str = request.timestamp.replace("Z", "")
-        # Remove microsecond precision if present to match Python 3.10- compatibility cleanly
+        device_time_str = punch_req.timestamp.replace("Z", "")
         if "." in device_time_str:
             device_time_str = device_time_str.split(".")[0]
         device_local_time = datetime.fromisoformat(device_time_str)
-        
-        # Convert device local time back to UTC for standard SQLite storage
-        tz_offset = timedelta(minutes=request.tz_offset_minutes)
         server_time_utc = device_local_time - tz_offset
         
-        logger.info(f"Using Offline-Ready Time: {device_local_time} (GPS Validated: {request.gps_time_validated})")
+        logger.info("punch_timestamp_parsed", device_local_time=str(device_local_time), gps_validated=punch_req.gps_time_validated)
     except Exception as e:
-        logger.warning(f"Failed to parse device timestamp: {e}. Falling back to server time.")
+        logger.warning("punch_timestamp_parse_failed", error=str(e))
         server_time_utc = datetime.utcnow()
 
     log = PunchLog(
         employee_id=effective_employee_id,
-        device_uuid=request.device_uuid,
+        device_uuid=punch_req.device_uuid,
         timestamp=server_time_utc,
-        latitude=request.latitude,
-        longitude=request.longitude,
-        is_mock_location=request.is_mock_location,
-        biometric_verified=request.biometric_verified,
-        punch_type=request.punch_type,
-        tz_offset_minutes=request.tz_offset_minutes,
+        latitude=punch_req.latitude,
+        longitude=punch_req.longitude,
+        is_mock_location=punch_req.is_mock_location,
+        biometric_verified=punch_req.biometric_verified,
+        punch_type=punch_req.punch_type,
+        tz_offset_minutes=punch_req.tz_offset_minutes,
         adms_status="pending",
-        client_punch_id=request.client_punch_id,
+        client_punch_id=punch_req.client_punch_id,
+        gps_time_validated=punch_req.gps_time_validated,
+        notes=notes,
     )
     db.add(log)
     db.commit()
     db.refresh(log)
 
-    # 6. Background push to ADMS
-    background_tasks.add_task(push_to_adms, log.id, effective_employee_id, server_time_utc, request.punch_type, request.tz_offset_minutes)
+    # 6. Enqueue ADMS sync via ARQ worker (replaces direct background push)
+    if arq_pool:
+        try:
+            await arq_pool.enqueue_job("sync_punches_to_adms", log.id)
+        except Exception as e:
+            logger.warning("arq_enqueue_failed", error=str(e))
 
+    logger.info("punch_submitted",
+                employee_id=effective_employee_id,
+                punch_type=punch_req.punch_type,
+                log_id=log.id,
+                geofence_valid=in_fence)
     return {
         "status": "success",
-        "message": f"Punch recorded: {request.punch_type}",
+        "message": f"Punch recorded: {punch_req.punch_type}",
         "server_time": server_time_utc,
         "log_id": log.id,
     }
@@ -1074,22 +1404,43 @@ async def create_punch(
 # ─── Batch Punch Endpoint ────────────────────────────────────────────────────
 
 @app.post("/api/v1/punch/batch", response_model=BatchPunchResponse)
+@limiter.limit("10/minute")
 async def create_batch_punch(
-    request: BatchPunchRequest,
+    request: Request,
+    batch_req: BatchPunchRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: ApiKey = Depends(verify_api_key),
 ):
     """Accept up to 50 offline punches in one request for efficient sync."""
-    if len(request.punches) > 50:
+    if len(batch_req.punches) > 50:
         raise HTTPException(status_code=400, detail="Batch size limit is 50 punches.")
 
     results = []
     synced = 0
     failed = 0
 
-    for punch in request.punches:
+    for punch in batch_req.punches:
         try:
+            # ── a) Time validation ─────────────────────────────────────────
+            try:
+                device_time_str = punch.timestamp.replace("Z", "")
+                if "." in device_time_str:
+                    device_time_str = device_time_str.split(".")[0]
+                device_local_time = datetime.fromisoformat(device_time_str)
+                server_time_utc = device_local_time - timedelta(minutes=punch.tz_offset_minutes)
+                time_diff = abs((datetime.utcnow() - server_time_utc).total_seconds())
+                if time_diff > 300:
+                    results.append(BatchPunchResult(
+                        client_punch_id=punch.client_punch_id,
+                        status="error",
+                        error="Timestamp deviation too large. Please sync your device time.",
+                    ))
+                    failed += 1
+                    continue
+            except Exception:
+                server_time_utc = datetime.utcnow()
+
             # Idempotency check
             if punch.client_punch_id:
                 existing = db.query(PunchLog).filter(
@@ -1104,15 +1455,7 @@ async def create_batch_punch(
                     synced += 1
                     continue
 
-            # Basic validation (parity with single-punch endpoint)
-            if punch.is_mock_location:
-                results.append(BatchPunchResult(
-                    client_punch_id=punch.client_punch_id,
-                    status="error",
-                    error="Mock location detected. Punch rejected.",
-                ))
-                failed += 1
-                continue
+            # Basic validation — allow mock location but tag it
             if not punch.biometric_verified:
                 results.append(BatchPunchResult(
                     client_punch_id=punch.client_punch_id,
@@ -1205,7 +1548,7 @@ async def create_batch_punch(
                 failed += 1
                 continue
 
-            # Duplicate punch prevention (block same punch_type within 5 minutes)
+            # ── d) Duplicate punch detection ────────────────────────────────
             recent_cutoff = datetime.utcnow() - timedelta(minutes=5)
             recent_punch = db.query(PunchLog).filter(
                 and_(
@@ -1215,14 +1558,36 @@ async def create_batch_punch(
                 )
             ).first()
             if recent_punch:
-                elapsed = int((datetime.utcnow() - recent_punch.timestamp).total_seconds() / 60)
                 results.append(BatchPunchResult(
                     client_punch_id=punch.client_punch_id,
                     status="error",
-                    error=f"Duplicate punch detected. Already clocked {punch.punch_type} {elapsed} minute(s) ago.",
+                    error=f"Duplicate {punch.punch_type} detected within 5 minutes",
                 ))
                 failed += 1
                 continue
+
+            # ── b) Rate limit per employee per day ──────────────────────────
+            MAX_DAILY_PUNCHES = settings.max_daily_punches
+            daily_count = db.query(PunchLog).filter(
+                PunchLog.employee_id == effective_employee_id,
+                func.date(PunchLog.timestamp) == func.current_date()
+            ).count()
+            if daily_count >= MAX_DAILY_PUNCHES:
+                results.append(BatchPunchResult(
+                    client_punch_id=punch.client_punch_id,
+                    status="error",
+                    error="Maximum daily punches exceeded",
+                ))
+                failed += 1
+                continue
+
+            # ── c) Client-reported flags tagging ───────────────────────────
+            notes_parts = []
+            if punch.is_mock_location:
+                notes_parts.append("mock_location: client-reported")
+            if not punch.gps_time_validated:
+                notes_parts.append("gps_time_validated: client-reported")
+            notes = "; ".join(notes_parts) if notes_parts else None
 
             # Parse timestamp
             try:
@@ -1246,11 +1611,18 @@ async def create_batch_punch(
                 tz_offset_minutes=punch.tz_offset_minutes,
                 adms_status="pending",
                 client_punch_id=punch.client_punch_id,
+                gps_time_validated=punch.gps_time_validated,
+                notes=notes,
             )
             db.add(log)
             db.commit()
             db.refresh(log)
-            background_tasks.add_task(push_to_adms, log.id, effective_employee_id, server_time_utc, punch.punch_type, punch.tz_offset_minutes)
+            # Enqueue ADMS sync via ARQ worker
+            if arq_pool:
+                try:
+                    await arq_pool.enqueue_job("sync_punches_to_adms", log.id)
+                except Exception as e:
+                    logger.warning("arq_enqueue_failed", error=str(e))
 
             results.append(BatchPunchResult(
                 client_punch_id=punch.client_punch_id,
@@ -1259,6 +1631,13 @@ async def create_batch_punch(
             ))
             synced += 1
 
+        except HTTPException as e:
+            results.append(BatchPunchResult(
+                client_punch_id=punch.client_punch_id,
+                status="error",
+                error=e.detail,
+            ))
+            failed += 1
         except Exception as e:
             results.append(BatchPunchResult(
                 client_punch_id=punch.client_punch_id,
@@ -1273,22 +1652,84 @@ async def create_batch_punch(
 # ─── Punch Types Endpoint ────────────────────────────────────────────────────
 
 @app.get("/api/v1/punch-types", response_model=list[PunchTypeResponse])
+@limiter.limit("30/minute")
 async def get_punch_types(
+    request: Request,
     db: Session = Depends(get_db),
     _: ApiKey = Depends(verify_api_key),
 ):
     """Mobile app fetches available punch types on startup."""
+    cache_key = f"punch_types:{_.id}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return [PunchTypeResponse(**item) for item in json.loads(cached)]
+
     types = db.query(PunchType).filter(PunchType.is_active == True).order_by(PunchType.display_order).all()
-    return [
+    result = [
         PunchTypeResponse(
             code=t.code, label=t.label, adms_status_code=t.adms_status_code,
             display_order=t.display_order, icon=t.icon, color_hex=t.color_hex,
             requires_geofence=t.requires_geofence,
         ) for t in types
     ]
+    # Cache for 10 minutes (punch types rarely change)
+    await set_cache(cache_key, json.dumps([r.model_dump() for r in result]), ttl=600)
+    return result
 
 
-# ─── Punch Log Export ────────────────────────────────────────────────────────
+# ─── Punch History (Cursor-based Pagination) ─────────────────────────────────
+
+@app.get("/api/v1/punch-history")
+async def get_punch_history(
+    api_key: ApiKey = Depends(verify_api_key),
+    employee_id: Optional[str] = None,
+    cursor: Optional[str] = None,  # ISO timestamp for cursor-based pagination
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """Paginated punch log history with cursor-based pagination."""
+    query = db.query(PunchLog)
+
+    if employee_id:
+        query = query.filter(PunchLog.employee_id == employee_id)
+
+    if cursor:
+        try:
+            cursor_dt = datetime.fromisoformat(cursor)
+            query = query.filter(PunchLog.timestamp < cursor_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor format. Use ISO timestamp.")
+
+    logs = query.order_by(PunchLog.timestamp.desc()).limit(limit + 1).all()
+
+    has_more = len(logs) > limit
+    if has_more:
+        logs = logs[:limit]
+
+    next_cursor = logs[-1].timestamp.isoformat() if logs and has_more else None
+
+    def serialize_punch_log(log):
+        return {
+            "id": log.id,
+            "employee_id": log.employee_id,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+            "punch_type": log.punch_type,
+            "latitude": log.latitude,
+            "longitude": log.longitude,
+            "is_mock_location": log.is_mock_location,
+            "biometric_verified": log.biometric_verified,
+            "adms_status": log.adms_status,
+            "tz_offset_minutes": log.tz_offset_minutes,
+        }
+
+    return {
+        "data": [serialize_punch_log(log) for log in logs],
+        "next_cursor": next_cursor,
+        "has_more": has_more
+    }
+
+
+# ─── Punch Log Export (Streaming CSV) ────────────────────────────────────────
 
 @app.get("/ui/logs/export")
 async def export_punch_logs(
@@ -1297,60 +1738,448 @@ async def export_punch_logs(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ):
-    """Export punch logs as CSV."""
-    import csv
-    import io
-    
+    """Export punch logs as CSV with server-side streaming for large datasets."""
     query = db.query(PunchLog, Employee.full_name).\
         outerjoin(Employee, PunchLog.employee_id == Employee.employee_id)
-    
+
     if from_date:
         query = query.filter(PunchLog.timestamp >= datetime.fromisoformat(from_date))
     if to_date:
         query = query.filter(PunchLog.timestamp <= datetime.fromisoformat(to_date))
-    
-    logs = query.order_by(PunchLog.timestamp.desc()).limit(10000).all()
-    
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Log ID", "Employee", "Employee ID", "Timestamp (UTC)", "Punch Type",
-                      "Latitude", "Longitude", "Mock Location", "Biometric",
-                      "ADMS Status", "TZ Offset"])
-    
-    for log, name in logs:
-        writer.writerow([
-            log.id,
-            name or "Unknown",
-            log.employee_id,
-            log.timestamp.isoformat() if log.timestamp else "",
-            log.punch_type,
-            log.latitude,
-            log.longitude,
-            log.is_mock_location,
-            log.biometric_verified,
-            log.adms_status,
-            log.tz_offset_minutes,
-        ])
-    
-    output.seek(0)
+
+    query = query.order_by(PunchLog.timestamp).yield_per(100)
+
+    async def generate():
+        yield "Employee ID,Timestamp,Punch Type,Latitude,Longitude,Biometric,Mock Location\n"
+        for log, name in query:
+            yield f"{log.employee_id},{log.timestamp.isoformat() if log.timestamp else ''},{log.punch_type},{log.latitude},{log.longitude},{log.biometric_verified},{log.is_mock_location}\n"
+
     return StreamingResponse(
-        iter([output.getvalue()]),
+        generate(),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=attendance_export_{datetime.utcnow().strftime('%Y%m%d')}.csv"}
+        headers={"Content-Disposition": f"attachment; filename=attendance_logs.csv"}
     )
 
 
-# ─── Health Check ─────────────────────────────────────────────────────────────
+# ═══════════════════ SUPERVISOR / MANAGER ENDPOINTS ═══════════════════
+
+@app.get("/api/v1/supervisor/team")
+async def get_team_attendance(
+    request: Request,
+    device_uuid: Optional[str] = None,
+    date: Optional[str] = None,
+    api_key: ApiKey = Depends(verify_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get attendance status of all team members for a supervisor."""
+    # Find the device binding from the API key
+    binding = db.query(DeviceBinding).filter(
+        DeviceBinding.api_key_id == api_key.id
+    ).first()
+    if device_uuid:
+        binding = db.query(DeviceBinding).filter(
+            DeviceBinding.device_uuid == device_uuid
+        ).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    supervisor_id = binding.employee_id
+
+    # Get team members
+    team = db.query(EmployeeSupervisor).filter(
+        EmployeeSupervisor.supervisor_id == supervisor_id
+    ).all()
+
+    if not team:
+        return {"team": []}
+
+    employee_ids = [t.employee_id for t in team]
+    employees = db.query(Employee).filter(Employee.employee_id.in_(employee_ids)).all()
+    employee_map = {e.employee_id: e.name for e in employees}
+
+    # Get today's punches
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    if date:
+        today = datetime.fromisoformat(date).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    tomorrow = today + timedelta(days=1)
+
+    result = []
+    for emp_id in employee_ids:
+        punches = db.query(PunchLog).filter(
+            PunchLog.employee_id == emp_id,
+            PunchLog.timestamp >= today,
+            PunchLog.timestamp < tomorrow
+        ).order_by(PunchLog.timestamp).all()
+
+        first_punch = punches[0] if punches else None
+        last_punch = punches[-1] if punches else None
+
+        # Calculate total hours
+        total_hours = None
+        if len(punches) >= 2:
+            total_seconds = (last_punch.timestamp - first_punch.timestamp).total_seconds()
+            total_hours = round(total_seconds / 3600, 2)
+
+        result.append({
+            "employee_id": emp_id,
+            "name": employee_map.get(emp_id, emp_id),
+            "today_punched": len(punches) > 0,
+            "first_punch_time": first_punch.timestamp.isoformat() if first_punch else None,
+            "last_punch_time": last_punch.timestamp.isoformat() if last_punch else None,
+            "total_hours_today": total_hours,
+            "is_late": first_punch and first_punch.timestamp.hour >= 9,
+        })
+
+    return {"team": result, "date": today.date().isoformat()}
+
+
+@app.get("/api/v1/supervisor/team/{employee_id}/history")
+async def get_employee_history(
+    employee_id: str,
+    days: int = 7,
+    device_uuid: Optional[str] = None,
+    api_key: ApiKey = Depends(verify_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get detailed punch history for a specific team member."""
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    punches = db.query(PunchLog).filter(
+        PunchLog.employee_id == employee_id,
+        PunchLog.timestamp >= start_date
+    ).order_by(PunchLog.timestamp.desc()).limit(100).all()
+
+    return {
+        "employee_id": employee_id,
+        "days": days,
+        "punches": [
+            {
+                "id": p.id,
+                "timestamp": p.timestamp.isoformat(),
+                "punch_type": p.punch_type,
+                "latitude": p.latitude,
+                "longitude": p.longitude,
+                "biometric_verified": p.biometric_verified,
+                "is_mock_location": p.is_mock_location,
+            }
+            for p in punches
+        ]
+    }
+
+
+# === CORRECTION ENDPOINTS ===
+
+@app.post("/api/v1/attendance/correction")
+async def request_correction(
+    request_data: CorrectionRequest,
+    api_key: ApiKey = Depends(verify_api_key),
+    db: Session = Depends(get_db)
+):
+    """Submit an attendance correction request."""
+    correction = AttendanceCorrection(
+        employee_id=request_data.employee_id,
+        original_punch_id=request_data.original_punch_id,
+        correction_type=request_data.correction_type,
+        description=request_data.description,
+        proposed_timestamp=datetime.fromisoformat(request_data.proposed_timestamp) if request_data.proposed_timestamp else None,
+        proposed_punch_type=request_data.proposed_punch_type,
+        status='pending',
+    )
+    db.add(correction)
+    db.commit()
+    db.refresh(correction)
+    return {"status": "submitted", "correction_id": correction.id}
+
+
+@app.get("/api/v1/supervisor/corrections")
+async def get_pending_corrections(
+    device_uuid: Optional[str] = None,
+    api_key: ApiKey = Depends(verify_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get pending correction requests for the supervisor's team."""
+    # Find the device binding from the API key
+    binding = db.query(DeviceBinding).filter(
+        DeviceBinding.api_key_id == api_key.id
+    ).first()
+    if device_uuid:
+        binding = db.query(DeviceBinding).filter(
+            DeviceBinding.device_uuid == device_uuid
+        ).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    # Get team employee IDs
+    team = db.query(EmployeeSupervisor).filter(
+        EmployeeSupervisor.supervisor_id == binding.employee_id
+    ).all()
+    employee_ids = [t.employee_id for t in team]
+
+    # Get pending corrections
+    corrections = db.query(AttendanceCorrection).filter(
+        AttendanceCorrection.employee_id.in_(employee_ids),
+        AttendanceCorrection.status == 'pending'
+    ).order_by(AttendanceCorrection.created_at.desc()).all()
+
+    return {
+        "corrections": [
+            {
+                "id": c.id,
+                "employee_id": c.employee_id,
+                "correction_type": c.correction_type,
+                "description": c.description,
+                "proposed_timestamp": c.proposed_timestamp.isoformat() if c.proposed_timestamp else None,
+                "proposed_punch_type": c.proposed_punch_type,
+                "created_at": c.created_at.isoformat(),
+            }
+            for c in corrections
+        ]
+    }
+
+
+@app.post("/api/v1/supervisor/corrections/{correction_id}/review")
+async def review_correction(
+    correction_id: int,
+    review: CorrectionReview,
+    device_uuid: Optional[str] = None,
+    api_key: ApiKey = Depends(verify_api_key),
+    db: Session = Depends(get_db)
+):
+    """Approve or reject an attendance correction request."""
+    correction = db.query(AttendanceCorrection).filter(
+        AttendanceCorrection.id == correction_id
+    ).first()
+
+    if not correction:
+        raise HTTPException(status_code=404, detail="Correction not found")
+
+    # Find the supervisor from their API key
+    binding = db.query(DeviceBinding).filter(
+        DeviceBinding.api_key_id == api_key.id
+    ).first()
+    if device_uuid:
+        binding = db.query(DeviceBinding).filter(
+            DeviceBinding.device_uuid == device_uuid
+        ).first()
+
+    correction.status = review.status
+    correction.reviewed_by = binding.employee_id if binding else "unknown"
+    correction.reviewed_at = datetime.utcnow()
+    correction.review_notes = review.notes
+
+    # If approved, update the punch log
+    if review.status == 'approved' and correction.original_punch_id:
+        punch = db.query(PunchLog).filter(PunchLog.id == correction.original_punch_id).first()
+        if punch:
+            if correction.proposed_punch_type:
+                punch.punch_type = correction.proposed_punch_type
+            if correction.proposed_timestamp:
+                punch.timestamp = correction.proposed_timestamp
+
+    db.commit()
+    return {"status": review.status, "correction_id": correction_id}
+
+
+# ═══════════════════ ADMIN SUPERVISOR MANAGEMENT ═══════════════════
+
+@app.post("/ui/supervisors/assign")
+async def assign_supervisor(
+    assignment: SupervisorAssignment,
+    current_user: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Assign a supervisor to an employee (admin only)."""
+    existing = db.query(EmployeeSupervisor).filter(
+        EmployeeSupervisor.supervisor_id == assignment.supervisor_id,
+        EmployeeSupervisor.employee_id == assignment.employee_id
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=409, detail="Assignment already exists")
+
+    mapping = EmployeeSupervisor(
+        supervisor_id=assignment.supervisor_id,
+        employee_id=assignment.employee_id
+    )
+    db.add(mapping)
+    db.commit()
+    return {"status": "assigned"}
+
+
+@app.delete("/ui/supervisors/assign/{mapping_id}")
+async def remove_supervisor(
+    mapping_id: int,
+    current_user: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Remove a supervisor-employee assignment."""
+    mapping = db.query(EmployeeSupervisor).filter(
+        EmployeeSupervisor.id == mapping_id
+    ).first()
+    if not mapping:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    db.delete(mapping)
+    db.commit()
+    return {"status": "removed"}
+
+
+@app.get("/ui/supervisors/list")
+async def list_supervisors(
+    current_user: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """List all supervisor assignments."""
+    assignments = db.query(EmployeeSupervisor).all()
+    return {
+        "assignments": [
+            {
+                "id": a.id,
+                "supervisor_id": a.supervisor_id,
+                "employee_id": a.employee_id,
+                "created_at": a.created_at.isoformat(),
+            }
+            for a in assignments
+        ]
+    }
+
+
+@app.get("/ui/supervisors")
+async def supervisor_management(
+    request: Request,
+    current_user: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "section": "supervisors",
+        "devices": db.query(DeviceBinding).all(),
+        "branches": db.query(Branch).all(),
+        "api_keys": db.query(ApiKey).all(),
+        "punch_types": db.query(PunchType).all(),
+        "adms_targets": db.query(ADMSTarget).all(),
+        "app_settings": {"max_devices_per_employee": 5},
+    })
+
+
+@app.get("/ui/help")
+async def help_page(
+    request: Request,
+    current_user: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Render the help/documentation page."""
+    max_devices_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
+    app_settings = {"max_devices_per_employee": int(max_devices_cfg.value) if max_devices_cfg else 5}
+    return templates.TemplateResponse("help.html", {
+        "request": request,
+        "devices": db.query(DeviceBinding).all(),
+        "branches": db.query(Branch).all(),
+        "api_keys": db.query(ApiKey).all(),
+        "punch_types": db.query(PunchType).all(),
+        "adms_targets": db.query(ADMSTarget).all(),
+        "app_settings": app_settings,
+    })
+
+
+# ─── Health Check & Metrics ───────────────────────────────────────────────────
 
 @app.get("/health")
-async def health_check(db: Session = Depends(get_db)):
+async def health_check():
+    """Health check endpoint for container orchestration and monitoring."""
+    db_ok = False
     try:
-        db.execute(__import__('sqlalchemy').text("SELECT 1"))
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
         db_ok = True
+        db.close()
     except Exception:
-        db_ok = False
+        pass
+
+    adms_ok = _handshake_state.get("handshake_done", False)
+
     return {
-        "status": "ok" if db_ok else "degraded",
-        "db": "ok" if db_ok else "error",
-        "adms_connected": _handshake_state.get("handshake_done", False),
+        "status": "healthy" if db_ok else "degraded",
+        "database": "connected" if db_ok else "disconnected",
+        "adms": "connected" if adms_ok else "disconnected",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0"
     }
+
+
+# ─── Selfie Upload & Serving Endpoints ───────────────────────────────────────
+
+@app.post("/api/v1/punch/selfie")
+async def upload_selfie(
+    punch_id: int,
+    file: UploadFile = File(...),
+    api_key: str = Depends(verify_api_key),
+    db: Session = Depends(get_db)
+):
+    """Upload a selfie image associated with a punch record."""
+    # Verify punch exists
+    punch = db.query(PunchLog).filter(PunchLog.id == punch_id).first()
+    if not punch:
+        raise HTTPException(status_code=404, detail="Punch not found")
+
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed")
+
+    # Save file
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    filename = f"selfie_{punch_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    content = await file.read()
+
+    # Optional: Validate file size (max 5MB)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum 5MB allowed")
+
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    # Update punch log
+    punch.selfie_filename = filename
+    db.commit()
+
+    return {"status": "success", "filename": filename}
+
+
+@app.get("/ui/selfie/{filename}")
+async def get_selfie(filename: str, current_user: AdminUser = Depends(get_current_admin)):
+    """Serve selfie images for admin review."""
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Selfie not found")
+    return FileResponse(filepath, media_type="image/jpeg")
+
+
+# ─── FCM Token Registration ──────────────────────────────────────────────────
+
+@app.post("/api/v1/device/fcm-token")
+async def update_fcm_token(
+    token_data: dict,
+    api_key: str = Depends(verify_api_key),
+    db: Session = Depends(get_db)
+):
+    """Register or update FCM token for push notifications."""
+    device_uuid = token_data.get("device_uuid")
+    fcm_token = token_data.get("fcm_token")
+
+    if not device_uuid or not fcm_token:
+        raise HTTPException(status_code=400, detail="device_uuid and fcm_token required")
+
+    binding = db.query(DeviceBinding).filter(
+        DeviceBinding.device_uuid == device_uuid
+    ).first()
+
+    if binding:
+        binding.fcm_token = fcm_token
+        db.commit()
+        return {"status": "updated"}
+
+    raise HTTPException(status_code=404, detail="Device not found")

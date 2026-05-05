@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create_engine, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create_engine, ForeignKey, UniqueConstraint, Index, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 import datetime
@@ -9,6 +9,10 @@ Base = declarative_base()
 
 class DeviceBinding(Base):
     __tablename__ = "device_bindings"
+    __table_args__ = (
+        Index('idx_device_binding_employee', 'employee_id'),
+        Index('idx_device_binding_device', 'device_uuid'),
+    )
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(String, index=True, nullable=True)
     device_uuid = Column(String, index=True)
@@ -27,7 +31,9 @@ class DeviceBinding(Base):
     approved_by = Column(String, nullable=True)                     # admin username
     notes = Column(String, nullable=True)
     # ── Multi-device support ───────────────────────────────────────────────
-    is_active = Column('is_active_device', Boolean, default=True)  # Admin can toggle per-device
+    is_active = Column(Boolean, default=True)  # Admin can toggle per-device
+    # ── Push Notifications ──────────────────────────────────────────────────
+    fcm_token = Column(String(500), nullable=True)                 # Firebase Cloud Messaging token
 
 
 class ADMSTarget(Base):
@@ -58,6 +64,8 @@ class Branch(Base):
     longitude = Column(Float, default=0.0)
     radius_meters = Column(Float, default=100.0)
     is_active = Column(Boolean, default=True)
+    qr_code_enabled = Column(Boolean, default=False, nullable=False)
+    qr_code_data = Column(String(256), nullable=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 
@@ -80,6 +88,8 @@ class ApiKey(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     last_used_at = Column(DateTime, nullable=True)
+    last_used_ip = Column(String(45), nullable=True)
+    expires_at = Column(DateTime, nullable=True)
 
 
 class ADMSRegisteredEmployee(Base):
@@ -137,10 +147,14 @@ class ADMSCredential(Base):
     username = Column(String)
     password = Column(String)
     is_active = Column(Boolean, default=True)
-
-
 class PunchLog(Base):
     __tablename__ = "punch_logs"
+    __table_args__ = (
+        Index('idx_punchlog_employee_type_date', 'employee_id', 'punch_type', 'timestamp'),
+        Index('idx_punchlog_sync_status', 'adms_status'),
+        Index('idx_punchlog_date', 'timestamp'),
+        Index('idx_punchlog_employee_date', 'employee_id', "timestamp"),  # For daily queries
+    )
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(String, index=True)
     device_uuid = Column(String)
@@ -154,6 +168,54 @@ class PunchLog(Base):
     adms_status = Column(String, default="pending")      # pending / uploaded / failed
     # ── Idempotency ───────────────────────────────────────────────────────
     client_punch_id = Column(String, nullable=True, unique=True, index=True)
+    # ── Security / Validation ──────────────────────────────────────────────
+    gps_time_validated = Column(Boolean, default=False)
+    notes = Column(String, nullable=True)
+    # ── Selfie / Face Verification ─────────────────────────────────────────
+    selfie_filename = Column(String(500), nullable=True)  # Stored selfie image filename
+    # ── ADMS ARQ Sync Tracking ─────────────────────────────────────────────
+    server_sync_status = Column(String, default="pending")  # pending / synced / failed / stale
+    synced_at = Column(DateTime, nullable=True)              # When it was successfully synced to ADMS
+    sync_error = Column(String(500), nullable=True)          # Error message if sync failed
+    sync_retry_count = Column(Integer, default=0)            # Number of retry attempts
+
+
+class EmployeeSupervisor(Base):
+    """Maps supervisors to their team members."""
+    __tablename__ = "employee_supervisors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supervisor_id = Column(String(50), nullable=False, index=True)  # Employee ID of the supervisor
+    employee_id = Column(String(50), nullable=False, index=True)    # Employee ID of the team member
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_supervisor_mapping', 'supervisor_id', 'employee_id', unique=True),
+    )
+
+
+class AttendanceCorrection(Base):
+    """Tracks attendance correction requests from employees."""
+    __tablename__ = "attendance_corrections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(String(50), nullable=False, index=True)
+    original_punch_id = Column(Integer, ForeignKey('punch_logs.id'), nullable=True)
+    correction_type = Column(String(50), nullable=False)  # 'missing_punch', 'wrong_type', 'wrong_time'
+    description = Column(String(500), nullable=False)
+    proposed_timestamp = Column(DateTime, nullable=True)
+    proposed_punch_type = Column(String(10), nullable=True)
+    status = Column(String(20), default='pending')  # 'pending', 'approved', 'rejected'
+    reviewed_by = Column(String(50), nullable=True)  # Supervisor's employee_id
+    reviewed_at = Column(DateTime, nullable=True)
+    review_notes = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_correction_employee', 'employee_id'),
+        Index('idx_correction_status', 'status'),
+    )
 
 
 # ─── Database Setup ────────────────────────────────────────────────────────────
@@ -178,17 +240,41 @@ def init_db():
     migrations = [
         "ALTER TABLE adms_targets ADD COLUMN timezone_offset INTEGER DEFAULT 7;",
         "ALTER TABLE punch_logs ADD COLUMN tz_offset_minutes INTEGER DEFAULT 420;",
+        "ALTER TABLE branches ADD COLUMN qr_code_enabled BOOLEAN DEFAULT 0 NOT NULL;",
+        "ALTER TABLE branches ADD COLUMN qr_code_data VARCHAR(256);",
         "ALTER TABLE punch_logs ADD COLUMN client_punch_id TEXT;",
+        "ALTER TABLE punch_logs ADD COLUMN gps_time_validated INTEGER DEFAULT 0;",
+        "ALTER TABLE punch_logs ADD COLUMN notes TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN device_label TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN registration_status TEXT DEFAULT 'pending_approval';",
         "ALTER TABLE device_bindings ADD COLUMN approved_at TIMESTAMP;",
         "ALTER TABLE device_bindings ADD COLUMN approved_by TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN notes TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN device_role TEXT DEFAULT 'primary';",
-        "ALTER TABLE device_bindings ADD COLUMN is_active_device INTEGER DEFAULT 1;",
+        "ALTER TABLE device_bindings ADD COLUMN is_active INTEGER DEFAULT 1;",
+        "DROP INDEX IF EXISTS ix_device_bindings_employee_id;",
         # Branch & ApiKey updates
         "ALTER TABLE branches ADD COLUMN updated_at TIMESTAMP;",
         "ALTER TABLE api_keys ADD COLUMN last_used_at TIMESTAMP;",
+        "ALTER TABLE api_keys ADD COLUMN last_used_ip VARCHAR(45);",
+        "ALTER TABLE api_keys ADD COLUMN expires_at TIMESTAMP;",
+        # ADMS ARQ sync tracking fields
+        "ALTER TABLE punch_logs ADD COLUMN server_sync_status VARCHAR(20) DEFAULT 'pending';",
+        "ALTER TABLE punch_logs ADD COLUMN synced_at TIMESTAMP;",
+        "ALTER TABLE punch_logs ADD COLUMN sync_error VARCHAR(500);",
+        "ALTER TABLE punch_logs ADD COLUMN sync_retry_count INTEGER DEFAULT 0;",
+        # Selfie / Face Verification
+        "ALTER TABLE punch_logs ADD COLUMN selfie_filename VARCHAR(500);",
+        # Push Notifications (FCM)
+        "ALTER TABLE device_bindings ADD COLUMN fcm_token VARCHAR(500);",
+        # Phase 5b: Supervisor tables
+        "CREATE TABLE IF NOT EXISTS employee_supervisors (id SERIAL PRIMARY KEY, supervisor_id VARCHAR(50) NOT NULL, employee_id VARCHAR(50) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(supervisor_id, employee_id));",
+        "CREATE INDEX IF NOT EXISTS idx_supervisor_mapping ON employee_supervisors(supervisor_id, employee_id);",
+        "CREATE INDEX IF NOT EXISTS idx_emp_supervisor ON employee_supervisors(supervisor_id);",
+        "CREATE INDEX IF NOT EXISTS idx_emp_employee ON employee_supervisors(employee_id);",
+        "CREATE TABLE IF NOT EXISTS attendance_corrections (id SERIAL PRIMARY KEY, employee_id VARCHAR(50) NOT NULL, original_punch_id INTEGER REFERENCES punch_logs(id), correction_type VARCHAR(50) NOT NULL, description VARCHAR(500) NOT NULL, proposed_timestamp TIMESTAMP, proposed_punch_type VARCHAR(10), status VARCHAR(20) DEFAULT 'pending', reviewed_by VARCHAR(50), reviewed_at TIMESTAMP, review_notes VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
+        "CREATE INDEX IF NOT EXISTS idx_correction_employee ON attendance_corrections(employee_id);",
+        "CREATE INDEX IF NOT EXISTS idx_correction_status ON attendance_corrections(status);",
     ]
     with engine.connect() as conn:
         for sql in migrations:

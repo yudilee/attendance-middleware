@@ -14,9 +14,12 @@ services:
       # Generate with: openssl rand -hex 32
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE_THIS_IN_PRODUCTION}
       - DATABASE_URL=postgresql://attendance:secret_db_password@attendance_db:5432/attendance_db
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       attendance_db:
         condition: service_healthy
+      redis:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8999/health')"]
       interval: 30s
@@ -39,3 +42,37 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: attendance_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - default
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: attendance_worker
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      attendance_db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://attendance:secret_db_password@attendance_db:5432/attendance_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENV=${ENV:-development}
+      - TZ=Asia/Jakarta
+    networks:
+      - default
+
+volumes:
+  redis_data:

@@ -390,3 +390,53 @@ button.danger:hover { background: #dc2626; }
 .mb-4 { margin-bottom: 1rem; }
 .mb-6 { margin-bottom: 1.5rem; }
 .mt-4 { margin-top: 1rem; }
+
+/* ADMS Dashboard */
+.adms-dashboard .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.adms-dashboard .stat-card {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    border: 1px solid #e9ecef;
+}
+.adms-dashboard .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #333;
+}
+.adms-dashboard .stat-label {
+    font-size: 0.875rem;
+    color: #666;
+    margin-top: 4px;
+}
+.adms-dashboard .stat-success .stat-value { color: #28a745; }
+.adms-dashboard .stat-warning .stat-value { color: #ffc107; }
+.adms-dashboard .stat-danger .stat-value { color: #dc3545; }
+.adms-dashboard .status-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+}
+.adms-dashboard .status-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.adms-dashboard .badge-success { background: #d4edda; color: #155724; }
+.adms-dashboard .badge-danger { background: #f8d7da; color: #721c24; }
+.adms-dashboard .error-cell {
+    color: #dc3545;
+    font-family: monospace;
+    font-size: 0.8rem;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

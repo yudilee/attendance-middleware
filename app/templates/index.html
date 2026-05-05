@@ -65,6 +65,7 @@
                         <th>Type</th>
                         <th>GPS Coordinates</th>
                         <th>ADMS Status</th>
+                        <th>Selfie</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -92,19 +93,155 @@
                                 <span class="badge badge-warning">⏳ Pending</span>
                             {% endif %}
                         </td>
+                        <td>
+                            {% if log.selfie_filename %}
+                            <a href="/ui/selfie/{{ log.selfie_filename }}" target="_blank" class="btn btn-sm btn-info">
+                                <i class="fas fa-camera"></i> View
+                            </a>
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                        <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">
                             No attendance logs yet. Waiting for first punch...
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
-            </table>
-        </div>
     </div>
 </div>
+
+<!-- ═══════════════════ ADMS SYNC DASHBOARD TAB ═══════════════════ -->
+{% if section == "adms-dashboard" %}
+<div id="adms-dashboard" class="tab-content">
+    <div class="adms-dashboard">
+        <h2><i class="ph ph-sync"></i> ADMS Sync Dashboard</h2>
+        
+        <!-- Summary Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total }}</div>
+                <div class="stat-label">Total Records</div>
+            </div>
+            <div class="stat-card stat-success">
+                <div class="stat-value">{{ stats.synced }}</div>
+                <div class="stat-label">Synced ({{ stats.sync_rate }}%)</div>
+            </div>
+            <div class="stat-card stat-warning">
+                <div class="stat-value">{{ stats.pending }}</div>
+                <div class="stat-label">Pending</div>
+            </div>
+            <div class="stat-card stat-danger">
+                <div class="stat-value">{{ stats.failed }}</div>
+                <div class="stat-label">Failed</div>
+            </div>
+        </div>
+
+        <!-- Connectivity Status -->
+        <div class="card">
+            <h3>Connections</h3>
+            <div class="status-row">
+                <span>ADMS Server:</span>
+                <span class="status-badge {% if adms_connected %}badge-success{% else %}badge-danger{% endif %}">
+                    {{ "Connected" if adms_connected else "Disconnected" }}
+                </span>
+                {% if adms_last_handshake %}
+                <span class="text-muted">Last handshake: {{ adms_last_handshake }}</span>
+                {% endif %}
+            </div>
+            <div class="status-row">
+                <span>Worker Queue:</span>
+                <span class="status-badge {% if worker_running %}badge-success{% else %}badge-danger{% endif %}">
+                    {{ "Running" if worker_running else "Stopped" }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Recent Failures -->
+        <div class="card">
+            <h3>Recent Sync Failures</h3>
+            {% if recent_failures %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Timestamp</th>
+                        <th>Punch Type</th>
+                        <th>Error</th>
+                        <th>Retry</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for punch in recent_failures %}
+                    <tr>
+                        <td>{{ punch.employee_id }}</td>
+                        <td>{{ punch.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ punch.punch_type }}</td>
+                        <td class="error-cell">{{ punch.sync_error or 'Unknown' }}</td>
+                        <td>
+                            <button onclick="retrySync('{{ punch.id }}')" class="btn btn-sm btn-warning">
+                                Retry
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted">No recent failures. All punches syncing successfully!</p>
+            {% endif %}
+        </div>
+
+        <!-- Manual Controls -->
+        <div class="card">
+            <h3>Manual Controls</h3>
+            <div class="btn-group">
+                <button onclick="triggerRetryAll()" class="btn btn-warning">
+                    <i class="ph ph-arrow-clockwise"></i> Retry All Failed
+                </button>
+                <button onclick="triggerFullSync()" class="btn btn-primary">
+                    <i class="ph ph-sync"></i> Full Sync
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function retrySync(punchId) {
+        fetch('/ui/adms-sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({punch_id: punchId})
+        }).then(r => r.json()).then(data => {
+            if(data.status === 'triggered') showToast('Sync retry triggered');
+        });
+    }
+
+    function triggerRetryAll() {
+        fetch('/ui/adms-sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({retry_all: true})
+        }).then(r => r.json()).then(data => {
+            if(data.status === 'triggered') showToast('Retrying all failed...');
+        });
+    }
+
+    function triggerFullSync() {
+        fetch('/ui/adms-sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({full_sync: true})
+        }).then(r => r.json()).then(data => {
+            if(data.status === 'triggered') showToast('Full sync triggered');
+        });
+    }
+    </script>
+</div>
+{% endif %}
 
 <!-- ═══════════════════ DEVICES TAB ═══════════════════ -->
 <div id="devices" class="tab-content" style="display: none;">
@@ -200,17 +337,17 @@
                         <td style="text-align: right; white-space: nowrap;">
                             {% if device.registration_status == 'pending_approval' %}
                                 <button class="btn-danger-sm" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
-                                        onclick="approveDevice('{{ device.employee_id }}')">✅ Approve</button>
+                                        onclick="approveDevice({{ device.id }})">✅ Approve</button>
                             {% elif device.registration_status in ('approved', 'active') %}
                                 <button class="btn-danger-sm" style="background:#fee2e2;color:#991b1b;"
-                                        onclick="suspendDevice('{{ device.employee_id }}')">🚫 Suspend</button>
+                                        onclick="suspendDevice({{ device.id }})">🚫 Suspend</button>
                             {% elif device.registration_status == 'suspended' %}
                                 <button class="btn-danger-sm" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
-                                        onclick="approveDevice('{{ device.employee_id }}')">↩ Re-approve</button>
+                                        onclick="approveDevice({{ device.id }})">↩ Re-approve</button>
                             {% endif %}
-                            <button class="btn-danger-sm" onclick="editDeviceLabel('{{ device.employee_id }}', '{{ device.device_label or '' }}')"
+                            <button class="btn-danger-sm" onclick="editDeviceLabel({{ device.id }}, '{{ device.device_label or '' }}')"
                                     style="background:#e0e7ff;color:#4338ca;border-color:#c7d2fe;">Label</button>
-                            <button class="btn-danger-sm" onclick="unbindDevice('{{ device.employee_id }}')">Unbind</button>
+                            <button class="btn-danger-sm" onclick="unbindDevice({{ device.id }})">Unbind</button>
                         </td>
                     </tr>
                     {% else %}
@@ -257,13 +394,15 @@
                         <th>Label</th>
                         <th>Key Preview</th>
                         <th>Status</th>
+                        <th>Expires</th>
                         <th>Devices</th>
                         <th>Last Used</th>
+                        <th>Last IP</th>
                         <th style="text-align: right;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="keysTableBody">
-                    <tr><td colspan="6" style="text-align:center; padding: 1.5rem; color: var(--text-muted);">Loading...</td></tr>
+                    <tr><td colspan="8" style="text-align:center; padding: 1.5rem; color: var(--text-muted);">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -285,11 +424,12 @@
                             <th>Branch Name</th>
                             <th>Coordinates</th>
                             <th>Radius</th>
+                            <th>QR Check-in</th>
                             <th style="text-align: right;">Action</th>
                         </tr>
                     </thead>
                     <tbody id="branchesTableBody">
-                        <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
+                        <tr><td colspan="5" style="text-align:center;">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -314,6 +454,20 @@
                 <div class="form-group">
                     <label>Allowed Radius (meters)</label>
                     <input type="number" id="branch_rad" value="50" required>
+                </div>
+                <div class="form-group" style="margin-top: 0.75rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="branch_qr_enabled" onchange="toggleQrField()">
+                        Enable QR Code Check-in
+                    </label>
+                </div>
+                <div class="form-group" id="qr_data_group" style="display: none;">
+                    <label>QR Code Data</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="branch_qr_data" placeholder="e.g. BRANCH-OFFICE-001" style="flex: 1;">
+                        <button type="button" onclick="generateQrData()" style="white-space: nowrap; padding: 0.5rem 0.75rem; background: #6366f1; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.8rem;">🎲 Generate</button>
+                    </div>
+                    <small style="color: var(--text-muted);">This data will be encoded as a QR code for mobile scan verification.</small>
                 </div>
                 <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
                     <button type="button" id="saveBranchBtn" onclick="saveBranch()">📍 Save Branch</button>
@@ -562,6 +716,129 @@
 
     </div>
 </div>
+
+<!-- ═══════════════════ SUPERVISORS TAB ═══════════════════ -->
+{% if section == "supervisors" %}
+<div class="supervisor-management">
+  <h2><i class="fas fa-users-cog"></i> Supervisor Management</h2>
+  
+  <!-- Assignment Form -->
+  <div class="card">
+    <h3>Assign Supervisor to Employee</h3>
+    <form id="supervisorForm" onsubmit="return assignSupervisor(event)">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Supervisor (Employee ID)</label>
+          <input type="text" id="supervisor_id" class="form-control" placeholder="e.g., SUP001" required>
+        </div>
+        <div class="form-group">
+          <label>Team Member (Employee ID)</label>
+          <input type="text" id="employee_id" class="form-control" placeholder="e.g., EMP001" required>
+        </div>
+        <div class="form-group" style="align-self: flex-end;">
+          <button type="submit" class="btn btn-primary">Assign</button>
+        </div>
+      </div>
+    </form>
+  </div>
+  
+  <!-- Assignment List -->
+  <div class="card">
+    <h3>Current Assignments</h3>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Supervisor</th>
+          <th>Employee</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="supervisorAssignments">
+        <tr><td colspan="5" class="text-muted">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  
+  <!-- Pending Corrections -->
+  <div class="card">
+    <h3>Pending Attendance Corrections</h3>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="pendingCorrections">
+        <tr><td colspan="5" class="text-muted">No pending corrections</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function assignSupervisor(event) {
+  event.preventDefault();
+  const supervisor_id = document.getElementById('supervisor_id').value;
+  const employee_id = document.getElementById('employee_id').value;
+  
+  const response = await fetch('/ui/supervisors/assign', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({supervisor_id, employee_id})
+  });
+  
+  if (response.ok) {
+    notify('Supervisor assigned successfully');
+    document.getElementById('supervisorForm').reset();
+    loadSupervisorAssignments();
+  } else {
+    const data = await response.json();
+    notify(data.detail || 'Failed to assign supervisor');
+  }
+}
+
+async function removeAssignment(id) {
+  if (!confirm('Are you sure you want to remove this assignment?')) return;
+  
+  const response = await fetch(`/ui/supervisors/assign/${id}`, {method: 'DELETE'});
+  if (response.ok) {
+    notify('Assignment removed');
+    loadSupervisorAssignments();
+  }
+}
+
+async function loadSupervisorAssignments() {
+  const response = await fetch('/ui/supervisors/list');
+  const data = await response.json();
+  
+  const tbody = document.getElementById('supervisorAssignments');
+  if (data.assignments.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-muted">No assignments found</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = data.assignments.map(a => `
+    <tr>
+      <td>${a.id}</td>
+      <td>${a.supervisor_id}</td>
+      <td>${a.employee_id}</td>
+      <td>${new Date(a.created_at).toLocaleDateString()}</td>
+      <td><button onclick="removeAssignment(${a.id})" class="btn btn-sm btn-danger">Remove</button></td>
+    </tr>
+  `).join('');
+}
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
+</script>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
@@ -716,30 +993,30 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
     }
 
     // ── Device Actions ─────────────────────────────────────────────────────────
-    async function unbindDevice(empId) {
-        if (!confirm(`Unbind hardware ID for ${empId}? They can re-register on next punch.`)) return;
-        const res = await fetch(`/ui/unbind/${empId}`, {method: 'DELETE'});
-        if (res.ok) { notify('Device unbound'); location.reload(); }
+    async function unbindDevice(id) {
+        if (!confirm('Permanently remove this device registration?')) return;
+        const res = await fetch(`/ui/devices/${id}/unbind`, {method: 'DELETE'});
+        if (res.ok) { notify('Device removed'); location.reload(); }
         else notify('Action failed', 'error');
     }
 
-    async function approveDevice(empId) {
-        const res = await fetch(`/ui/devices/${empId}/approve`, {method: 'POST'});
-        if (res.ok) { notify(`Device for ${empId} approved ✅`); location.reload(); }
+    async function approveDevice(id) {
+        const res = await fetch(`/ui/devices/${id}/approve`, {method: 'POST'});
+        if (res.ok) { notify(`Device approved ✅`); location.reload(); }
         else { const e = await res.json(); notify(e.detail || 'Failed', 'error'); }
     }
 
-    async function suspendDevice(empId) {
-        if (!confirm(`Suspend device for ${empId}? They will not be able to punch.`)) return;
-        const res = await fetch(`/ui/devices/${empId}/suspend`, {method: 'POST'});
-        if (res.ok) { notify(`Device for ${empId} suspended`); location.reload(); }
+    async function suspendDevice(id) {
+        if (!confirm(`Suspend this device? It will not be able to punch.`)) return;
+        const res = await fetch(`/ui/devices/${id}/suspend`, {method: 'POST'});
+        if (res.ok) { notify(`Device suspended`); location.reload(); }
         else { const e = await res.json(); notify(e.detail || 'Failed', 'error'); }
     }
 
-    async function editDeviceLabel(empId, currentLabel) {
-        const label = prompt(`Enter label for ${empId}'s device:`, currentLabel || '');
+    async function editDeviceLabel(id, currentLabel) {
+        const label = prompt(`Enter label for this device:`, currentLabel || '');
         if (label === null) return;
-        const res = await fetch(`/ui/devices/${empId}/label`, {
+        const res = await fetch(`/ui/devices/${id}/label`, {
             method: 'PUT', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({label: label.trim(), notes: ''})
         });
@@ -755,7 +1032,7 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         currentBranches = await res.json();
         const tbody = document.getElementById('branchesTableBody');
         if (!currentBranches.length) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1.5rem;color:var(--text-muted);">No branches found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1.5rem;color:var(--text-muted);">No branches found.</td></tr>';
             return;
         }
         tbody.innerHTML = currentBranches.map(b => `
@@ -763,11 +1040,27 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
                 <td><strong>${b.name}</strong></td>
                 <td style="font-family:monospace;font-size:0.75rem;">${b.latitude.toFixed(5)}, ${b.longitude.toFixed(5)}</td>
                 <td>${b.radius_meters}m</td>
+                <td>${b.qr_code_enabled ? '<span style="color:#16a34a;font-weight:600;">✓ QR</span>' : '<span style="color:#94a3b8;">—</span>'}</td>
                 <td style="text-align:right;">
                     <button class="btn-danger-sm" style="background:#e0e7ff; color:#4338ca; border-color:#c7d2fe;" onclick="editBranch(${b.id})">Edit</button>
                     <button class="btn-danger-sm" onclick="deleteBranch(${b.id})">Delete</button>
                 </td>
             </tr>`).join('');
+    }
+
+    function toggleQrField() {
+        const enabled = document.getElementById('branch_qr_enabled').checked;
+        document.getElementById('qr_data_group').style.display = enabled ? 'block' : 'none';
+        if (!enabled) {
+            document.getElementById('branch_qr_data').value = '';
+        }
+    }
+
+    function generateQrData() {
+        const name = document.getElementById('branch_name').value.trim();
+        const prefix = name ? name.toUpperCase().replace(/\\s+/g, '-') : 'BRANCH';
+        const suffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+        document.getElementById('branch_qr_data').value = prefix + '-' + suffix;
     }
 
     function editBranch(id) {
@@ -779,6 +1072,9 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         document.getElementById('branch_lat').value = branch.latitude;
         document.getElementById('branch_lon').value = branch.longitude;
         document.getElementById('branch_rad').value = branch.radius_meters;
+        document.getElementById('branch_qr_enabled').checked = branch.qr_code_enabled || false;
+        document.getElementById('branch_qr_data').value = branch.qr_code_data || '';
+        toggleQrField();
         
         document.getElementById('branchFormTitle').innerText = 'Edit Branch';
         document.getElementById('cancelEditBtn').style.display = 'inline-block';
@@ -791,17 +1087,24 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         document.getElementById('branchFormTitle').innerText = 'Create New Branch';
         document.getElementById('cancelEditBtn').style.display = 'none';
         document.getElementById('saveBranchBtn').innerText = '📍 Add Branch';
+        document.getElementById('qr_data_group').style.display = 'none';
     }
 
     async function saveBranch() {
+        const qrEnabled = document.getElementById('branch_qr_enabled').checked;
         const payload = {
             name: document.getElementById('branch_name').value.trim(),
             latitude: parseFloat(document.getElementById('branch_lat').value),
             longitude: parseFloat(document.getElementById('branch_lon').value),
             radius_meters: parseFloat(document.getElementById('branch_rad').value),
+            qr_code_enabled: qrEnabled,
+            qr_code_data: qrEnabled ? document.getElementById('branch_qr_data').value.trim() : null,
         };
         if (!payload.name || isNaN(payload.latitude) || isNaN(payload.longitude) || isNaN(payload.radius_meters)) {
             notify('Please fill all branch fields correctly', 'error'); return;
+        }
+        if (qrEnabled && !payload.qr_code_data) {
+            notify('Please enter or generate QR code data', 'error'); return;
         }
         
         const editId = document.getElementById('edit_branch_id').value;
@@ -813,12 +1116,12 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
             body: JSON.stringify(payload)
         });
         
-        if (res.ok) { 
-            notify(editId ? 'Branch updated!' : 'Branch added!'); 
+        if (res.ok) {
+            notify(editId ? 'Branch updated!' : 'Branch added!');
             cancelEdit();
-            await loadBranches(); 
-        } else { 
-            notify('Failed to save branch', 'error'); 
+            await loadBranches();
+        } else {
+            notify('Failed to save branch', 'error');
         }
     }
 
@@ -868,20 +1171,36 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
     // ── API Keys ───────────────────────────────────────────────────────────────
     let _generatedKey = '';
 
+    function expiryBadgeHtml(k) {
+        if (!k.expires_at) return '<span class="badge" style="background:#e2e8f0;color:#64748b;">Never</span>';
+        if (k.expiry_status === 'expired') {
+            return '<span class="badge" style="background:#fef2f2;color:#dc2626;font-weight:600;">⛔ Expired</span>';
+        }
+        if (k.expiry_status === 'expiring_soon') {
+            const days = k.expires_in_days;
+            const label = days === 0 ? 'Expires today' : days < 0 ? 'Expired' : `Expires in ${days}d`;
+            return `<span class="badge" style="background:#fef9c3;color:#a16207;font-weight:600;">⚠️ ${label}</span>`;
+        }
+        // More than 30 days
+        return `<span class="badge" style="background:#d1fae5;color:#065f46;">✅ ${k.expires_in_days}d</span>`;
+    }
+
     async function loadApiKeys() {
         const res = await fetch('/ui/api-keys');
         const keys = await res.json();
         const tbody = document.getElementById('keysTableBody');
         if (!keys.length) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--text-muted);">No API keys yet. Generate one above.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--text-muted);">No API keys yet. Generate one above.</td></tr>';
             return;
         }
         tbody.innerHTML = keys.map(k => {
             const lastUsed = k.last_used_at
                 ? new Date(k.last_used_at).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
                 : 'Never';
+            const lastIp = k.last_used_ip || '—';
             const actions = [];
-            if (k.is_active) {
+            if (k.is_active && k.expiry_status !== 'expired') {
+                actions.push(`<button class="btn-danger-sm" onclick="rotateKey(${k.id})" title="Rotate key (grace period)" style="background:#e0e7ff;color:#4338ca;">🔄 Rotate</button>`);
                 actions.push(`<button class="btn-danger-sm" onclick="revokeKey(${k.id})" title="Revoke">Revoke</button>`);
             } else {
                 actions.push(`<button class="btn-danger-sm" onclick="deleteKey(${k.id})" title="Permanently delete" style="background:#991b1b;">Delete</button>`);
@@ -892,13 +1211,15 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
                 <td><strong>${k.label}</strong></td>
                 <td style="font-family:monospace;font-size:0.8rem;color:var(--primary);">${k.key_preview}</td>
                 <td>
-                    ${k.is_active
+                    ${k.is_active && k.expiry_status !== 'expired'
                         ? '<span class="badge badge-success">Active</span>'
                         : '<span class="badge badge-danger">Revoked</span>'}
                 </td>
+                <td>${expiryBadgeHtml(k)}</td>
                 <td style="text-align:center;font-size:0.85rem;">${k.device_count ?? 0}</td>
                 <td style="font-size:0.8rem;color:var(--text-muted);">${lastUsed}</td>
-                <td style="text-align:right;">${actions.join('')}</td>
+                <td style="font-size:0.75rem;font-family:monospace;color:var(--text-muted);">${lastIp}</td>
+                <td style="text-align:right;white-space:nowrap;">${actions.join('')}</td>
             </tr>`;
         }).join('');
     }
@@ -936,6 +1257,22 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         const data = await res.json();
         if (res.ok) { await loadApiKeys(); notify('Key permanently deleted'); }
         else notify(data.detail || 'Delete failed', 'error');
+    }
+
+    async function rotateKey(id) {
+        if (!confirm('Rotate this API key?\n\nA new key will be generated with the same label. The old key will remain valid for 7 more days (grace period) to allow mobile apps to transition smoothly.\n\nYou will need to update the mobile app with the new key.')) return;
+        const res = await fetch(`/ui/api-keys/${id}/rotate`, {method: 'POST'});
+        const data = await res.json();
+        if (res.ok) {
+            _generatedKey = data.new_key;
+            document.getElementById('newKeyValue').innerText = data.new_key;
+            document.getElementById('newKeyDisplay').style.display = 'block';
+            await loadApiKeys();
+            notify(`Key rotated! Old key expires ${new Date(data.old_key_expires_at).toLocaleDateString()}. New key shown above.`);
+        } else {
+            const err = await res.json();
+            notify(err.detail || 'Rotate failed', 'error');
+        }
     }
 
     function copyKey() {

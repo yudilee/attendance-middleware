@@ -1,5 +1,5 @@
 import httpx
-import logging
+import structlog
 import asyncio
 import re
 from datetime import datetime, timedelta, timezone
@@ -9,7 +9,7 @@ from app.database.models import ADMSTarget, PunchLog, ADMSRegisteredEmployee, Se
 # Standard ZKTeco iClock User-Agent - BioTime/ADMS servers often reject other agents with 500 errors
 ICLOCK_USER_AGENT = "iClock Proxy/1.0"
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # ─── Shared state for heartbeat ───────────────────────────────────────────────
 # These values are populated from the server's handshake response
