@@ -252,18 +252,31 @@ def init_db():
         "ALTER TABLE device_bindings ADD COLUMN notes TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN device_role TEXT DEFAULT 'primary';",
         "ALTER TABLE device_bindings ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;" if engine.name != "sqlite" else "ALTER TABLE device_bindings ADD COLUMN is_active BOOLEAN DEFAULT 1;",
-        # Convert existing integer is_active to boolean in Postgres to avoid type mismatch
+        # Convert existing integer is_active to boolean in Postgres with explicit casting
+        "ALTER TABLE device_bindings ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
         "ALTER TABLE device_bindings ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
+        "ALTER TABLE device_bindings ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
         "DROP INDEX IF EXISTS ix_device_bindings_employee_id;",
         # Branch & ApiKey updates
         "ALTER TABLE branches ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN updated_at TIMESTAMP;",
         "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE api_keys ADD COLUMN last_used_at TIMESTAMP;",
         "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_ip VARCHAR(45);" if engine.name != "sqlite" else "ALTER TABLE api_keys ADD COLUMN last_used_ip VARCHAR(45);",
         "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE api_keys ADD COLUMN expires_at TIMESTAMP;",
+        "ALTER TABLE branches ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
         "ALTER TABLE branches ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
+        "ALTER TABLE branches ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
+        
+        "ALTER TABLE punch_types ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
         "ALTER TABLE punch_types ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
+        "ALTER TABLE punch_types ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
+        
+        "ALTER TABLE employees ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
         "ALTER TABLE employees ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
+        "ALTER TABLE employees ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
+        
+        "ALTER TABLE api_keys ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
         "ALTER TABLE api_keys ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
+        "ALTER TABLE api_keys ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
         # ADMS ARQ sync tracking fields
         "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS server_sync_status VARCHAR(20) DEFAULT 'pending';" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN server_sync_status VARCHAR(20) DEFAULT 'pending';",
         "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS synced_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN synced_at TIMESTAMP;",
@@ -285,14 +298,11 @@ def init_db():
     with engine.connect() as conn:
         for sql in migrations:
             try:
-                # For PostgreSQL, we can use IF NOT EXISTS if supported, 
-                # but for ALTER TABLE ADD COLUMN it's PG 9.6+.
-                # We'll stick to try/except but fix the syntax.
                 conn.execute(text(sql))
                 conn.commit()
             except Exception as e:
                 conn.rollback()
-                # logger.debug(f"Migration skipped or failed: {sql} - {e}")
+                print(f"Migration notice: {sql[:50]}... skipped: {str(e)[:100]}")
                 pass 
 
         # Migrate existing branch_id to device_branch_assignments
