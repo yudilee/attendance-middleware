@@ -2069,6 +2069,7 @@ async def help_page(
     db: Session = Depends(get_db)
 ):
     """Render the help/documentation page."""
+    logger.info("rendering_help_page", client_ip=request.client.host)
     return templates.TemplateResponse("help.html", {
         "request": request,
         "app_settings": {"max_devices_per_employee": 5},
