@@ -1032,22 +1032,26 @@ async def get_adms_sync_status(request: Request, db: Session = Depends(get_db), 
     # Worker queue health
     worker_running = arq_pool is not None
     
-    return templates.TemplateResponse("adms_sync.html", {
-        "request": request,
-        "stats": {
-            "total": total,
-            "synced": synced,
-            "pending": pending,
-            "failed": failed,
-            "synced_24h": synced_24h,
-            "sync_rate": round((synced / total * 100), 1) if total > 0 else 0,
+    return templates.TemplateResponse(
+        request=request,
+        name="adms_sync.html",
+        context={
+            "request": request,
+            "stats": {
+                "total": total,
+                "synced": synced,
+                "pending": pending,
+                "failed": failed,
+                "synced_24h": synced_24h,
+                "sync_rate": round((synced / total * 100), 1) if total > 0 else 0,
+            },
+            "recent_failures": recent_failures,
+            "adms_connected": adms_connected,
+            "adms_last_handshake": adms_last_handshake,
+            "worker_running": worker_running,
+            "app_settings": {"max_devices_per_employee": 5},
         },
-        "recent_failures": recent_failures,
-        "adms_connected": adms_connected,
-        "adms_last_handshake": adms_last_handshake,
-        "worker_running": worker_running,
-        "app_settings": {"max_devices_per_employee": 5},
-    })
+    )
 
 
 # ─── API V1 ROUTES ───────────────────────────────────────────────────────────
@@ -2044,16 +2048,20 @@ async def supervisor_management(
     current_user: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "section": "supervisors",
-        "devices": db.query(DeviceBinding).all(),
-        "branches": db.query(Branch).all(),
-        "api_keys": db.query(ApiKey).all(),
-        "punch_types": db.query(PunchType).all(),
-        "adms_targets": db.query(ADMSTarget).all(),
-        "app_settings": {"max_devices_per_employee": 5},
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={
+            "request": request,
+            "section": "supervisors",
+            "devices": db.query(DeviceBinding).all(),
+            "branches": db.query(Branch).all(),
+            "api_keys": db.query(ApiKey).all(),
+            "punch_types": db.query(PunchType).all(),
+            "adms_targets": db.query(ADMSTarget).all(),
+            "app_settings": {"max_devices_per_employee": 5},
+        },
+    )
 
 
 @app.get("/ui/help")
@@ -2064,10 +2072,14 @@ async def help_page(
 ):
     """Render the help/documentation page."""
     logger.info("rendering_help_page", client_ip=request.client.host)
-    return templates.TemplateResponse("help.html", {
-        "request": request,
-        "app_settings": {"max_devices_per_employee": 5},
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="help.html",
+        context={
+            "request": request,
+            "app_settings": {"max_devices_per_employee": 5},
+        },
+    )
 
 
 # ─── Health Check & Metrics ───────────────────────────────────────────────────
