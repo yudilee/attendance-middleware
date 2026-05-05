@@ -172,8 +172,8 @@ class WorkerSettings:
     cron_jobs = [
         # Retry failed punches every 5 minutes
         arq.cron(retry_failed_punches, minute=5, run_at_startup=True),
-        # Heartbeat every minute
-        arq.cron(adms_heartbeat, minute=1),
+        # Heartbeat every minute (run immediately on startup)
+        arq.cron(adms_heartbeat, minute=set(range(60)), run_at_startup=True),
         # Cleanup stale jobs daily at midnight
         arq.cron(cleanup_stale_jobs, hour=0, minute=0),
         # Clock-in reminders every weekday at 08:00 (mon=0, tues=1, wed=2, thurs=3, fri=4)
