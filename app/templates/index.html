@@ -781,6 +781,7 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         const url = document.getElementById('server_url').value.trim();
         const sn = document.getElementById('serial_number').value.trim();
         const device_name = document.getElementById('device_name').value.trim();
+        const timezone_offset = parseInt(document.getElementById('timezone_offset').value) || 7;
         const board = document.getElementById('testResult');
         board.style.display = 'block';
         board.style.background = '#f1f5f9'; board.style.borderColor = '#e2e8f0';
@@ -788,7 +789,12 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         try {
             const res = await fetch('/ui/test-connection', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({server_url: url, serial_number: sn, device_name: device_name})
+                body: JSON.stringify({
+                    server_url: url, 
+                    serial_number: sn, 
+                    device_name: device_name,
+                    timezone_offset: timezone_offset
+                })
             });
             const data = await res.json();
             board.style.background = data.success ? '#d1fae5' : '#fee2e2';
