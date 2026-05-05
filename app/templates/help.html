@@ -1,8 +1,840 @@
 {% extends "layout.html" %}
 
+{% block title %}Help & Documentation — Virtual Attendance{% endblock %}
+
+{% block extra_css %}
+<style>
+    .help-container {
+        display: flex;
+        height: 100%;
+        overflow: hidden;
+    }
+    .help-sidebar {
+        width: 280px;
+        flex-shrink: 0;
+        border-right: 1px solid var(--border);
+        overflow-y: auto;
+        padding: 1rem 0;
+        background: var(--card-bg);
+    }
+    .help-sidebar .search-box {
+        margin: 0 1rem 1rem;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        width: calc(100% - 2rem);
+        outline: none;
+        transition: var(--transition);
+    }
+    .help-sidebar .search-box:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+    .help-section-group {
+        margin-bottom: 0.5rem;
+    }
+    .help-section-header {
+        padding: 0.5rem 1rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: var(--transition);
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+    }
+    .help-section-header:hover {
+        color: var(--primary);
+    }
+    .help-section-header .icon {
+        font-size: 1.1rem;
+    }
+    .help-article-link {
+        display: block;
+        padding: 0.4rem 1rem 0.4rem 2.5rem;
+        font-size: 0.875rem;
+        color: var(--text-main);
+        text-decoration: none;
+        border-radius: 0.25rem;
+        margin: 0 0.25rem;
+        transition: var(--transition);
+        cursor: pointer;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+    }
+    .help-article-link:hover {
+        background: rgba(99,102,241,0.08);
+        color: var(--primary);
+    }
+    .help-article-link.active {
+        background: rgba(99,102,241,0.12);
+        color: var(--primary);
+        font-weight: 600;
+    }
+    .help-main {
+        flex: 1;
+        overflow-y: auto;
+        padding: 2rem;
+    }
+    .help-main h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        color: var(--text-main);
+    }
+    .help-main h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-top: 2rem;
+        margin-bottom: 0.75rem;
+        color: var(--text-main);
+    }
+    .help-main h3 {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+        color: var(--text-main);
+    }
+    .help-main p {
+        margin-bottom: 1rem;
+        line-height: 1.7;
+        color: var(--text-main);
+    }
+    .help-main ul, .help-main ol {
+        margin-bottom: 1rem;
+        padding-left: 1.5rem;
+    }
+    .help-main li {
+        margin-bottom: 0.35rem;
+        line-height: 1.6;
+    }
+    .help-main .card {
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .help-main .step-list {
+        counter-reset: step;
+        list-style: none;
+        padding-left: 0;
+    }
+    .help-main .step-list li {
+        counter-increment: step;
+        padding: 0.75rem 1rem 0.75rem 3rem;
+        position: relative;
+        background: var(--bg-base);
+        border-radius: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .help-main .step-list li::before {
+        content: counter(step);
+        position: absolute;
+        left: 0.75rem;
+        top: 0.75rem;
+        width: 1.5rem;
+        height: 1.5rem;
+        background: var(--primary);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+    .help-main .badge-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 0.75rem 0;
+    }
+    .help-main .badge-list .badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .help-main .badge-success { background: #d1fae5; color: #065f46; }
+    .help-main .badge-warning { background: #fef3c7; color: #92400e; }
+    .help-main .badge-danger { background: #fee2e2; color: #991b1b; }
+    .help-main .badge-info { background: #dbeafe; color: #1e40af; }
+    .help-main .info-box {
+        background: #eef2ff;
+        border-left: 4px solid var(--primary);
+        padding: 1rem 1.25rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
+    .help-main .info-box strong {
+        color: var(--primary);
+    }
+    .help-main .welcome-section {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+    .help-main .welcome-section .welcome-icon {
+        font-size: 3rem;
+        color: var(--primary);
+        margin-bottom: 1rem;
+    }
+    .help-main .welcome-section h1 {
+        margin-bottom: 0.5rem;
+    }
+    .help-main .welcome-section p {
+        color: var(--text-muted);
+        max-width: 500px;
+        margin: 0 auto;
+    }
+    .help-main .welcome-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    .help-main .welcome-grid .card {
+        cursor: pointer;
+        text-align: center;
+        padding: 1.5rem 1rem;
+        transition: var(--transition);
+    }
+    .help-main .welcome-grid .card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    .help-main .welcome-grid .card .card-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    .help-main .welcome-grid .card .card-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    @media (max-width: 768px) {
+        .help-container {
+            flex-direction: column;
+        }
+        .help-sidebar {
+            width: 100%;
+            max-height: 200px;
+            border-right: none;
+            border-bottom: 1px solid var(--border);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Help documentation data
+const helpDocs = {
+    sections: [
+        {
+            id: 'getting_started',
+            title: 'Getting Started',
+            icon: '🚀',
+            articles: [
+                {
+                    id: 'what_is_this',
+                    title: 'What is This App?',
+                    content: `<p>This attendance system replaces traditional fingerprint machines with mobile-based clock-in/clock-out. It uses GPS geofencing, biometric verification, and optional selfie/QR verification to ensure accurate attendance tracking.</p>
+<p><strong>Key capabilities:</strong></p>
+<ul>
+<li>Clock in/out from your phone using fingerprint or face unlock</li>
+<li>GPS location verification to confirm you're at the workplace</li>
+<li>Works offline — punches sync automatically when connection returns</li>
+<li>Real-time sync with your company's ADMS attendance server</li>
+<li>Administrative web dashboard for managing employees and viewing reports</li>
+</ul>`
+                },
+                {
+                    id: 'requirements',
+                    title: 'Requirements',
+                    content: `<p>Before using this app, make sure you have:</p>
+<h3>📱 Device Requirements</h3>
+<ul>
+<li>Android device running Android 8.0 (API 26) or higher</li>
+<li>GPS/Location services enabled</li>
+<li>Fingerprint sensor OR Face unlock capability (recommended)</li>
+<li>Camera (for optional selfie and QR features)</li>
+<li>Internet connection for initial setup</li>
+</ul>
+<h3>🔧 Provided by Your IT Administrator</h3>
+<ul>
+<li>Server URL (backend API address)</li>
+<li>API Key (unique to your device)</li>
+<li>Your Employee ID</li>
+<li>Branch/Office location details</li>
+</ul>
+<h3>🛡️ Permissions Required</h3>
+<ul>
+<li>Location (GPS) — required for geofence verification</li>
+<li>Biometrics (Fingerprint/Face) — required for punch identity verification</li>
+<li>Camera — required for selfie verification & QR scanning (optional)</li>
+</ul>`
+                },
+                {
+                    id: 'first_time_setup',
+                    title: 'First-Time Setup Guide',
+                    content: `<p>Follow these steps to set up the app for the first time:</p>
+<ol class="step-list">
+<li><strong>Launch the App</strong><br>Open the app. You'll see the Settings screen.</li>
+<li><strong>Enter Server URL</strong><br>Tap "Server URL" and enter the backend address provided by your IT admin.</li>
+<li><strong>Enter API Key</strong><br>Tap "API Key" and enter the key provided by your admin.</li>
+<li><strong>Configure Security (Recommended)</strong><br>Enable biometric authentication and certificate pinning in Settings.</li>
+<li><strong>Enable Location</strong><br>The app will ask for location permissions. Grant "Allow all the time" for automatic geofence detection.</li>
+<li><strong>Test Connection</strong><br>Tap the fingerprint icon in the Punch tab. If configured correctly, you'll see the punch interface ready to use.</li>
+</ol>`,
+                    steps: ['Launch the app and go to Settings', 'Enter the Server URL from your IT admin', 'Enter your API Key', 'Configure biometric and security preferences', 'Grant location permissions', 'Test by tapping the Punch tab']
+                }
+            ]
+        },
+        {
+            id: 'device_setup',
+            title: 'Device Registration',
+            icon: '📱',
+            articles: [
+                {
+                    id: 'registering_device',
+                    title: 'Registering Your Device',
+                    content: `<p>Device registration links your phone to your employee account. This ensures only authorized devices can punch attendance.</p>
+<h3>Automatic Registration</h3>
+<p>When you first open the app and enter your API key, the app automatically sends a registration request containing your device's unique hardware ID, device name/model, and Employee ID (linked via API key).</p>
+<h3>Approval Flow</h3>
+<ol>
+<li>Registration request is sent to the server</li>
+<li>Admin reviews the request in the web dashboard</li>
+<li>Admin assigns your device to a branch (office location)</li>
+<li>Once approved, the device status changes to "Active"</li>
+<li>You'll see "Ready to Punch" on the home screen</li>
+</ol>
+<h3>Status Indicators</h3>
+<ul>
+<li><strong>"Pending Approval"</strong> — Waiting for admin to approve</li>
+<li><strong>"No Branch Assigned"</strong> — Approved but not yet linked to a branch</li>
+<li><strong>"Ready"</strong> — Fully active and ready to punch</li>
+<li><strong>"Suspended"</strong> — Device has been deactivated by admin</li>
+</ul>`
+                },
+                {
+                    id: 'multi_device',
+                    title: 'Using Multiple Devices',
+                    content: `<p>You can register multiple devices under the same employee account. This is useful if:</p>
+<ul>
+<li>You switch between phone and tablet</li>
+<li>You get a new phone and want both active during transition</li>
+<li>You use a work-provided device and a personal device</li>
+</ul>
+<h3>Rules</h3>
+<ul>
+<li>Each device gets its own API key</li>
+<li>Each device registers independently</li>
+<li>All devices are linked to the same Employee ID</li>
+<li>Punches from any device are recorded under your name</li>
+<li>Admin can suspend individual devices if needed</li>
+</ul>
+<p>To add another device, install the app on the new device and repeat the setup process with a new API key.</p>`
+                }
+            ]
+        },
+        {
+            id: 'punching',
+            title: 'Punching In/Out',
+            icon: '🖐️',
+            articles: [
+                {
+                    id: 'how_to_punch',
+                    title: 'How to Clock In/Out',
+                    content: `<p>The punch flow is designed to be quick and secure. Here's how it works:</p>
+<ol class="step-list">
+<li><strong>Navigate to Punch Tab</strong><br>Tap the fingerprint icon in the bottom navigation bar.</li>
+<li><strong>Choose Punch Type</strong><br>Select from Clock In, Clock Out, Break Start, Break End, or custom types.</li>
+<li><strong>Biometric Verification</strong><br>The app prompts for fingerprint or face unlock to verify your identity.</li>
+<li><strong>Location Verification</strong><br>The app checks your GPS location against the office geofence.</li>
+<li><strong>Optional Selfie</strong><br>If enabled, you'll be prompted to take a selfie for visual verification.</li>
+<li><strong>Optional QR Scan</strong><br>If required, scan the QR code at your office entrance.</li>
+<li><strong>Confirmation</strong><br>A success message confirms your punch. The punch is immediately synced.</li>
+</ol>`,
+                    steps: ['Tap the Punch tab (fingerprint icon)', 'Select the punch type', 'Authenticate with fingerprint or face', 'Wait for GPS geofence verification', 'Take optional selfie if prompted', 'Scan optional QR code if prompted', 'Confirm — punch is recorded!']
+                },
+                {
+                    id: 'punch_types',
+                    title: 'Punch Types Explained',
+                    content: `<p>Your company configures which punch types are available. Common types include:</p>
+<div class="badge-list">
+<span class="badge badge-success">🟢 Clock In</span>
+<span class="badge badge-danger">🔴 Clock Out</span>
+<span class="badge badge-warning">🟡 Break Start</span>
+<span class="badge badge-info">🔵 Break End</span>
+</div>
+<ul>
+<li><strong>Clock In (In)</strong> — Marks the start of your work day.</li>
+<li><strong>Clock Out (Out)</strong> — Marks the end of your work day.</li>
+<li><strong>Break Start</strong> — Marks the start of a break period.</li>
+<li><strong>Break End</strong> — Marks the end of a break period.</li>
+<li><strong>Overtime Start/End</strong> — For tracking overtime work.</li>
+</ul>
+<p>Some punch types may have geofence requirements turned off. The app shows which types require geofence verification.</p>`
+                },
+                {
+                    id: 'geofence',
+                    title: 'GPS & Geofence Verification',
+                    content: `<p>The app uses GPS to confirm you're physically at your workplace when punching.</p>
+<h3>How It Works</h3>
+<ol>
+<li>Your company defines geofence zones around each office branch</li>
+<li>Each branch has a center point (lat/lng) and radius (in meters)</li>
+<li>When you punch, the app checks if your GPS location falls within any assigned branch's zone</li>
+<li>If you're outside all zones, the punch is rejected (for geofenced types)</li>
+</ol>
+<h3>Tips</h3>
+<ul>
+<li>Enable high-accuracy GPS in your phone settings</li>
+<li>Make sure you're actually at the office location</li>
+<li>GPS works best outdoors; near windows indoors</li>
+<li>If GPS is slow, wait a moment for the location to stabilize</li>
+</ul>
+<div class="info-box"><strong>Mock Location Detection:</strong> If your phone detects mock locations (GPS spoofing), the punch is flagged but not automatically rejected. The admin can review flagged punches.</div>`
+                },
+                {
+                    id: 'duplicate_protection',
+                    title: 'Duplicate Punch Protection',
+                    content: `<p>The app prevents duplicate punches through two mechanisms:</p>
+<h3>1. Client-Side ID (Idempotency)</h3>
+<p>Each punch generates a unique ID (UUID). If the network fails and you retry, the server recognizes the same ID and returns the existing result instead of creating a duplicate.</p>
+<h3>2. 5-Minute Window</h3>
+<p>The server automatically rejects a punch if: same employee, same punch type, within 5 minutes of the last punch. This prevents accidental double-taps.</p>
+<h3>3. Daily Limit</h3>
+<p>The server enforces a maximum number of punches per day (configurable by admin, default: 10). This prevents abuse or automated punching.</p>`
+                }
+            ]
+        },
+        {
+            id: 'offline_sync',
+            title: 'Offline Mode & Sync',
+            icon: '📡',
+            articles: [
+                {
+                    id: 'offline_punching',
+                    title: 'Punching When Offline',
+                    content: `<p>The app works even without internet.</p>
+<h3>When You're Offline</h3>
+<ol>
+<li>All punch flow steps remain the same (biometric, GPS, etc.)</li>
+<li>The punch is stored locally on your device in an offline queue</li>
+<li>A "Pending" indicator shows the punch hasn't synced yet</li>
+<li>The punch is queued for automatic sync when connection returns</li>
+</ol>
+<h3>When Connection Returns</h3>
+<ol>
+<li>The app detects internet availability automatically</li>
+<li>All queued punches are sent to the server in a batch</li>
+<li>The server processes each punch (checking for duplicates)</li>
+<li>Results are stored locally and a sync confirmation appears</li>
+</ol>
+<h3>Sync Status Codes</h3>
+<ul>
+<li><strong>"Pending"</strong> — Waiting to sync</li>
+<li><strong>"Synced"</strong> — Successfully uploaded</li>
+<li><strong>"Failed"</strong> — Error during sync (tap to retry)</li>
+<li><strong>"Stale"</strong> — Not synced after 7 days</li>
+</ul>`
+                },
+                {
+                    id: 'offline_setup',
+                    title: 'Preparing for Offline Use',
+                    content: `<p>To ensure the app works properly when you're offline:</p>
+<h3>1. Connect At Least Once</h3>
+<p>Before going offline, open the app with internet and let it fully load. This caches branch locations, geofence data, punch types, device registration status, and recent history.</p>
+<h3>2. Handle Sync Failures</h3>
+<p>If a punch fails to sync: Go to the History tab, find punches with "Failed" status, tap to retry individual punches, or wait for automatic retry (every 5 minutes).</p>
+<h3>3. Storage Management</h3>
+<p>Offline queue data is stored locally. Settings → Clear Cache removes temporary data. Old synced records are automatically cleaned up.</p>`
+                }
+            ]
+        },
+        {
+            id: 'features',
+            title: 'Features',
+            icon: '⭐',
+            articles: [
+                {
+                    id: 'dashboard',
+                    title: 'Attendance Dashboard',
+                    content: `<p>The Dashboard gives you a real-time overview of your attendance.</p>
+<h3>Today's Summary Card</h3>
+<ul>
+<li>Shows current date and time</li>
+<li>Total work duration today</li>
+<li>Status badge: Present, Late, or Absent</li>
+<li>First and last punch time</li>
+<li>Overtime hours (if applicable)</li>
+</ul>
+<h3>Weekly Overview Card</h3>
+<ul>
+<li>Current week stats: present days, total hours, average per day</li>
+<li>Each day shown with color indicator</li>
+<li>🟢 Green — Present on time, 🟡 Yellow — Late, 🔴 Red — Absent</li>
+</ul>
+<h3>Monthly Stats Card</h3>
+<ul>
+<li>Month-to-date totals</li>
+<li>Present/Late/Absence counts</li>
+<li>Attendance percentage bar</li>
+</ul>`
+                },
+                {
+                    id: 'history',
+                    title: 'Punch History',
+                    content: `<p>The History tab shows all your recorded punches.</p>
+<ul>
+<li>Scrollable list of all punches with date, time, punch type, sync status</li>
+<li>Color-coded by punch type</li>
+<li>Distance from branch at time of punch</li>
+</ul>
+<h3>Sync Status Indicators</h3>
+<ul>
+<li>✅ Green check — Synced to server</li>
+<li>⏳ Yellow clock — Pending sync (offline)</li>
+<li>❌ Red X — Sync failed (tap to retry)</li>
+</ul>
+<h3>Filtering</h3>
+<p>Filter by date range, punch type, or sync status.</p>
+<p><em>Export: Your HR admin can export all attendance records from the web dashboard as CSV.</em></p>`
+                },
+                {
+                    id: 'selfie',
+                    title: 'Selfie Verification',
+                    content: `<p>When enabled by your company, you may be asked to take a selfie when punching for visual proof of attendance.</p>
+<h3>How It Works</h3>
+<ol>
+<li>After biometric auth, the front camera opens</li>
+<li>Take a photo of your face</li>
+<li>Review and confirm the photo</li>
+<li>The photo is stored securely on the server</li>
+<li>Admins can review selfies alongside punch records</li>
+</ol>
+<div class="info-box"><strong>Privacy:</strong> Selfies are stored on the company server only. Only HR administrators can view them. They are linked to specific punch records for audit purposes. You can skip selfie if you prefer.</div>`
+                },
+                {
+                    id: 'qr_nfc',
+                    title: 'QR Code & NFC Check-in',
+                    content: `<p>Some branches may require QR code scanning or NFC tag tapping as additional location verification.</p>
+<h3>QR Code Check-in</h3>
+<ol>
+<li>Your office displays a unique QR code at the entrance</li>
+<li>When punching, the app opens the camera to scan the QR code</li>
+<li>The app verifies it matches the expected branch code</li>
+<li>Punch proceeds only if QR matches</li>
+</ol>
+<h3>NFC Tag Check-in</h3>
+<ol>
+<li>Your office has NFC tags installed at entry points</li>
+<li>Tap your phone to the NFC tag when punching</li>
+<li>The app reads the tag and verifies it's authentic</li>
+</ol>
+<p><em>Tip: Enable NFC in your phone's quick settings if NFC verification is active at your branch.</em></p>`
+                },
+                {
+                    id: 'notifications',
+                    title: 'Push Notifications',
+                    content: `<p>When enabled, push notifications help you stay on track with your attendance.</p>
+<h3>Types of Notifications</h3>
+<ul>
+<li><strong>⏰ Punch Reminders</strong> — Morning reminder to clock in, evening reminder to clock out</li>
+<li><strong>📍 Geofence Alerts</strong> — "You've arrived at [Branch]. Clock in now?"</li>
+<li><strong>⚠️ Missed Punch Alerts</strong> — If no clock-in detected by late morning</li>
+</ul>
+<p>Configure notifications in Settings → Notifications.</p>`
+                }
+            ]
+        },
+        {
+            id: 'security',
+            title: 'Account & Security',
+            icon: '🔒',
+            articles: [
+                {
+                    id: 'api_key_security',
+                    title: 'API Key Management',
+                    content: `<p>Your API key is the credential that links your device to your employee account.</p>
+<h3>Important Rules</h3>
+<ul>
+<li>🔑 Keep your API key secret — never share it with others</li>
+<li>🔑 Your key is shown only once when created by the admin</li>
+<li>🔑 If you lose your key, ask your admin to generate a new one</li>
+<li>🔑 Old keys can be revoked by admin if compromised</li>
+</ul>
+<h3>Best Practices</h3>
+<ul>
+<li>Don't screenshot or save your API key in plain text</li>
+<li>If you suspect your key is compromised, request a new one immediately</li>
+<li>Use a strong device PIN/password to protect your phone</li>
+</ul>`
+                },
+                {
+                    id: 'biometric_security',
+                    title: 'Biometric & Session Security',
+                    content: `<p>The app uses your device's built-in biometric security (fingerprint or face unlock).</p>
+<h3>How Biometric Authentication Works</h3>
+<ol>
+<li>Before each punch, the app requests fingerprint or face scan</li>
+<li>Your biometric data NEVER leaves your device</li>
+<li>The app only receives a "success/failure" result</li>
+<li>Your fingerprint template is stored securely by your device's hardware</li>
+</ol>
+<h3>Biometric Session Timeout</h3>
+<p>You can set how often to re-authenticate: Every Punch, 30 seconds, 1 minute, or 5 minutes.</p>
+<div class="info-box"><strong>Device Security:</strong> If your device is rooted/jailbroken, punching is blocked and a red "Device Compromised" banner is shown. Contact your IT admin.</div>`
+                },
+                {
+                    id: 'certificate_pinning',
+                    title: 'Certificate Pinning',
+                    content: `<p>Certificate pinning prevents man-in-the-middle attacks by ensuring your app ONLY trusts the specific certificate from your server.</p>
+<h3>When to Enable</h3>
+<ul>
+<li>✅ Enable in production environments</li>
+<li>✅ Enable when using public WiFi</li>
+<li>❌ Disable during development/testing with self-signed certificates</li>
+</ul>
+<p>Enable in: Settings → Security → Certificate Pinning</p>
+<div class="info-box"><strong>Note:</strong> If enabled incorrectly, the app may not connect. Toggle off if you can't connect after enabling.</div>`
+                }
+            ]
+        },
+        {
+            id: 'admin_guide',
+            title: 'Admin Guide',
+            icon: '⚙️',
+            articles: [
+                {
+                    id: 'admin_dashboard',
+                    title: 'Web Admin Dashboard',
+                    content: `<p>The web admin dashboard is where IT administrators manage the entire attendance system.</p>
+<h3>Access</h3>
+<p>URL: <code>http://[server-address]:8999/</code> — Login with your admin username and password.</p>
+<h3>Main Sections</h3>
+<ul>
+<li><strong>Dashboard (Home)</strong> — Overview of devices, quick statistics, pending approvals, ADMS sync status</li>
+<li><strong>Devices</strong> — View/approve/suspend devices, assign to branches</li>
+<li><strong>Branches (Geofences)</strong> — Add branches with GPS coordinates, set geofence radius, manage QR codes</li>
+<li><strong>API Keys</strong> — Create/rotate/revoke API keys for employees</li>
+<li><strong>Punch Types</strong> — Configure available punch types and geofence requirements</li>
+<li><strong>ADMS Sync</strong> — View sync statistics, retry failed records</li>
+<li><strong>App Settings</strong> — Set minimum app version, configure sync intervals</li>
+<li><strong>Supervisors</strong> — Assign supervisors, manage correction requests</li>
+</ul>`
+                },
+                {
+                    id: 'device_approval',
+                    title: 'Device Approval Workflow',
+                    content: `<ol class="step-list">
+<li><strong>Employee Installs App</strong> — Employee installs the app and enters their API key</li>
+<li><strong>Registration Sent</strong> — The app sends an automatic registration request</li>
+<li><strong>Admin Reviews</strong> — Go to Dashboard → check "Pending Approval" section</li>
+<li><strong>Approve Device</strong> — Click "Approve" to accept the device</li>
+<li><strong>Assign Branch</strong> — Select the device and assign it to one or more branches</li>
+<li><strong>Device Active</strong> — The employee can start punching</li>
+<li><strong>Monitor</strong> — View device details, suspend, or delete at any time</li>
+</ol>`
+                },
+                {
+                    id: 'adms_config',
+                    title: 'ADMS Server Configuration',
+                    content: `<p>The system syncs attendance data with your existing ADMS (ZKTeco) server.</p>
+<h3>Configuration Steps</h3>
+<ol>
+<li><strong>Add ADMS Target</strong> — Enter Server URL, Device Serial Number, Device Name</li>
+<li><strong>Set Credentials</strong> — Enter Username and Password for ADMS</li>
+<li><strong>Enable Sync</strong> — The system starts syncing automatically</li>
+</ol>
+<h3>How Sync Works</h3>
+<ul>
+<li>Each punch is queued for sync</li>
+<li>The ARQ worker processes the queue</li>
+<li>Handshake with ADMS server happens every 60 seconds</li>
+<li>Failed punches retry with exponential backoff (10s → 20s → 40s → 80s → 160s)</li>
+</ul>`
+                }
+            ]
+        },
+        {
+            id: 'troubleshooting',
+            title: 'Troubleshooting',
+            icon: '🔧',
+            articles: [
+                {
+                    id: 'cant_connect',
+                    title: "Can't Connect to Server",
+                    content: `<ol>
+<li><strong>Check Server URL</strong> — Make sure the URL is correct (including http:// or https://)</li>
+<li><strong>Check Internet</strong> — Ensure WiFi or mobile data is enabled</li>
+<li><strong>Check API Key</strong> — Keys are case-sensitive, make sure it's correct and not expired</li>
+<li><strong>Check Server Status</strong> — Ask your admin to verify the backend is running</li>
+<li><strong>Certificate Issues</strong> — Try disabling certificate pinning in Settings</li>
+</ol>`
+                },
+                {
+                    id: 'gps_not_working',
+                    title: 'GPS / Location Not Working',
+                    content: `<ol>
+<li><strong>Enable GPS</strong> — Turn on Location and set to "High Accuracy" mode</li>
+<li><strong>Check Permissions</strong> — Set Location permission to "Allow all the time"</li>
+<li><strong>Wait for GPS Fix</strong> — GPS can take 10-30 seconds outdoors</li>
+<li><strong>Restart App</strong> — Close and reopen, or restart your phone</li>
+<li><strong>Check Geofence</strong> — Your branch coordinates might be incorrect, ask admin to verify</li>
+</ol>`
+                },
+                {
+                    id: 'biometric_fails',
+                    title: 'Biometric / Fingerprint Not Working',
+                    content: `<ol>
+<li><strong>Clean the Sensor</strong> — Wipe the fingerprint sensor dry and clean</li>
+<li><strong>Re-register</strong> — Delete and re-register your fingerprints in phone settings</li>
+<li><strong>Good Lighting</strong> — For face unlock, ensure good lighting</li>
+<li><strong>Skip Temporarily</strong> — Disable biometric in Settings for testing, re-enable later</li>
+</ol>`
+                },
+                {
+                    id: 'sync_failures',
+                    title: 'Punch Sync Failures',
+                    content: `<ol>
+<li><strong>Check Internet</strong> — Make sure you have an active connection</li>
+<li><strong>Manual Retry</strong> — Go to History, tap failed punches to retry</li>
+<li><strong>Check Server</strong> — Backend might be down for maintenance</li>
+<li><strong>Check API Key</strong> — Your key might have expired</li>
+<li><strong>Storage Full</strong> — Free up phone storage if the queue can't save</li>
+</ol>`
+                },
+                {
+                    id: 'app_crashes',
+                    title: 'App Crashes or Freezes',
+                    content: `<ol>
+<li><strong>Force Close</strong> — Close the app from recent apps and reopen</li>
+<li><strong>Clear Cache</strong> — Settings → Apps → Attendance → Storage → Clear Cache</li>
+<li><strong>Update App</strong> — Check if a newer version is available</li>
+<li><strong>Reinstall</strong> — As a last resort, uninstall and reinstall (save your API key first)</li>
+<li><strong>Report</strong> — Note when it happens and send details to IT support</li>
+</ol>`
+                }
+            ]
+        }
+    ]
+};
+
+// Render help page
+document.addEventListener('DOMContentLoaded', function() {
+    const sidebar = document.getElementById('help-sidebar');
+    const main = document.getElementById('help-main');
+    let selectedSection = null;
+    let selectedArticle = null;
+    let searchQuery = '';
+
+    function renderSidebar() {
+        const filtered = helpDocs.sections.map(section => {
+            const articles = section.articles.filter(a =>
+                !searchQuery ||
+                a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                a.content.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+            return { ...section, articles };
+        }).filter(s => !searchQuery || s.articles.length > 0);
+
+        let html = '<input type="text" class="search-box" placeholder="Search documentation..." id="help-search" value="' + searchQuery.replace(/"/g, '"') + '">';
+        
+        filtered.forEach(section => {
+            const isExpanded = selectedSection === section.id || selectedSection === null;
+            html += '<div class="help-section-group">';
+            html += '<button class="help-section-header" onclick="toggleSection(\'' + section.id + '\')">';
+            html += '<span class="icon">' + section.icon + '</span> ' + section.title;
+            html += '</button>';
+            if (isExpanded) {
+                section.articles.forEach(article => {
+                    const isActive = selectedArticle === article.id;
+                    html += '<button class="help-article-link' + (isActive ? ' active' : '') + '" onclick="selectArticle(\'' + section.id + '\', \'' + article.id + '\')">' + article.title + '</button>';
+                });
+            }
+            html += '</div>';
+        });
+        
+        sidebar.innerHTML = html;
+        
+        // Re-attach search handler
+        document.getElementById('help-search').addEventListener('input', function(e) {
+            searchQuery = e.target.value;
+            selectedSection = null;
+            selectedArticle = null;
+            renderSidebar();
+            renderWelcome();
+        });
+    }
+
+    function renderArticle(sectionId, articleId) {
+        const section = helpDocs.sections.find(s => s.id === sectionId);
+        if (!section) return;
+        const article = section.articles.find(a => a.id === articleId);
+        if (!article) return;
+        
+        selectedSection = sectionId;
+        selectedArticle = articleId;
+        
+        document.getElementById('page-title').textContent = article.title;
+        
+        main.innerHTML = '<div class="card"><h1>' + article.title + '</h1>' + article.content + '</div>';
+        renderSidebar();
+    }
+
+    function renderWelcome() {
+        selectedSection = null;
+        selectedArticle = null;
+        document.getElementById('page-title').textContent = 'Help & Documentation';
+        
+        let html = '<div class="welcome-section">';
+        html += '<div class="welcome-icon">📖</div>';
+        html += '<h1>Help & Documentation</h1>';
+        html += '<p>Select a topic from the sidebar to get started, or browse the quick links below.</p>';
+        html += '<div class="welcome-grid">';
+        
+        helpDocs.sections.forEach(section => {
+            html += '<div class="card" onclick="selectArticle(\'' + section.id + '\', \'' + section.articles[0].id + '\')">';
+            html += '<div class="card-icon">' + section.icon + '</div>';
+            html += '<div class="card-title">' + section.title + '</div>';
+            html += '</div>';
+        });
+        
+        html += '</div></div>';
+        main.innerHTML = html;
+        renderSidebar();
+    }
+
+    // Expose functions globally
+    window.toggleSection = function(sectionId) {
+        // Just re-render with that section expanded
+        renderSidebar();
+    };
+
+    window.selectArticle = function(sectionId, articleId) {
+        renderArticle(sectionId, articleId);
+    };
+
+    // Initial render
+    renderWelcome();
+});
+</script>
+{% endblock %}
+
 {% block content %}
-<div style="padding: 2rem;">
-    <h1>Help & Documentation</h1>
-    <p>This is a simplified help page for testing.</p>
+<div class="help-container">
+    <div class="help-sidebar" id="help-sidebar"></div>
+    <div class="help-main" id="help-main"></div>
 </div>
 {% endblock %}
