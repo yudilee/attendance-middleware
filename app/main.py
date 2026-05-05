@@ -641,15 +641,10 @@ async def get_branches(db: Session = Depends(get_db), admin: AdminUser = Depends
     result = []
     for b in branches:
         # Count DISTINCT devices assigned to this branch (via DeviceBinding.branch_id or BindingBranch M2M)
-        # Using UNION to avoid double-counting when a device has both a direct branch_id AND a M2M entry
-        direct_subq = db.query(DeviceBinding.id.label("device_id")).filter(
-            DeviceBinding.branch_id == b.id
-        ).subquery()
-        m2m_subq = db.query(BindingBranch.binding_id.label("device_id")).filter(
-            BindingBranch.branch_id == b.id
-        ).subquery()
-        union_query = direct_subq.union(m2m_subq).alias("all_devices")
-        device_count = db.query(func.count(text("distinct all_devices.device_id"))).select_from(union_query).scalar() or 0
+        # Combine both sources using Python sets to avoid double-counting
+        direct_ids = {r[0] for r in db.query(DeviceBinding.id).filter(DeviceBinding.branch_id == b.id).all()}
+        m2m_ids = {r[0] for r in db.query(BindingBranch.binding_id).filter(BindingBranch.branch_id == b.id).all()}
+        device_count = len(direct_ids | m2m_ids)
 
         result.append({
             "id": b.id,
