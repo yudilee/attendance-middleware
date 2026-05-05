@@ -740,27 +740,51 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
 code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875em; }
 </style>
 <script>
+    // Helper to switch tabs
+    function showTab(tabId) {
+        document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        
+        const content = document.getElementById(tabId);
+        if (content) {
+            content.style.display = 'block';
+            const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+            if (navItem) {
+                navItem.classList.add('active');
+                document.getElementById('page-title').innerText = navItem.innerText.trim();
+            }
+            
+            // Trigger load data
+            if (tabId === 'security') loadApiKeys();
+            if (tabId === 'geofence') loadBranches();
+            if (tabId === 'profile') loadUsers();
+            if (tabId === 'punch-types') loadPunchTypes();
+            if (tabId === 'settings') loadAdmsSyncSettings();
+        }
+    }
+
     // Navigation switching
     document.querySelectorAll('.nav-item[data-tab]').forEach(tab => {
         tab.addEventListener('click', (e) => {
-            e.preventDefault();
-            document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-            tab.classList.add('active');
-            
-            const targetTab = tab.dataset.tab;
-            document.getElementById(targetTab).style.display = 'block';
-            
-            // Update Header Title
-            document.getElementById('page-title').innerText = tab.innerText.trim();
-            
-            // Trigger load data
-            if (targetTab === 'security') loadApiKeys();
-            if (targetTab === 'geofence') loadBranches();
-            if (targetTab === 'profile') loadUsers();
-            if (targetTab === 'punch-types') loadPunchTypes();
-            if (targetTab === 'settings') loadAdmsSyncSettings();
+            // If already on /ui/ dashboard, prevent reload and just switch
+            if (window.location.pathname.startsWith('/ui/') || window.location.pathname === '/ui') {
+                e.preventDefault();
+                const targetTab = tab.dataset.tab;
+                showTab(targetTab);
+                window.location.hash = targetTab;
+            }
         });
+    });
+
+    // Handle initial load and back/forward navigation
+    window.addEventListener('load', () => {
+        const hash = window.location.hash.replace('#', '') || 'dashboard';
+        showTab(hash);
+    });
+
+    window.addEventListener('hashchange', () => {
+        const hash = window.location.hash.replace('#', '') || 'dashboard';
+        showTab(hash);
     });
 
     // ── ADMS Settings ──────────────────────────────────────────────────────────

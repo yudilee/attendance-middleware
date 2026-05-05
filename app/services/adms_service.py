@@ -20,6 +20,7 @@ _handshake_state = {
     "trans_interval": 2,        # Minutes between data transmissions
     "timezone_offset": 7,       # Hours offset from UTC (from TimeZone= in handshake)
     "handshake_done": False,
+    "last_contact": None,
 }
 
 
@@ -380,7 +381,7 @@ async def adms_heartbeat_loop():
                         logger.info(f"📋 Server config: {parsed}")
 
                         # Store stamp values for use in data pushes
-                        _handshake_state["attlog_stamp"] = parsed.get("ATTLOGStamp", "None")
+                        _handshake_state["attlog_stamp"] = parsed.get("ATTLOGStamp") or parsed.get("Stamp") or "None"
                         _handshake_state["operlog_stamp"] = parsed.get("OPERLOGStamp", "0")
 
                         # Use server-configured timing
@@ -401,6 +402,7 @@ async def adms_heartbeat_loop():
                             _handshake_state["timezone_offset"] = 7
 
                         _handshake_state["handshake_done"] = True
+                        _handshake_state["last_contact"] = datetime.utcnow()
                         _update_adms_last_contact()
                         logger.info(
                             f"✅ Handshake complete! ATTLOGStamp={_handshake_state['attlog_stamp']}, "
@@ -444,6 +446,7 @@ async def adms_heartbeat_loop():
                 if poll_resp.status_code == 200:
                     body = poll_resp.text.strip()
                     logger.debug(f"Heartbeat OK for {sn}. Server response: {body!r}")
+                    _handshake_state["last_contact"] = datetime.utcnow()
                     _update_adms_last_contact()
 
                     # ── Step 3: Acknowledge any commands the server sent ──────

@@ -1027,7 +1027,8 @@ async def get_adms_sync_status(request: Request, db: Session = Depends(get_db), 
     
     # ADMS connectivity status from handshake state
     adms_connected = _handshake_state.get("handshake_done", False)
-    adms_last_handshake = _handshake_state.get("attlog_stamp", None)
+    lc = _handshake_state.get("last_contact")
+    adms_last_handshake = lc.strftime("%H:%M:%S") if lc else "None"
     
     # Worker queue health
     worker_running = arq_pool is not None
