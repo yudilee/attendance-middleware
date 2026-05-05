@@ -176,6 +176,6 @@ class WorkerSettings:
         arq.cron(adms_heartbeat, minute=1),
         # Cleanup stale jobs daily at midnight
         arq.cron(cleanup_stale_jobs, hour=0, minute=0),
-        # Clock-in reminders every weekday at 08:00
-        arq.cron(send_clock_in_reminders, hour=8, minute=0, weekday="mon-fri"),
+        # Clock-in reminders every weekday at 08:00 (mon=0, tues=1, wed=2, thurs=3, fri=4)
+        arq.cron(send_clock_in_reminders, hour=8, minute=0, weekday={0, 1, 2, 3, 4}),
     ]
