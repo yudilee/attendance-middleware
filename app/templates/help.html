@@ -44,18 +44,27 @@
         cursor: pointer;
         display: flex;
         align-items: center;
+        justify-content: flex-start;
         gap: 0.5rem;
         transition: var(--transition);
         border: none;
         background: none;
         width: 100%;
         text-align: left;
+        box-sizing: border-box;
+    }
+    .help-section-header .toggle-icon {
+        font-size: 0.6rem;
+        width: 0.6rem;
+        flex-shrink: 0;
+        color: var(--text-muted);
+    }
+    .help-section-header .icon {
+        flex-shrink: 0;
+        font-size: 1.1rem;
     }
     .help-section-header:hover {
         color: var(--primary);
-    }
-    .help-section-header .icon {
-        font-size: 1.1rem;
     }
     .help-article-link {
         display: block;
@@ -69,8 +78,12 @@
         cursor: pointer;
         border: none;
         background: none;
-        width: 100%;
+        width: calc(100% - 0.5rem);
         text-align: left;
+        box-sizing: border-box;
+        white-space: normal;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
     .help-article-link:hover {
         background: rgba(99,102,241,0.08);
@@ -735,9 +748,10 @@ const helpDocs = {
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('help-sidebar');
     const main = document.getElementById('help-main');
-    let selectedSection = null;
     let selectedArticle = null;
     let searchQuery = '';
+    // Track which sections are collapsed (by default all expanded)
+    let collapsedSections = new Set();
 
     function renderSidebar() {
         const filtered = helpDocs.sections.map(section => {
@@ -752,9 +766,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = '<input type="text" class="search-box" placeholder="Search documentation..." id="help-search" value="' + searchQuery.replace(/"/g, '"') + '">';
         
         filtered.forEach(section => {
-            const isExpanded = selectedSection === section.id || selectedSection === null;
+            const isExpanded = !collapsedSections.has(section.id);
             html += '<div class="help-section-group">';
             html += '<button class="help-section-header" onclick="toggleSection(\'' + section.id + '\')">';
+            html += '<span class="toggle-icon">' + (isExpanded ? '▼' : '▶') + '</span> ';
             html += '<span class="icon">' + section.icon + '</span> ' + section.title;
             html += '</button>';
             if (isExpanded) {
@@ -771,8 +786,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Re-attach search handler
         document.getElementById('help-search').addEventListener('input', function(e) {
             searchQuery = e.target.value;
-            selectedSection = null;
             selectedArticle = null;
+            collapsedSections.clear(); // expand all sections on search
             renderSidebar();
             renderWelcome();
         });
@@ -784,7 +799,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const article = section.articles.find(a => a.id === articleId);
         if (!article) return;
         
-        selectedSection = sectionId;
         selectedArticle = articleId;
         
         document.getElementById('page-title').textContent = article.title;
@@ -794,7 +808,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderWelcome() {
-        selectedSection = null;
         selectedArticle = null;
         document.getElementById('page-title').textContent = 'Help & Documentation';
         
@@ -818,7 +831,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Expose functions globally
     window.toggleSection = function(sectionId) {
-        // Just re-render with that section expanded
+        if (collapsedSections.has(sectionId)) {
+            collapsedSections.delete(sectionId); // expand
+        } else {
+            collapsedSections.add(sectionId); // collapse
+        }
         renderSidebar();
     };
 
