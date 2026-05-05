@@ -2112,6 +2112,7 @@ async def supervisor_management(
         context={
             "request": request,
             "section": "supervisors",
+            "admin": current_user,
             "devices": db.query(DeviceBinding).all(),
             "branches": db.query(Branch).all(),
             "api_keys": db.query(ApiKey).all(),
