@@ -1046,13 +1046,7 @@ async def get_adms_sync_status(request: Request, db: Session = Depends(get_db), 
         "adms_connected": adms_connected,
         "adms_last_handshake": adms_last_handshake,
         "worker_running": worker_running,
-        # Include existing context variables for the rest of the page
-        "devices": db.query(DeviceBinding).all(),
-        "branches": db.query(Branch).all(),
-        "api_keys": db.query(ApiKey).all(),
-        "punch_types": db.query(PunchType).all(),
-        "adms_targets": db.query(ADMSTarget).all(),
-        "app_settings": get_app_settings,
+        "app_settings": {"max_devices_per_employee": 5},
     })
 
 
