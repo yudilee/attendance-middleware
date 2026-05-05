@@ -5,6 +5,12 @@ services:
     build: .
     container_name: attendance_middleware
     restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.attendance.rule=Host(`attendance.hartonomotor-group.com`)"
+      - "traefik.http.routers.attendance.entrypoints=websecure"
+      - "traefik.http.routers.attendance.tls.certresolver=myresolver"
+      - "traefik.http.services.attendance.loadbalancer.server.port=8999"
     ports:
       - "8999:8999"
     volumes:
