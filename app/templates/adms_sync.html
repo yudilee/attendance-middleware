@@ -1,0 +1,156 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="adms-dashboard">
+    <h2><i class="ph ph-sync"></i> ADMS Sync Dashboard</h2>
+    
+    <!-- Summary Cards -->
+    <div class="grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem;">
+        <div class="card">
+            <div class="card-title">Total Records</div>
+            <div class="card-value">{{ stats.total }}</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Synced</div>
+            <div class="card-value" style="color: var(--success);">{{ stats.synced }}</div>
+            <div class="card-title" style="margin-top: 0.5rem;">{{ stats.sync_rate }}% success rate</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Pending</div>
+            <div class="card-value" style="color: var(--warning);">{{ stats.pending }}</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Failed</div>
+            <div class="card-value" style="color: var(--danger);">{{ stats.failed }}</div>
+        </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
+        <!-- Connectivity Status -->
+        <div class="card">
+            <h3 style="margin-bottom: 1.5rem;">System Health</h3>
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-main); border-radius: 8px;">
+                    <span style="font-weight: 500;">ADMS Connection</span>
+                    <span class="badge {% if adms_connected %}badge-success{% else %}badge-danger{% endif %}">
+                        {{ "Connected" if adms_connected else "Disconnected" }}
+                    </span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-main); border-radius: 8px;">
+                    <span style="font-weight: 500;">Worker Queue</span>
+                    <span class="badge {% if worker_running %}badge-success{% else %}badge-danger{% endif %}">
+                        {{ "Running" if worker_running else "Stopped" }}
+                    </span>
+                </div>
+                {% if adms_last_handshake %}
+                <div style="font-size: 0.85rem; color: var(--text-muted); text-align: center;">
+                    Last server heartbeat: <strong>{{ adms_last_handshake }}</strong>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div style="margin-top: 2rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                <button onclick="triggerRetryAll()" class="btn btn-warning" style="width: 100%;">
+                    <i class="ph ph-arrow-clockwise"></i> Retry All Failed Punches
+                </button>
+                <button onclick="triggerFullSync()" class="btn btn-primary" style="width: 100%;">
+                    <i class="ph ph-sync"></i> Trigger Full Sync
+                </button>
+            </div>
+        </div>
+
+        <!-- Recent Failures -->
+        <div class="card" style="padding: 0; overflow: hidden;">
+            <div style="padding: 1.5rem; border-bottom: 1px solid var(--border);">
+                <h3 style="font-size: 1rem; font-weight: 600;">Recent Sync Failures</h3>
+            </div>
+            <div class="table-container" style="border: none; border-radius: 0; max-height: 400px; overflow-y: auto;">
+                {% if recent_failures %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Time</th>
+                            <th>Error</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for punch in recent_failures %}
+                        <tr>
+                            <td><strong>{{ punch.employee_id }}</strong></td>
+                            <td style="font-size: 0.75rem;">{{ punch.timestamp.strftime('%H:%M:%S') }}</td>
+                            <td style="color: var(--danger); font-size: 0.75rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis;">
+                                {{ punch.sync_error or 'Unknown Error' }}
+                            </td>
+                            <td>
+                                <button onclick="retrySync({{ punch.id }})" class="btn btn-sm" style="background: var(--primary-light); color: var(--primary);">Retry</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div style="padding: 3rem; text-align: center; color: var(--text-muted);">
+                    <i class="ph ph-check-circle" style="font-size: 3rem; color: var(--success); opacity: 0.5; margin-bottom: 1rem; display: block;"></i>
+                    No recent failures. All syncs are healthy.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function retrySync(punchId) {
+    try {
+        const res = await fetch('/ui/adms-sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({punch_id: punchId})
+        });
+        if (res.ok) {
+            notify('Retry triggered successfully');
+            setTimeout(() => location.reload(), 1000);
+        }
+    } catch (e) {
+        notify('Failed to trigger retry', 'error');
+    }
+}
+
+async function triggerRetryAll() {
+    try {
+        const res = await fetch('/ui/adms-sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({retry_all: true})
+        });
+        if (res.ok) {
+            notify('Retrying all failed punches...');
+            setTimeout(() => location.reload(), 2000);
+        }
+    } catch (e) {
+        notify('Failed to trigger retry', 'error');
+    }
+}
+
+async function triggerFullSync() {
+    if (!confirm('This will queue all unsynced punches. Continue?')) return;
+    try {
+        const res = await fetch('/ui/adms-sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({full_sync: true})
+        });
+        if (res.ok) {
+            notify('Full sync triggered');
+            setTimeout(() => location.reload(), 2000);
+        }
+    } catch (e) {
+        notify('Failed to trigger sync', 'error');
+    }
+}
+</script>
+{% endblock %}

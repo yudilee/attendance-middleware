@@ -1032,9 +1032,8 @@ async def get_adms_sync_status(request: Request, db: Session = Depends(get_db), 
     # Worker queue health
     worker_running = arq_pool is not None
     
-    return templates.TemplateResponse("index.html", {
+    return templates.TemplateResponse("adms_sync.html", {
         "request": request,
-        "section": "adms-dashboard",
         "stats": {
             "total": total,
             "synced": synced,

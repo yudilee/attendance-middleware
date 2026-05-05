@@ -4,6 +4,7 @@
 <!-- Content is handled via sidebar tabs defined in layout.html -->
 
 <!-- ═══════════════════ DASHBOARD TAB ═══════════════════ -->
+{% if not section or section == "dashboard" %}
 <div id="dashboard" class="tab-content">
     <div class="grid" style="grid-template-columns: repeat(4, 1fr);">
         <div class="card">
@@ -111,135 +112,9 @@
                     </tr>
                     {% endfor %}
                 </tbody>
-    </div>
-</div>
-
-<!-- ═══════════════════ ADMS SYNC DASHBOARD TAB ═══════════════════ -->
-{% if section == "adms-dashboard" %}
-<div id="adms-dashboard" class="tab-content">
-    <div class="adms-dashboard">
-        <h2><i class="ph ph-sync"></i> ADMS Sync Dashboard</h2>
-        
-        <!-- Summary Cards -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value">{{ stats.total }}</div>
-                <div class="stat-label">Total Records</div>
-            </div>
-            <div class="stat-card stat-success">
-                <div class="stat-value">{{ stats.synced }}</div>
-                <div class="stat-label">Synced ({{ stats.sync_rate }}%)</div>
-            </div>
-            <div class="stat-card stat-warning">
-                <div class="stat-value">{{ stats.pending }}</div>
-                <div class="stat-label">Pending</div>
-            </div>
-            <div class="stat-card stat-danger">
-                <div class="stat-value">{{ stats.failed }}</div>
-                <div class="stat-label">Failed</div>
-            </div>
-        </div>
-
-        <!-- Connectivity Status -->
-        <div class="card">
-            <h3>Connections</h3>
-            <div class="status-row">
-                <span>ADMS Server:</span>
-                <span class="status-badge {% if adms_connected %}badge-success{% else %}badge-danger{% endif %}">
-                    {{ "Connected" if adms_connected else "Disconnected" }}
-                </span>
-                {% if adms_last_handshake %}
-                <span class="text-muted">Last handshake: {{ adms_last_handshake }}</span>
-                {% endif %}
-            </div>
-            <div class="status-row">
-                <span>Worker Queue:</span>
-                <span class="status-badge {% if worker_running %}badge-success{% else %}badge-danger{% endif %}">
-                    {{ "Running" if worker_running else "Stopped" }}
-                </span>
-            </div>
-        </div>
-
-        <!-- Recent Failures -->
-        <div class="card">
-            <h3>Recent Sync Failures</h3>
-            {% if recent_failures %}
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Employee</th>
-                        <th>Timestamp</th>
-                        <th>Punch Type</th>
-                        <th>Error</th>
-                        <th>Retry</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for punch in recent_failures %}
-                    <tr>
-                        <td>{{ punch.employee_id }}</td>
-                        <td>{{ punch.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-                        <td>{{ punch.punch_type }}</td>
-                        <td class="error-cell">{{ punch.sync_error or 'Unknown' }}</td>
-                        <td>
-                            <button onclick="retrySync('{{ punch.id }}')" class="btn btn-sm btn-warning">
-                                Retry
-                            </button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
             </table>
-            {% else %}
-            <p class="text-muted">No recent failures. All punches syncing successfully!</p>
-            {% endif %}
-        </div>
-
-        <!-- Manual Controls -->
-        <div class="card">
-            <h3>Manual Controls</h3>
-            <div class="btn-group">
-                <button onclick="triggerRetryAll()" class="btn btn-warning">
-                    <i class="ph ph-arrow-clockwise"></i> Retry All Failed
-                </button>
-                <button onclick="triggerFullSync()" class="btn btn-primary">
-                    <i class="ph ph-sync"></i> Full Sync
-                </button>
-            </div>
         </div>
     </div>
-
-    <script>
-    function retrySync(punchId) {
-        fetch('/ui/adms-sync', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({punch_id: punchId})
-        }).then(r => r.json()).then(data => {
-            if(data.status === 'triggered') showToast('Sync retry triggered');
-        });
-    }
-
-    function triggerRetryAll() {
-        fetch('/ui/adms-sync', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({retry_all: true})
-        }).then(r => r.json()).then(data => {
-            if(data.status === 'triggered') showToast('Retrying all failed...');
-        });
-    }
-
-    function triggerFullSync() {
-        fetch('/ui/adms-sync', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({full_sync: true})
-        }).then(r => r.json()).then(data => {
-            if(data.status === 'triggered') showToast('Full sync triggered');
-        });
-    }
-    </script>
 </div>
 {% endif %}
 
