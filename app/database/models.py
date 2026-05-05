@@ -240,8 +240,8 @@ def init_db():
     migrations = [
         "ALTER TABLE adms_targets ADD COLUMN timezone_offset INTEGER DEFAULT 7;",
         "ALTER TABLE punch_logs ADD COLUMN tz_offset_minutes INTEGER DEFAULT 420;",
-        "ALTER TABLE branches ADD COLUMN qr_code_enabled BOOLEAN DEFAULT 0 NOT NULL;",
-        "ALTER TABLE branches ADD COLUMN qr_code_data VARCHAR(256);",
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS qr_code_enabled BOOLEAN DEFAULT FALSE;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN qr_code_enabled BOOLEAN DEFAULT 0;",
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS qr_code_data VARCHAR(256);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN qr_code_data VARCHAR(256);",
         "ALTER TABLE punch_logs ADD COLUMN client_punch_id TEXT;",
         "ALTER TABLE punch_logs ADD COLUMN gps_time_validated INTEGER DEFAULT 0;",
         "ALTER TABLE punch_logs ADD COLUMN notes TEXT;",
@@ -251,22 +251,22 @@ def init_db():
         "ALTER TABLE device_bindings ADD COLUMN approved_by TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN notes TEXT;",
         "ALTER TABLE device_bindings ADD COLUMN device_role TEXT DEFAULT 'primary';",
-        "ALTER TABLE device_bindings ADD COLUMN is_active INTEGER DEFAULT 1;",
+        "ALTER TABLE device_bindings ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;" if engine.name != "sqlite" else "ALTER TABLE device_bindings ADD COLUMN is_active BOOLEAN DEFAULT 1;",
         "DROP INDEX IF EXISTS ix_device_bindings_employee_id;",
         # Branch & ApiKey updates
-        "ALTER TABLE branches ADD COLUMN updated_at TIMESTAMP;",
-        "ALTER TABLE api_keys ADD COLUMN last_used_at TIMESTAMP;",
-        "ALTER TABLE api_keys ADD COLUMN last_used_ip VARCHAR(45);",
-        "ALTER TABLE api_keys ADD COLUMN expires_at TIMESTAMP;",
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN updated_at TIMESTAMP;",
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE api_keys ADD COLUMN last_used_at TIMESTAMP;",
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_ip VARCHAR(45);" if engine.name != "sqlite" else "ALTER TABLE api_keys ADD COLUMN last_used_ip VARCHAR(45);",
+        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE api_keys ADD COLUMN expires_at TIMESTAMP;",
         # ADMS ARQ sync tracking fields
-        "ALTER TABLE punch_logs ADD COLUMN server_sync_status VARCHAR(20) DEFAULT 'pending';",
-        "ALTER TABLE punch_logs ADD COLUMN synced_at TIMESTAMP;",
-        "ALTER TABLE punch_logs ADD COLUMN sync_error VARCHAR(500);",
-        "ALTER TABLE punch_logs ADD COLUMN sync_retry_count INTEGER DEFAULT 0;",
+        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS server_sync_status VARCHAR(20) DEFAULT 'pending';" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN server_sync_status VARCHAR(20) DEFAULT 'pending';",
+        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS synced_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN synced_at TIMESTAMP;",
+        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS sync_error VARCHAR(500);" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN sync_error VARCHAR(500);",
+        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS sync_retry_count INTEGER DEFAULT 0;" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN sync_retry_count INTEGER DEFAULT 0;",
         # Selfie / Face Verification
-        "ALTER TABLE punch_logs ADD COLUMN selfie_filename VARCHAR(500);",
+        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS selfie_filename VARCHAR(500);" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN selfie_filename VARCHAR(500);",
         # Push Notifications (FCM)
-        "ALTER TABLE device_bindings ADD COLUMN fcm_token VARCHAR(500);",
+        "ALTER TABLE device_bindings ADD COLUMN IF NOT EXISTS fcm_token VARCHAR(500);" if engine.name != "sqlite" else "ALTER TABLE device_bindings ADD COLUMN fcm_token VARCHAR(500);",
         # Phase 5b: Supervisor tables
         "CREATE TABLE IF NOT EXISTS employee_supervisors (id SERIAL PRIMARY KEY, supervisor_id VARCHAR(50) NOT NULL, employee_id VARCHAR(50) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(supervisor_id, employee_id));",
         "CREATE INDEX IF NOT EXISTS idx_supervisor_mapping ON employee_supervisors(supervisor_id, employee_id);",
@@ -279,11 +279,15 @@ def init_db():
     with engine.connect() as conn:
         for sql in migrations:
             try:
+                # For PostgreSQL, we can use IF NOT EXISTS if supported, 
+                # but for ALTER TABLE ADD COLUMN it's PG 9.6+.
+                # We'll stick to try/except but fix the syntax.
                 conn.execute(text(sql))
                 conn.commit()
-            except Exception:
-                conn.rollback()  # Required for Postgres to clear aborted transaction state
-                pass  # Column already exists — safe to ignore
+            except Exception as e:
+                conn.rollback()
+                # logger.debug(f"Migration skipped or failed: {sql} - {e}")
+                pass 
 
         # Migrate existing branch_id to device_branch_assignments
         try:
