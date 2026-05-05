@@ -844,13 +844,18 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
 
     // Handle initial load and back/forward navigation
     window.addEventListener('load', () => {
-        const hash = window.location.hash.replace('#', '') || 'dashboard';
-        showTab(hash);
+        // Only run tab logic if we are on the main dashboard root
+        if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
+            const hash = window.location.hash.replace('#', '') || 'dashboard';
+            showTab(hash);
+        }
     });
 
     window.addEventListener('hashchange', () => {
-        const hash = window.location.hash.replace('#', '') || 'dashboard';
-        showTab(hash);
+        if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
+            const hash = window.location.hash.replace('#', '') || 'dashboard';
+            showTab(hash);
+        }
     });
 
     // ── ADMS Settings ──────────────────────────────────────────────────────────
