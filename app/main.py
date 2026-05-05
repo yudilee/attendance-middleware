@@ -638,16 +638,23 @@ class BranchRequest(BaseModel):
 @app.get("/ui/branches")
 async def get_branches(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
     branches = db.query(Branch).all()
-    return [{
-        "id": b.id,
-        "name": b.name,
-        "latitude": b.latitude,
-        "longitude": b.longitude,
-        "radius_meters": b.radius_meters,
-        "is_active": b.is_active,
-        "qr_code_enabled": b.qr_code_enabled,
-        "qr_code_data": b.qr_code_data if b.qr_code_enabled else None,
-    } for b in branches]
+    result = []
+    for b in branches:
+        # Count devices assigned to this branch (via DeviceBinding.branch_id direct or BindingBranch)
+        direct_count = db.query(DeviceBinding).filter(DeviceBinding.branch_id == b.id).count()
+        via_m2m_count = db.query(BindingBranch).filter(BindingBranch.branch_id == b.id).count()
+        result.append({
+            "id": b.id,
+            "name": b.name,
+            "latitude": b.latitude,
+            "longitude": b.longitude,
+            "radius_meters": b.radius_meters,
+            "is_active": b.is_active,
+            "qr_code_enabled": b.qr_code_enabled,
+            "qr_code_data": b.qr_code_data if b.qr_code_enabled else None,
+            "device_count": direct_count + via_m2m_count,
+        })
+    return result
 
 @app.post("/ui/branches")
 async def create_branch(req: BranchRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
@@ -693,6 +700,18 @@ async def delete_branch(branch_id: int, db: Session = Depends(get_db), admin: Ad
         db.commit()
     await invalidate_cache("device_config:*")
     return {"status": "success"}
+
+
+@app.patch("/ui/branches/{branch_id}/toggle")
+async def toggle_branch_status(branch_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    """Toggle a branch's is_active status."""
+    branch = db.query(Branch).filter(Branch.id == branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+    branch.is_active = not branch.is_active
+    db.commit()
+    await invalidate_cache("device_config:*")
+    return {"status": "success", "is_active": branch.is_active}
 
 
 @app.post("/ui/devices/{binding_id}/assign")
@@ -990,16 +1009,20 @@ async def list_employees(db: Session = Depends(get_db), admin: AdminUser = Depen
 
 @app.get("/ui/adms-sync-info")
 async def get_adms_sync_info(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    """Fetch the latest sync status and stats."""
-    def get_val(key):
+    """Fetch the latest sync status, stats, and heartbeat status."""
+    def get_val(key, default="Never"):
         cfg = db.query(AppConfig).filter(AppConfig.key == key).first()
-        return cfg.value if cfg else "Never"
+        return cfg.value if cfg else default
     
     return {
         "last_sync": get_val("last_adms_sync_time"),
         "last_count": get_val("last_adms_sync_count"),
         "last_status": get_val("last_adms_sync_status"),
-        "total_employees": db.query(Employee).count()
+        "total_employees": db.query(Employee).count(),
+        # Heartbeat status (written by ARQ worker's adms_heartbeat cron)
+        "heartbeat_connected": get_val("adms_connected", "false") == "true",
+        "heartbeat_last_contact": get_val("adms_last_contact", ""),
+        "heartbeat_last_error": get_val("adms_last_error", ""),
     }
 
 

@@ -6,6 +6,11 @@
     <title>{% block title %}Virtual Attendance{% endblock %}</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Leaflet (Interactive Map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- QRCode.js -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <link rel="stylesheet" href="/static/css/styles.css?v=2">
     {% block extra_css %}{% endblock %}
 </head>
@@ -19,13 +24,12 @@
             </div>
             
             <nav class="sidebar-nav">
-                <!-- Navigation items will be injected or handled by JS/templating depending on active page -->
-                <!-- We will manage the active states in index.html, but let's provide a structure -->
                 <a href="/ui/#dashboard" class="nav-item active" data-tab="dashboard">
                     <i class="ph ph-squares-four"></i> Overview
                 </a>
-                <a href="/ui/adms-sync-status" class="nav-item">
+                <a href="/ui/adms-sync-status" class="nav-item" id="navAdmsSync">
                     <i class="ph ph-arrows-clockwise"></i> ADMS Sync
+                    <span id="admsSidebarBadge" style="margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: #64748b; display: inline-block;" title="Checking..."></span>
                 </a>
                 <a href="/ui/#devices" class="nav-item" data-tab="devices">
                     <i class="ph ph-devices"></i> Devices
@@ -94,6 +98,54 @@
             toast.innerText = message;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Highlight active sidebar nav item based on current URL path
+        document.addEventListener('DOMContentLoaded', function() {
+            const path = window.location.pathname;
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            const pathMap = {
+                '/ui/adms-sync-status': 'ADMS Sync',
+                '/ui/supervisors': 'Supervisors',
+                '/ui/help': 'Help & Docs',
+            };
+            
+            const matchedTitle = pathMap[path];
+            if (matchedTitle) {
+                navItems.forEach(item => {
+                    item.classList.remove('active');
+                    if (item.innerText.trim() === matchedTitle) {
+                        item.classList.add('active');
+                    }
+                });
+                const titleEl = document.getElementById('page-title');
+                if (titleEl) titleEl.innerText = matchedTitle;
+            }
+
+            // ── ADMS Sidebar Status Badge ──
+            updateAdmsBadge();
+            setInterval(updateAdmsBadge, 15000); // Poll every 15s
+        });
+
+        async function updateAdmsBadge() {
+            const badge = document.getElementById('admsSidebarBadge');
+            if (!badge) return;
+            try {
+                const res = await fetch('/ui/adms-sync-info');
+                if (!res.ok) throw new Error('Not available');
+                const info = await res.json();
+                if (info.heartbeat_connected) {
+                    badge.style.background = '#10b981'; // green = connected
+                    badge.title = 'ADMS Connected';
+                } else {
+                    badge.style.background = '#ef4444'; // red = disconnected
+                    badge.title = info.heartbeat_last_error || 'ADMS Disconnected';
+                }
+            } catch {
+                badge.style.background = '#64748b'; // grey = unknown
+                badge.title = 'Status unknown';
+            }
         }
     </script>
     {% block extra_js %}{% endblock %}
