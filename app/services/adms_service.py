@@ -226,6 +226,7 @@ async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch
             log = db.query(PunchLog).filter(PunchLog.id == log_id).first()
             if log:
                 log.adms_status = "pending"
+                log.server_sync_status = "pending"
                 db.commit()
         finally:
             db.close()
@@ -289,6 +290,8 @@ async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch
                     log = db.query(PunchLog).filter(PunchLog.id == log_id).first()
                     if log:
                         log.adms_status = "uploaded"
+                        log.server_sync_status = "synced"
+                        log.synced_at = datetime.utcnow()
                         db.commit()
                     return True
                 else:
@@ -296,6 +299,9 @@ async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch
                     log = db.query(PunchLog).filter(PunchLog.id == log_id).first()
                     if log:
                         log.adms_status = "failed"
+                        log.server_sync_status = "failed"
+                        log.sync_error = f"HTTP {response.status_code}: {response.text[:200]}"
+                        log.sync_retry_count = (log.sync_retry_count or 0) + 1
                         db.commit()
                     return False
         except Exception as e:
@@ -303,6 +309,9 @@ async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch
             log = db.query(PunchLog).filter(PunchLog.id == log_id).first()
             if log:
                 log.adms_status = "failed"
+                log.server_sync_status = "failed"
+                log.sync_error = str(e)[:500]
+                log.sync_retry_count = (log.sync_retry_count or 0) + 1
                 db.commit()
             return False
     finally:
