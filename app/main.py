@@ -1026,11 +1026,21 @@ async def get_adms_sync_status(request: Request, db: Session = Depends(get_db), 
         PunchLog.synced_at >= last_24h
     ).count()
     
-    # ADMS connectivity status from handshake state
-    adms_connected = _handshake_state.get("handshake_done", False)
-    lc = _handshake_state.get("last_contact")
-    adms_last_handshake = lc.strftime("%H:%M:%S") if lc else "Never"
-    adms_error = _handshake_state.get("last_error")
+    # ADMS connectivity status (stored in AppConfig by the ARQ worker's heartbeat)
+    def get_cfg(key: str, default: str = "") -> str:
+        cfg = db.query(AppConfig).filter(AppConfig.key == key).first()
+        return cfg.value if cfg else default
+    
+    adms_connected = get_cfg("adms_connected", "false") == "true"
+    raw_lc = get_cfg("adms_last_contact", "")
+    adms_last_handshake = "Never"
+    if raw_lc:
+        try:
+            lc_dt = datetime.fromisoformat(raw_lc)
+            adms_last_handshake = lc_dt.strftime("%H:%M:%S")
+        except (ValueError, TypeError):
+            pass
+    adms_error = get_cfg("adms_last_error", "") or None
     
     # Worker queue health
     worker_running = arq_pool is not None
