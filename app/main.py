@@ -640,9 +640,17 @@ async def get_branches(db: Session = Depends(get_db), admin: AdminUser = Depends
     branches = db.query(Branch).all()
     result = []
     for b in branches:
-        # Count devices assigned to this branch (via DeviceBinding.branch_id direct or BindingBranch)
-        direct_count = db.query(DeviceBinding).filter(DeviceBinding.branch_id == b.id).count()
-        via_m2m_count = db.query(BindingBranch).filter(BindingBranch.branch_id == b.id).count()
+        # Count DISTINCT devices assigned to this branch (via DeviceBinding.branch_id or BindingBranch M2M)
+        # Using UNION to avoid double-counting when a device has both a direct branch_id AND a M2M entry
+        direct_subq = db.query(DeviceBinding.id.label("device_id")).filter(
+            DeviceBinding.branch_id == b.id
+        ).subquery()
+        m2m_subq = db.query(BindingBranch.binding_id.label("device_id")).filter(
+            BindingBranch.branch_id == b.id
+        ).subquery()
+        union_query = direct_subq.union(m2m_subq).alias("all_devices")
+        device_count = db.query(func.count(text("distinct all_devices.device_id"))).select_from(union_query).scalar() or 0
+
         result.append({
             "id": b.id,
             "name": b.name,
@@ -652,7 +660,7 @@ async def get_branches(db: Session = Depends(get_db), admin: AdminUser = Depends
             "is_active": b.is_active,
             "qr_code_enabled": b.qr_code_enabled,
             "qr_code_data": b.qr_code_data if b.qr_code_enabled else None,
-            "device_count": direct_count + via_m2m_count,
+            "device_count": device_count,
         })
     return result
 
@@ -691,13 +699,21 @@ async def update_branch(branch_id: int, req: BranchRequest, db: Session = Depend
 @app.delete("/ui/branches/{branch_id}")
 async def delete_branch(branch_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
-    if branch:
-        # Prevent deletion if it's currently bound
-        in_use = db.query(DeviceBinding).filter(DeviceBinding.branch_id == branch_id).first()
-        if in_use:
-            raise HTTPException(status_code=400, detail="Cannot delete branch while it is assigned to devices.")
-        db.delete(branch)
-        db.commit()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    # Check if any devices are directly assigned to this branch
+    in_use_direct = db.query(DeviceBinding).filter(DeviceBinding.branch_id == branch_id).first()
+    if in_use_direct:
+        raise HTTPException(status_code=400, detail="Cannot delete branch while it is assigned to devices (direct binding). Remove the device assignment first.")
+
+    # Check if any devices are linked via M2M BindingBranch
+    in_use_m2m = db.query(BindingBranch).filter(BindingBranch.branch_id == branch_id).first()
+    if in_use_m2m:
+        raise HTTPException(status_code=400, detail="Cannot delete branch while devices are linked via multi-branch assignment. Remove the device-branch links first.")
+
+    db.delete(branch)
+    db.commit()
     await invalidate_cache("device_config:*")
     return {"status": "success"}
 

@@ -1041,16 +1041,19 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         const query = document.getElementById('branchSearch').value.toLowerCase().trim();
         const filter = document.getElementById('branchFilter').value;
         const tbody = document.getElementById('branchesTableBody');
+        
+        // Defensive: ensure currentBranches is an array
+        const branches = Array.isArray(currentBranches) ? currentBranches : [];
 
-        const filtered = currentBranches.filter(b => {
-            const matchesSearch = !query || b.name.toLowerCase().includes(query);
+        const filtered = branches.filter(b => {
+            const matchesSearch = !query || (b.name && b.name.toLowerCase().includes(query));
             const matchesFilter = filter === 'all'
                 || (filter === 'active' && b.is_active)
                 || (filter === 'inactive' && !b.is_active);
             return matchesSearch && matchesFilter;
         });
 
-        document.getElementById('branchCount').innerText = `${filtered.length} / ${currentBranches.length} branches`;
+        document.getElementById('branchCount').innerText = `${filtered.length} / ${branches.length} branches`;
 
         if (!filtered.length) {
             tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">No matching branches.</td></tr>';
@@ -1084,9 +1087,26 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
     }
 
     async function loadBranches() {
-        const res = await fetch('/ui/branches');
-        currentBranches = await res.json();
-        filterBranches();
+        try {
+            const res = await fetch('/ui/branches');
+            if (!res.ok) {
+                const errText = await res.text();
+                console.error('loadBranches failed:', res.status, errText);
+                notify('Failed to load branches: server error', 'error');
+                return;
+            }
+            const data = await res.json();
+            if (!Array.isArray(data)) {
+                console.error('loadBranches: response is not an array', data);
+                notify('Failed to load branches: invalid data', 'error');
+                return;
+            }
+            currentBranches = data;
+            filterBranches();
+        } catch(e) {
+            console.error('loadBranches error:', e);
+            notify('Failed to load branches: ' + (e.message || 'network error'), 'error');
+        }
     }
 
     function toggleQrField() {
@@ -1137,9 +1157,29 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         updateQrPreview();
     }
 
-    function editBranch(id) {
+    async function editBranch(id) {
+        // Ensure we have fresh data - reload if currentBranches is empty or stale
+        if (!Array.isArray(currentBranches) || currentBranches.length === 0) {
+            await loadBranches();
+        }
+        // If still no data after reload, try fetching fresh
+        if (!Array.isArray(currentBranches) || currentBranches.length === 0) {
+            notify('No branch data available. Please reload the page.', 'error');
+            return;
+        }
+        
         const branch = currentBranches.find(b => b.id === id);
-        if (!branch) return;
+        if (!branch) {
+            notify('Branch not found in current data. Refreshing...', 'error');
+            await loadBranches();
+            // Try again after reload
+            const reloaded = currentBranches.find(b => b.id === id);
+            if (!reloaded) {
+                notify('Branch may have been deleted. Please refresh the page.', 'error');
+                return;
+            }
+            return editBranch(id); // Recurse with fresh data (safe: max 1 extra call)
+        }
         
         document.getElementById('edit_branch_id').value = branch.id;
         document.getElementById('branch_name').value = branch.name;
@@ -1211,42 +1251,71 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         const url = editId ? `/ui/branches/${editId}` : '/ui/branches';
         const method = editId ? 'PUT' : 'POST';
 
-        const res = await fetch(url, {
-            method: method, headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-        
-        if (res.ok) {
-            notify(editId ? 'Branch updated!' : 'Branch added!');
-            cancelEdit();
-            await loadBranches();
-        } else {
-            const err = await res.json();
-            notify(err.detail || 'Failed to save branch', 'error');
+        try {
+            const res = await fetch(url, {
+                method: method, headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            
+            if (res.ok) {
+                notify(editId ? 'Branch updated!' : 'Branch added!');
+                cancelEdit();
+                await loadBranches();
+            } else {
+                let errDetail = 'Failed to save branch';
+                try {
+                    const err = await res.json();
+                    errDetail = err.detail || errDetail;
+                } catch(_) {}
+                notify(errDetail, 'error');
+            }
+        } catch(e) {
+            notify('Network error while saving branch: ' + (e.message || 'unknown'), 'error');
         }
     }
 
     async function toggleBranchStatus(id, currentlyActive) {
         const label = currentlyActive ? 'deactivate' : 'activate';
         showConfirm(`Are you sure you want to <strong>${label}</strong> this branch?`, async () => {
-            const res = await fetch(`/ui/branches/${id}/toggle`, {method: 'PATCH'});
-            if (res.ok) {
-                notify(`Branch ${label}d`);
-                await loadBranches();
-            } else {
-                const err = await res.json();
-                notify(err.detail || 'Failed to toggle status', 'error');
+            try {
+                const res = await fetch(`/ui/branches/${id}/toggle`, {method: 'PATCH'});
+                if (res.ok) {
+                    notify(`Branch ${label}d`);
+                    await loadBranches();
+                } else {
+                    let errDetail = 'Failed to toggle status';
+                    try {
+                        const err = await res.json();
+                        errDetail = err.detail || errDetail;
+                    } catch(_) {}
+                    notify(errDetail, 'error');
+                }
+            } catch(e) {
+                notify('Network error while toggling status: ' + (e.message || 'unknown'), 'error');
             }
         });
     }
 
     function confirmDeleteBranch(id, name) {
         showConfirm(
-            `Delete branch <strong>${name}</strong>?<br><small style="color:var(--text-muted);">This cannot be undone. Devices assigned to this branch will be unlinked.</small>`,
+            `Delete branch <strong>${name}</strong>?<br><small style="color:var(--text-muted);">This cannot be undone. Remove all device assignments first before deleting.</small>`,
             async () => {
-                const res = await fetch(`/ui/branches/${id}`, {method: 'DELETE'});
-                if (res.ok) { notify('Branch deleted'); await loadBranches(); }
-                else { const err = await res.json(); notify(err.detail || 'Failed to delete branch', 'error'); }
+                try {
+                    const res = await fetch(`/ui/branches/${id}`, {method: 'DELETE'});
+                    if (res.ok) {
+                        notify('Branch deleted');
+                        await loadBranches();
+                    } else {
+                        let errDetail = 'Failed to delete branch';
+                        try {
+                            const err = await res.json();
+                            errDetail = err.detail || errDetail;
+                        } catch(_) {}
+                        notify(errDetail, 'error');
+                    }
+                } catch(e) {
+                    notify('Network error while deleting branch: ' + (e.message || 'unknown'), 'error');
+                }
             }
         );
     }
