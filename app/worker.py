@@ -59,15 +59,35 @@ async def retry_failed_punches(ctx):
         db.close()
 
 async def adms_heartbeat(ctx):
-    """Scheduled task: maintain ADMS heartbeat connection."""
-    from app.services.adms_service import test_adms_connection, get_adms_config
+    """Scheduled task: maintain ADMS heartbeat connection.
+    
+    This runs every minute via ARQ cron and updates the shared
+    _handshake_state that the web dashboard reads to display
+    "Connected" / "Disconnected" status.
+    """
+    from app.services.adms_service import test_adms_connection, get_adms_config, _handshake_state
+    from datetime import datetime
     try:
         server_url, sn, device_name = get_adms_config()
         if not server_url:
+            _handshake_state["handshake_done"] = False
+            _handshake_state["last_error"] = "No ADMS server configured"
             return {"status": "skipped", "reason": "no_server_configured"}
+        
         success, message = await test_adms_connection(server_url, sn, device_name)
+        
+        if success:
+            _handshake_state["handshake_done"] = True
+            _handshake_state["last_contact"] = datetime.utcnow()
+            _handshake_state["last_error"] = None
+        else:
+            _handshake_state["handshake_done"] = False
+            _handshake_state["last_error"] = message
+        
         return {"status": "ok" if success else "failed", "message": message}
     except Exception as e:
+        _handshake_state["handshake_done"] = False
+        _handshake_state["last_error"] = str(e)
         return {"status": "error", "error": str(e)}
 
 async def cleanup_stale_jobs(ctx):

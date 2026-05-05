@@ -265,7 +265,7 @@ const helpDocs = {
 <li>Clock in/out from your phone using fingerprint or face unlock</li>
 <li>GPS location verification to confirm you're at the workplace</li>
 <li>Works offline — punches sync automatically when connection returns</li>
-<li>Real-time sync with your company's ADMS attendance server</li>
+<li>Attendance data is queued and synced to your company's ADMS server</li>
 <li>Administrative web dashboard for managing employees and viewing reports</li>
 </ul>`
                 },
@@ -663,20 +663,97 @@ const helpDocs = {
                 {
                     id: 'adms_config',
                     title: 'ADMS Server Configuration',
-                    content: `<p>The system syncs attendance data with your existing ADMS (ZKTeco) server.</p>
+                    content: `<p>The system syncs attendance data with your existing ADMS (ZKTeco) server. However, it is important to understand that the middleware communicates with the ADMS server through a <strong>separate, asynchronous sync layer</strong> — not in real-time.</p>
+
+<h3>🏗️ Two-Layer Architecture</h3>
+<p>The attendance system has <strong>two independent communication layers</strong>. Understanding this distinction explains why the ADMS Sync dashboard exists and why ADMS can show "Disconnected" even when the middleware is working perfectly:</p>
+
+<div style="background:#f0f4ff; border:1px solid #d0d7ff; border-radius:0.75rem; padding:1rem; margin:1rem 0; font-size:0.9rem;">
+<h4 style="margin:0 0 0.5rem; color:#4338ca;">Layer 1: Mobile App ↔ Middleware (REST API — Always On)</h4>
+<p style="margin:0 0 0.5rem;">This is the <strong>primary, real-time</strong> communication path. When an employee clocks in/out on their phone:</p>
+<ul style="margin:0;">
+<li>The app sends a JSON request directly to the middleware via HTTP REST API</li>
+<li>The middleware records the punch in PostgreSQL immediately</li>
+<li>This works as long as the middleware server is running — <strong>no ADMS server required</strong></li>
+<li>If the phone is offline, punches are stored locally and synced when connectivity returns</li>
+</ul>
+</div>
+
+<div style="background:#fef2f2; border:1px solid #fecaca; border-radius:0.75rem; padding:1rem; margin:1rem 0; font-size:0.9rem;">
+<h4 style="margin:0 0 0.5rem; color:#dc2626;">Layer 2: Middleware ↔ ADMS Server (Async Queue — Separate Connection)</h4>
+<p style="margin:0 0 0.5rem;">This is a <strong>background sync</strong> that pushes recorded punches to your legacy ZKTeco ADMS server:</p>
+<ul style="margin:0;">
+<li>After a punch is saved in PostgreSQL, it is <strong>queued</strong> for ADMS sync</li>
+<li>An ARQ background worker picks up queued punches and pushes them to the ADMS server using the ZKTeco iClock protocol</li>
+<li>The ADMS server can be <strong>down, unreachable, or misconfigured</strong> without affecting Layer 1 — employees can still punch normally</li>
+<li>Sync is asynchronous — there may be a delay between a punch being recorded and it appearing on the ADMS server</li>
+</ul>
+</div>
+
+<h3>❓ Why Does The ADMS Sync Dashboard Show "Disconnected"?</h3>
+<p>The ADMS Sync Status on the admin dashboard checks <strong>Layer 2 only</strong> — it tests whether the middleware can establish a handshake with the ADMS server. A "Disconnected" status means:</p>
+<ul>
+<li>The ADMS server URL or credentials may be incorrect</li>
+<li>The ADMS server may be down or unreachable from the middleware</li>
+<li>A firewall may be blocking the connection between the middleware and the ADMS server</li>
+<li><strong>It does NOT mean the attendance system is broken</strong> — employees can still clock in/out normally via Layer 1</li>
+</ul>
+<p>The dashboard is designed to give you <strong>visibility into Layer 2</strong> so you know when ADMS sync is falling behind and can investigate the ADMS server or network issues.</p>
+
 <h3>Configuration Steps</h3>
 <ol>
 <li><strong>Add ADMS Target</strong> — Enter Server URL, Device Serial Number, Device Name</li>
 <li><strong>Set Credentials</strong> — Enter Username and Password for ADMS</li>
 <li><strong>Enable Sync</strong> — The system starts syncing automatically</li>
 </ol>
-<h3>How Sync Works</h3>
+
+<h3>How the Sync Queue Works</h3>
 <ul>
-<li>Each punch is queued for sync</li>
-<li>The ARQ worker processes the queue</li>
-<li>Handshake with ADMS server happens every 60 seconds</li>
-<li>Failed punches retry with exponential backoff (10s → 20s → 40s → 80s → 160s)</li>
-</ul>`
+<li>Each punch is queued in PostgreSQL with a <code>server_sync_status</code> of <code>pending</code></li>
+<li>The ARQ worker picks up pending punches and pushes them via the ZKTeco iClock protocol (<code>POST /iclock/cdata?table=ATTLOG</code>)</li>
+<li>A handshake with the ADMS server occurs every 60 seconds to maintain the connection</li>
+<li>Failed punches retry with exponential backoff (10s → 20s → 40s → 80s → 160s, up to ~5 minutes max)</li>
+<li>Punches older than 7 days that are still pending are marked as <code>stale</code></li>
+<li>You can manually trigger a sync retry from the ADMS Sync dashboard</li>
+</ul>
+
+<h3>Summary</h3>
+<table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
+<thead>
+<tr style="background:#f1f5f9;">
+<th style="padding:0.5rem; border:1px solid #e2e8f0; text-align:left;">Aspect</th>
+<th style="padding:0.5rem; border:1px solid #e2e8f0; text-align:left;">Layer 1 (Mobile ↔ Middleware)</th>
+<th style="padding:0.5rem; border:1px solid #e2e8f0; text-align:left;">Layer 2 (Middleware ↔ ADMS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;"><strong>Protocol</strong></td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">REST API (JSON over HTTP)</td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">ZKTeco iClock (HTTP form POST)</td>
+</tr>
+<tr>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;"><strong>Timing</strong></td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">Real-time (instant)</td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">Async (queued, batched)</td>
+</tr>
+<tr>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;"><strong>Works without ADMS?</strong></td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">✅ Yes — fully independent</td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">❌ No — requires ADMS server</td>
+</tr>
+<tr>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;"><strong>Shows on Dashboard</strong></td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">Punch log, employee list</td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">ADMS Sync Status card</td>
+</tr>
+<tr>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;"><strong>Failure Impact</strong></td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">Employees cannot punch</td>
+<td style="padding:0.5rem; border:1px solid #e2e8f0;">No impact — punches queued locally</td>
+</tr>
+</tbody>
+</table>`
                 }
             ]
         },
