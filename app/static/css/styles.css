@@ -241,7 +241,7 @@ body {
 .table-container {
     background: var(--card-bg);
     border-radius: 1rem;
-    overflow: hidden;
+    overflow-x: auto;
     border: 1px solid var(--border);
     box-shadow: var(--shadow-sm);
 }
