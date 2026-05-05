@@ -2069,16 +2069,9 @@ async def help_page(
     db: Session = Depends(get_db)
 ):
     """Render the help/documentation page."""
-    max_devices_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
-    app_settings = {"max_devices_per_employee": int(max_devices_cfg.value) if max_devices_cfg else 5}
     return templates.TemplateResponse("help.html", {
         "request": request,
-        "devices": db.query(DeviceBinding).all(),
-        "branches": db.query(Branch).all(),
-        "api_keys": db.query(ApiKey).all(),
-        "punch_types": db.query(PunchType).all(),
-        "adms_targets": db.query(ADMSTarget).all(),
-        "app_settings": app_settings,
+        "app_settings": {"max_devices_per_employee": 5},
     })
 
 
