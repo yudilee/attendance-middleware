@@ -211,6 +211,7 @@ async def logout():
     response.delete_cookie("dashboard_session")
     return response
 
+@app.get("/ui", response_class=HTMLResponse)
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_root(request: Request, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
     import traceback
@@ -1028,7 +1029,8 @@ async def get_adms_sync_status(request: Request, db: Session = Depends(get_db), 
     # ADMS connectivity status from handshake state
     adms_connected = _handshake_state.get("handshake_done", False)
     lc = _handshake_state.get("last_contact")
-    adms_last_handshake = lc.strftime("%H:%M:%S") if lc else "None"
+    adms_last_handshake = lc.strftime("%H:%M:%S") if lc else "Never"
+    adms_error = _handshake_state.get("last_error")
     
     # Worker queue health
     worker_running = arq_pool is not None
@@ -1049,6 +1051,7 @@ async def get_adms_sync_status(request: Request, db: Session = Depends(get_db), 
             "recent_failures": recent_failures,
             "adms_connected": adms_connected,
             "adms_last_handshake": adms_last_handshake,
+            "adms_error": adms_error,
             "worker_running": worker_running,
             "app_settings": {"max_devices_per_employee": 5},
         },

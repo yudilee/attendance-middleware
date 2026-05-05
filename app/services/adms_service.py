@@ -21,6 +21,7 @@ _handshake_state = {
     "timezone_offset": 7,       # Hours offset from UTC (from TimeZone= in handshake)
     "handshake_done": False,
     "last_contact": None,
+    "last_error": None,
 }
 
 
@@ -432,6 +433,7 @@ async def adms_heartbeat_loop():
                             db.close()
 
                     else:
+                        _handshake_state["last_error"] = f"HTTP {hs_resp.status_code}"
                         logger.warning(f"⚠️ Handshake failed: HTTP {hs_resp.status_code}. Will retry.")
                         await asyncio.sleep(60)
                         continue
@@ -467,6 +469,7 @@ async def adms_heartbeat_loop():
             logger.warning(f"⏱️ ADMS heartbeat timed out for {sn}")
             _handshake_state["handshake_done"] = False
         except Exception as e:
+            _handshake_state["last_error"] = str(e)
             logger.error(f"🔴 Unexpected heartbeat error: {e}")
             _handshake_state["handshake_done"] = False
 

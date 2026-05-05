@@ -47,6 +47,11 @@
                     Last server heartbeat: <strong>{{ adms_last_handshake }}</strong>
                 </div>
                 {% endif %}
+                {% if adms_error %}
+                <div style="font-size: 0.75rem; color: var(--danger); text-align: center; margin-top: 0.25rem;">
+                    Last Error: <code>{{ adms_error }}</code>
+                </div>
+                {% endif %}
             </div>
             
             <div style="margin-top: 2rem; display: flex; flex-direction: column; gap: 0.75rem;">
