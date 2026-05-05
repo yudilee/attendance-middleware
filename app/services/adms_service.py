@@ -140,7 +140,8 @@ async def test_adms_connection(server_url: str, serial_number: str, device_name:
             response = await client.get(url, params=params, headers=headers)
             if response.status_code == 200:
                 parsed = _parse_handshake_response(response.text)
-                stamp = parsed.get("ATTLOGStamp", "?")
+                # Some servers use ATTLOGStamp, others just Stamp
+                stamp = parsed.get("ATTLOGStamp") or parsed.get("Stamp") or "?"
                 server_ver = parsed.get("ServerVer", "?")
                 return True, f"Handshake OK! ServerVer={server_ver} | ATTLOGStamp={stamp}"
             # Capture more of the error body to diagnose BioTime specific crashes
