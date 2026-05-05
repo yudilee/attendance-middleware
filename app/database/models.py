@@ -66,6 +66,8 @@ class Branch(Base):
     is_active = Column(Boolean, default=True)
     qr_code_enabled = Column(Boolean, default=False, nullable=False)
     qr_code_data = Column(String(256), nullable=True)
+    nfc_enabled = Column(Boolean, default=False, nullable=False)
+    nfc_tag_data = Column(String(256), nullable=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 
@@ -294,6 +296,9 @@ def init_db():
         "CREATE TABLE IF NOT EXISTS attendance_corrections (id SERIAL PRIMARY KEY, employee_id VARCHAR(50) NOT NULL, original_punch_id INTEGER REFERENCES punch_logs(id), correction_type VARCHAR(50) NOT NULL, description VARCHAR(500) NOT NULL, proposed_timestamp TIMESTAMP, proposed_punch_type VARCHAR(10), status VARCHAR(20) DEFAULT 'pending', reviewed_by VARCHAR(50), reviewed_at TIMESTAMP, review_notes VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
         "CREATE INDEX IF NOT EXISTS idx_correction_employee ON attendance_corrections(employee_id);",
         "CREATE INDEX IF NOT EXISTS idx_correction_status ON attendance_corrections(status);",
+        # Phase 6: NFC check-in support
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS nfc_enabled BOOLEAN NOT NULL DEFAULT FALSE;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN nfc_enabled BOOLEAN NOT NULL DEFAULT 0;",
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS nfc_tag_data VARCHAR(256);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN nfc_tag_data VARCHAR(256);",
     ]
     with engine.connect() as conn:
         for sql in migrations:

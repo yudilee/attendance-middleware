@@ -634,6 +634,8 @@ class BranchRequest(BaseModel):
     radius_meters: float
     qr_code_enabled: bool = False
     qr_code_data: Optional[str] = None
+    nfc_enabled: bool = False
+    nfc_tag_data: Optional[str] = None
 
 @app.get("/ui/branches")
 async def get_branches(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
@@ -655,6 +657,8 @@ async def get_branches(db: Session = Depends(get_db), admin: AdminUser = Depends
             "is_active": b.is_active,
             "qr_code_enabled": b.qr_code_enabled,
             "qr_code_data": b.qr_code_data if b.qr_code_enabled else None,
+            "nfc_enabled": b.nfc_enabled,
+            "nfc_tag_data": b.nfc_tag_data if b.nfc_enabled else None,
             "device_count": device_count,
         })
     return result
@@ -669,6 +673,8 @@ async def create_branch(req: BranchRequest, db: Session = Depends(get_db), admin
         is_active=True,
         qr_code_enabled=req.qr_code_enabled,
         qr_code_data=req.qr_code_data if req.qr_code_enabled else None,
+        nfc_enabled=req.nfc_enabled,
+        nfc_tag_data=req.nfc_tag_data if req.nfc_enabled else None,
     )
     db.add(new_branch)
     db.commit()
@@ -687,6 +693,8 @@ async def update_branch(branch_id: int, req: BranchRequest, db: Session = Depend
     branch.radius_meters = req.radius_meters
     branch.qr_code_enabled = req.qr_code_enabled
     branch.qr_code_data = req.qr_code_data if req.qr_code_enabled else None
+    branch.nfc_enabled = req.nfc_enabled
+    branch.nfc_tag_data = req.nfc_tag_data if req.nfc_enabled else None
     db.commit()
     await invalidate_cache("device_config:*")
     return {"status": "success"}
@@ -1234,6 +1242,8 @@ async def get_device_config(
                 radius_meters=branch.radius_meters,
                 qr_code_enabled=branch.qr_code_enabled,
                 qr_code_data=branch.qr_code_data if branch.qr_code_enabled else None,
+                nfc_enabled=branch.nfc_enabled,
+                nfc_tag_data=branch.nfc_tag_data if branch.nfc_enabled else None,
             ))
 
     if not branches:

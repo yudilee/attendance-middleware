@@ -62,6 +62,8 @@ class BranchInfo(BaseModel):
     radius_meters: float
     qr_code_enabled: bool = False
     qr_code_data: Optional[str] = None
+    nfc_enabled: bool = False
+    nfc_tag_data: Optional[str] = None
 
 
 class PunchTypeResponse(BaseModel):
