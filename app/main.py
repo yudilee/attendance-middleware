@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
         admin = db.query(AdminUser).first()
         if not admin:
             logger.info("creating_default_admin")
-            default_admin = AdminUser(username="admin", hashed_password=get_password_hash("admin"))
+            default_admin = AdminUser(username="admin", hashed_password=get_password_hash("admin"), role="superadmin")
             db.add(default_admin)
             db.commit()
     finally:
@@ -393,54 +393,76 @@ async def update_admin_profile(
 
 @app.get("/ui/users")
 async def list_users(db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
-    users = db.query(AdminUser).all()
-    return [{"id": u.id, "username": u.username, "created_at": u.created_at} for u in users]
+    users = db.query(AdminUser).order_by(AdminUser.created_at.asc()).all()
+    return [{"id": u.id, "username": u.username, "role": u.role or "admin", "created_at": u.created_at} for u in users]
 
 class CreateUserRequest(BaseModel):
     username: str
-    password: str
+    password: Optional[str] = None
+    role: Optional[str] = "admin"
 
 @app.post("/ui/users")
 async def create_user(req: CreateUserRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    if getattr(admin, "role", "admin") not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Only Super Admins and Admins can create users")
+        
     existing = db.query(AdminUser).filter(AdminUser.username == req.username).first()
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
     
+    if not req.password or len(req.password) < 5:
+        raise HTTPException(status_code=400, detail="Password is required and must be at least 5 characters")
+
     new_user = AdminUser(
         username=req.username,
-        hashed_password=get_password_hash(req.password)
+        hashed_password=get_password_hash(req.password),
+        role=req.role or "admin"
     )
     db.add(new_user)
     db.commit()
-    logger.info(f"Admin '{admin.username}' created new user '{req.username}'")
+    logger.info(f"Admin '{admin.username}' created new user '{req.username}' with role '{req.role}'")
     return {"status": "success"}
 
 @app.put("/ui/users/{user_id}")
 async def update_user(user_id: int, req: CreateUserRequest, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    if getattr(admin, "role", "admin") not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Only Super Admins and Admins can update users")
+        
     target_user = db.query(AdminUser).filter(AdminUser.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    # Logic to update password (and optionally username if it's not the root admin)
+    # Root admin user checks
+    if target_user.username == "admin":
+        if req.username != "admin":
+            raise HTTPException(status_code=400, detail="Cannot rename the root admin user")
+        if req.role and req.role != "superadmin":
+            raise HTTPException(status_code=400, detail="Root admin must remain superadmin")
+            
     if req.username != target_user.username:
-        if target_user.username == "admin":
-             raise HTTPException(status_code=400, detail="Cannot rename the root admin user")
-        # Check if new username is taken
         existing = db.query(AdminUser).filter(AdminUser.username == req.username).first()
         if existing:
             raise HTTPException(status_code=400, detail="Username already exists")
         target_user.username = req.username
         
-    if req.password: # Only update password if provided
+    if req.password: # Only update password if provided and non-empty
+        if len(req.password) < 5:
+            raise HTTPException(status_code=400, detail="Password must be at least 5 characters")
         target_user.hashed_password = get_password_hash(req.password)
+        
+    if req.role:
+        target_user.role = req.role
         
     db.add(target_user)
     db.commit()
-    logger.info(f"Admin '{admin.username}' updated user '{target_user.username}'")
+    logger.info(f"Admin '{admin.username}' updated user '{target_user.username}' (role: {target_user.role})")
     return {"status": "success"}
 
 @app.delete("/ui/users/{user_id}")
 async def delete_user(user_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    if getattr(admin, "role", "admin") not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Only Super Admins and Admins can delete users")
+        
     user_to_delete = db.query(AdminUser).filter(AdminUser.id == user_id).first()
     if not user_to_delete:
         raise HTTPException(status_code=404, detail="User not found")

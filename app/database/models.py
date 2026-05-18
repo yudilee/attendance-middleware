@@ -52,6 +52,7 @@ class AdminUser(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
+    role = Column(String, default="admin")  # "superadmin", "admin", "manager", "operator"
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -303,6 +304,8 @@ def init_db():
         # Phase 6: NFC check-in support
         "ALTER TABLE branches ADD COLUMN IF NOT EXISTS nfc_enabled BOOLEAN NOT NULL DEFAULT FALSE;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN nfc_enabled BOOLEAN NOT NULL DEFAULT 0;",
         "ALTER TABLE branches ADD COLUMN IF NOT EXISTS nfc_tag_data VARCHAR(256);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN nfc_tag_data VARCHAR(256);",
+        "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'admin';" if engine.name != "sqlite" else "ALTER TABLE admin_users ADD COLUMN role VARCHAR(50) DEFAULT 'admin';",
+        "UPDATE admin_users SET role = 'superadmin' WHERE username = 'admin';",
     ]
     with engine.connect() as conn:
         for sql in migrations:
