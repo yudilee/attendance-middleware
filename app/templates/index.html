@@ -1909,11 +1909,17 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         }
     }
 
+let onboardEmployees = [];
+let filteredEmployees = [];
+
 async function openOnboardingModal() {
     document.getElementById('onboardQrContainer').style.display = 'none';
     
-    // Set loading options
-    document.getElementById('onboard_emp_id').innerHTML = '<option value="">Loading employees...</option>';
+    // Clear search and selected values
+    document.getElementById('onboard_emp_id').value = '';
+    document.getElementById('onboard_emp_search').value = '';
+    document.getElementById('onboard_emp_dropdown').innerHTML = '<div style="padding: 0.625rem; color: var(--text-muted); font-size: 0.875rem;">Loading employees...</div>';
+    
     document.getElementById('onboard_branch_id').innerHTML = '<option value="">Loading branch sites...</option>';
     document.getElementById('onboard_key_id').innerHTML = '<option value="">Loading API keys...</option>';
     
@@ -1933,17 +1939,10 @@ async function openOnboardingModal() {
             keyRes.json()
         ]);
 
-        // Populate Employees
-        if (!employees || employees.length === 0) {
-            document.getElementById('onboard_emp_id').innerHTML = '<option value="">No employees found</option>';
-        } else {
-            document.getElementById('onboard_emp_id').innerHTML = employees.map(e => {
-                // If name is blank or a number, show only the employee ID number. Otherwise show: ID - Name
-                const isNameNumber = !e.name || !isNaN(e.name) || /^\d+$/.test(e.name.trim());
-                const display = isNameNumber ? e.id : `${e.id} - ${e.name}`;
-                return `<option value="${e.id}">${display}</option>`;
-            }).join('');
-        }
+        // Populate Searchable Employees Array
+        onboardEmployees = employees || [];
+        filteredEmployees = onboardEmployees;
+        renderOnboardEmpDropdown();
 
         // Populate Branches
         if (!branches || branches.length === 0) {
@@ -1978,6 +1977,76 @@ async function openOnboardingModal() {
         console.error(e);
     }
 }
+
+function renderOnboardEmpDropdown() {
+    const dropdown = document.getElementById('onboard_emp_dropdown');
+    if (!filteredEmployees || filteredEmployees.length === 0) {
+        dropdown.innerHTML = '<div style="padding: 0.625rem; color: var(--text-muted); font-size: 0.875rem;">No matches found</div>';
+        return;
+    }
+    
+    dropdown.innerHTML = filteredEmployees.map(e => {
+        const isNameNumber = !e.name || !isNaN(e.name) || /^\d+$/.test(e.name.trim());
+        const display = isNameNumber ? e.id : `${e.id} - ${e.name}`;
+        
+        return `
+            <div class="dropdown-item" style="padding: 0.625rem 0.75rem; cursor: pointer; font-size: 0.875rem; color: var(--text-main); border-bottom: 1px solid var(--border);"
+                 onclick="selectOnboardEmployee('${e.id}', '${display.replace(/'/g, "\\'")}')"
+                 onmouseover="this.style.background='var(--border)'"
+                 onmouseout="this.style.background='none'">
+                ${display}
+            </div>
+        `;
+    }).join('');
+}
+
+function filterOnboardEmployees() {
+    const query = document.getElementById('onboard_emp_search').value.toLowerCase().trim();
+    if (!query) {
+        filteredEmployees = onboardEmployees;
+    } else {
+        filteredEmployees = onboardEmployees.filter(e => {
+            const idMatch = e.id.toLowerCase().includes(query);
+            const nameMatch = e.name ? e.name.toLowerCase().includes(query) : false;
+            return idMatch || nameMatch;
+        });
+    }
+    renderOnboardEmpDropdown();
+    showOnboardEmpDropdown();
+}
+
+function selectOnboardEmployee(id, display) {
+    document.getElementById('onboard_emp_id').value = id;
+    document.getElementById('onboard_emp_search').value = display;
+    hideOnboardEmpDropdown();
+}
+
+function showOnboardEmpDropdown() {
+    document.getElementById('onboard_emp_dropdown').style.display = 'block';
+}
+
+function hideOnboardEmpDropdown() {
+    document.getElementById('onboard_emp_dropdown').style.display = 'none';
+}
+
+function toggleOnboardEmpDropdown() {
+    const dropdown = document.getElementById('onboard_emp_dropdown');
+    if (dropdown.style.display === 'block') {
+        hideOnboardEmpDropdown();
+    } else {
+        showOnboardEmpDropdown();
+    }
+}
+
+// Global click outside listener to dismiss searchable dropdown
+document.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('onboard_emp_dropdown');
+    const searchInput = document.getElementById('onboard_emp_search');
+    const toggleBtn = document.getElementById('onboard_emp_toggle');
+    if (dropdown && e.target !== searchInput && e.target !== toggleBtn && !dropdown.contains(e.target)) {
+        hideOnboardEmpDropdown();
+    }
+});
 
 function closeOnboardingModal() {
     document.getElementById('onboardModal').style.display = 'none';
@@ -2027,11 +2096,18 @@ async function generateOnboardQR() {
         <h3 style="margin-top: 0;">📱 Generate Onboarding QR</h3>
         <p style="font-size:0.875rem; color:var(--text-muted); margin-bottom: 1.25rem;">Select the employee and target branch site to create a secure, one-click onboarding setup.</p>
         
-        <div class="form-group">
+        <div class="form-group" style="position: relative;">
             <label>Select Employee</label>
-            <select id="onboard_emp_id" class="input" style="width: 100%; border: 1px solid var(--border); padding: 0.625rem; border-radius: 0.375rem; background: var(--bg-card); color: var(--text-main);">
-                <option value="">Loading employees...</option>
-            </select>
+            <input type="hidden" id="onboard_emp_id" value="">
+            <div style="position: relative; display: flex; align-items: center;">
+                <input type="text" id="onboard_emp_search" placeholder="🔍 Type ID or Name to search..." 
+                       style="width: 100%; border: 1px solid var(--border); padding: 0.625rem 2.25rem 0.625rem 0.625rem; border-radius: 0.375rem; background: var(--bg-card); color: var(--text-main);"
+                       oninput="filterOnboardEmployees()" onclick="showOnboardEmpDropdown()" onfocus="showOnboardEmpDropdown()">
+                <span id="onboard_emp_toggle" style="position: absolute; right: 0.75rem; cursor: pointer; color: var(--text-muted); font-size: 0.75rem; user-select: none;" onclick="toggleOnboardEmpDropdown()">▼</span>
+            </div>
+            <div id="onboard_emp_dropdown" style="display: none; position: absolute; z-index: 1010; left: 0; right: 0; top: 100%; max-height: 220px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.375rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 0.25rem;">
+                <div style="padding: 0.625rem; color: var(--text-muted); font-size: 0.875rem;">Loading employees...</div>
+            </div>
         </div>
         <div class="form-group">
             <label>Assign to Branch Site</label>
