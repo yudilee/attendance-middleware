@@ -30,7 +30,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi import Response
 
 from app.services.auth import verify_api_key, generate_api_key
-from app.services.auth_ui import get_password_hash, verify_password, create_access_token, get_current_admin
+from app.services.auth_ui import get_password_hash, verify_password, create_access_token, get_current_admin, SECRET_KEY, ALGORITHM
+from jose import jwt, JWTError
 
 from app.database.models import init_db, SessionLocal, DeviceBinding, PunchLog, ADMSTarget, Branch, ApiKey, ADMSRegisteredEmployee, AdminUser, PunchType, Employee, AppConfig, ADMSCredential, BindingBranch, EmployeeSupervisor, AttendanceCorrection
 from app.cache import init_redis, close_redis, get_cache, set_cache, invalidate_cache
@@ -39,7 +40,8 @@ from app.api.v1.schemas import (
     PunchRequest, PunchResponse, DeviceConfigResponse,
     BatchPunchRequest, BatchPunchResponse, BatchPunchResult, PunchTypeResponse,
     ADMSCredentialPayload, AppStatusResponse, BranchInfo,
-    CorrectionRequest, CorrectionReview, SupervisorAssignment
+    CorrectionRequest, CorrectionReview, SupervisorAssignment,
+    OnboardGenerateRequest, OnboardDeviceRequest
 )
 from app.services.adms_scraper import sync_employees_from_adms
 from app.services.geo import is_within_fence, is_within_any_fence
@@ -2255,3 +2257,147 @@ async def update_fcm_token(
         return {"status": "updated"}
 
     raise HTTPException(status_code=404, detail="Device not found")
+
+# ─── ONBOARDING API ───────────────────────────────────────────────────────
+
+@app.post("/api/v1/admin/generate-onboard-qr")
+async def generate_onboard_qr(
+    req: OnboardGenerateRequest,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    """Generates a secure QR payload for device onboarding."""
+    # Create JWT valid for 24 hours
+    payload = {
+        "emp": req.employee_id,
+        "branch": req.branch_id,
+        "key_id": req.api_key_id,
+        "exp": datetime.utcnow() + timedelta(hours=24)
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    
+    config = db.query(AppConfig).filter(AppConfig.key == "server_url").first()
+    server_url = config.value if config else "http://localhost:8000"
+    
+    qr_payload = {
+        "url": server_url,
+        "token": token
+    }
+    return qr_payload
+
+@app.post("/api/v1/device-onboard", response_model=DeviceConfigResponse)
+@limiter.limit("10/minute")
+async def onboard_device(
+    request: Request,
+    req: OnboardDeviceRequest,
+    db: Session = Depends(get_db)
+):
+    """Mobile app uses this with the token to auto-approve device."""
+    try:
+        payload = jwt.decode(req.token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired onboarding token")
+        
+    employee_id = payload.get("emp")
+    branch_id = payload.get("branch")
+    api_key_id = payload.get("key_id")
+    
+    if not employee_id or not branch_id or not api_key_id:
+        raise HTTPException(status_code=400, detail="Invalid token payload")
+
+    # Get max devices config
+    max_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
+    max_devices = int(max_cfg.value) if max_cfg else 5
+    
+    # Create or update binding
+    binding = db.query(DeviceBinding).filter(DeviceBinding.device_uuid == req.device_uuid).first()
+    if not binding:
+        existing_count = db.query(DeviceBinding).filter(
+            DeviceBinding.employee_id == employee_id,
+            DeviceBinding.is_active == True,
+            DeviceBinding.registration_status.in_(["approved", "active"])
+        ).count()
+        if existing_count >= max_devices:
+            raise HTTPException(status_code=400, detail="Maximum devices reached")
+            
+        binding = DeviceBinding(
+            employee_id=employee_id,
+            device_uuid=req.device_uuid,
+            device_label=req.device_label,
+            registration_status="active",
+            is_active=True,
+            api_key_id=api_key_id,
+            approved_at=datetime.utcnow(),
+            approved_by="System (QR)"
+        )
+        db.add(binding)
+        db.commit()
+        db.refresh(binding)
+    else:
+        # Update existing
+        binding.employee_id = employee_id
+        binding.registration_status = "active"
+        binding.api_key_id = api_key_id
+        binding.is_active = True
+        binding.approved_at = datetime.utcnow()
+        binding.approved_by = "System (QR)"
+        db.commit()
+        
+    # Assign branch
+    existing_branch = db.query(BindingBranch).filter(
+        BindingBranch.binding_id == binding.id,
+        BindingBranch.branch_id == branch_id
+    ).first()
+    if not existing_branch:
+        db.add(BindingBranch(binding_id=binding.id, branch_id=branch_id))
+        db.commit()
+        
+    # Fetch API Key to return to the device
+    api_key = db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
+    
+    # We construct the device config
+    # Need employee name
+    employee_name = None
+    emp = db.query(Employee).filter(Employee.employee_id == employee_id).first()
+    if emp and emp.full_name:
+        employee_name = emp.full_name
+    else:
+        adms_emp = db.query(ADMSRegisteredEmployee).filter(ADMSRegisteredEmployee.employee_id == employee_id).first()
+        if adms_emp and adms_emp.employee_name:
+            employee_name = adms_emp.employee_name
+            
+    # Need branches
+    branches = []
+    branch = db.query(Branch).filter(Branch.id == branch_id, Branch.is_active == True).first()
+    if branch:
+        branches.append(BranchInfo(
+            id=branch.id,
+            name=branch.name,
+            latitude=branch.latitude,
+            longitude=branch.longitude,
+            radius_meters=branch.radius_meters,
+            qr_code_enabled=branch.qr_code_enabled,
+            qr_code_data=branch.qr_code_data if branch.qr_code_enabled else None,
+            nfc_enabled=branch.nfc_enabled,
+            nfc_tag_data=branch.nfc_tag_data if branch.nfc_enabled else None,
+        ))
+        
+    device_count = db.query(DeviceBinding).filter(
+        DeviceBinding.employee_id == employee_id,
+        DeviceBinding.is_active == True,
+        DeviceBinding.registration_status.in_(["approved", "active"])
+    ).count()
+
+    # Create response but attach api_key for the mobile app
+    # Wait, DeviceConfigResponse doesn't have api_key field!
+    # Let's subclass it or return it as dict? I can just return a dict
+    resp = DeviceConfigResponse(
+        status="active",
+        branches=branches,
+        device_count=device_count,
+        max_devices=max_devices,
+        employee_name=employee_name
+    ).model_dump()
+    
+    resp["api_key"] = api_key.key_value if api_key else ""
+    return resp

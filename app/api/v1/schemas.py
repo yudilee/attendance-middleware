@@ -120,3 +120,13 @@ class CorrectionReview(BaseModel):
 class SupervisorAssignment(BaseModel):
     supervisor_id: str
     employee_id: str
+
+class OnboardGenerateRequest(BaseModel):
+    employee_id: str
+    branch_id: int
+    api_key_id: int
+
+class OnboardDeviceRequest(BaseModel):
+    device_uuid: str
+    device_label: Optional[str] = None
+    token: str

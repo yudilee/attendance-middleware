@@ -62,7 +62,7 @@
                 <thead>
                     <tr>
                         <th>Employee</th>
-                        <th>Timestamp (UTC)</th>
+                        <th>Timestamp (Local)</th>
                         <th>Type</th>
                         <th>GPS Coordinates</th>
                         <th>ADMS Status</th>
@@ -76,7 +76,7 @@
                             <strong>{{ log.employee_name }}</strong><br>
                             <span style="font-size: 0.7rem; color: var(--text-muted);">ID: {{ log.employee_id }}</span>
                         </td>
-                        <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td class="local-time" data-utc="{{ log.timestamp.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                         <td>
                             <span class="badge {{ 'badge-success' if log.punch_type == 'In' else 'badge-danger' }}">
                                 {{ '🟢 In' if log.punch_type == 'In' else '🔴 Out' }}
@@ -129,6 +129,8 @@
                     New devices start as <strong>Pending Approval</strong> until an admin approves them.
                 </p>
             </div>
+        
+            <button onclick="openOnboardingModal()" style="background:#10b981; color:white; border:none; padding:0.5rem 1rem; border-radius:0.5rem; cursor:pointer;">📱 Generate Onboarding QR</button>
         </div>
         <div class="table-container">
             <table>
@@ -774,7 +776,50 @@ async function loadSupervisorAssignments() {
 
 // Load on page load
 document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
+
+function openOnboardingModal() {
+    document.getElementById('onboardQrContainer').style.display = 'none';
+    document.getElementById('onboardModal').style.display = 'flex';
+}
+function closeOnboardingModal() {
+    document.getElementById('onboardModal').style.display = 'none';
+}
+async function generateOnboardQR() {
+    const empId = document.getElementById('onboard_emp_id').value;
+    const branchId = document.getElementById('onboard_branch_id').value;
+    const keyId = document.getElementById('onboard_key_id').value;
+    
+    if (!empId || !branchId || !keyId) {
+        notify('Please fill all fields');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/v1/admin/generate-onboard-qr', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                employee_id: empId,
+                branch_id: parseInt(branchId),
+                api_key_id: parseInt(keyId)
+            })
+        });
+        if (!response.ok) throw new Error('Failed to generate QR');
+        
+        const data = await response.json();
+        
+        // Generate QR code image url using a public API for simplicity
+        const qrData = encodeURIComponent(JSON.stringify(data));
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}`;
+        
+        document.getElementById('onboardQrImg').src = qrUrl;
+        document.getElementById('onboardQrContainer').style.display = 'block';
+    } catch(err) {
+        notify(err.message);
+    }
+}
 </script>
+
 {% endif %}
 
 {% endblock %}
@@ -842,8 +887,27 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         });
     });
 
+    function localizeTimestamps() {
+        document.querySelectorAll('.local-time').forEach(el => {
+            const utcStr = el.getAttribute('data-utc');
+            if (utcStr) {
+                const localDate = new Date(utcStr);
+                if (!isNaN(localDate.getTime())) {
+                    const year = localDate.getFullYear();
+                    const month = String(localDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(localDate.getDate()).padStart(2, '0');
+                    const hours = String(localDate.getHours()).padStart(2, '0');
+                    const minutes = String(localDate.getMinutes()).padStart(2, '0');
+                    const seconds = String(localDate.getSeconds()).padStart(2, '0');
+                    el.textContent = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                }
+            }
+        });
+    }
+
     // Handle initial load and back/forward navigation
     window.addEventListener('load', () => {
+        localizeTimestamps();
         // Only run tab logic if we are on the main dashboard root
         if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
             const hash = window.location.hash.replace('#', '') || 'dashboard';
@@ -1843,9 +1907,83 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
             btn.disabled = false;
         }
     }
+
+function openOnboardingModal() {
+    document.getElementById('onboardQrContainer').style.display = 'none';
+    document.getElementById('onboardModal').style.display = 'flex';
+}
+function closeOnboardingModal() {
+    document.getElementById('onboardModal').style.display = 'none';
+}
+async function generateOnboardQR() {
+    const empId = document.getElementById('onboard_emp_id').value;
+    const branchId = document.getElementById('onboard_branch_id').value;
+    const keyId = document.getElementById('onboard_key_id').value;
+    
+    if (!empId || !branchId || !keyId) {
+        notify('Please fill all fields');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/v1/admin/generate-onboard-qr', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                employee_id: empId,
+                branch_id: parseInt(branchId),
+                api_key_id: parseInt(keyId)
+            })
+        });
+        if (!response.ok) throw new Error('Failed to generate QR');
+        
+        const data = await response.json();
+        
+        // Generate QR code image url using a public API for simplicity
+        const qrData = encodeURIComponent(JSON.stringify(data));
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}`;
+        
+        document.getElementById('onboardQrImg').src = qrUrl;
+        document.getElementById('onboardQrContainer').style.display = 'block';
+    } catch(err) {
+        notify(err.message);
+    }
+}
 </script>
 
+
 <!-- ═══════════════════ MODALS ═══════════════════ -->
+
+<div id="onboardModal" class="modal" style="display: none; position: fixed; z-index: 1002; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="card" style="width: 400px; max-width: 90%; max-height: 90vh; overflow-y: auto;">
+        <h3 style="margin-top: 0;">📱 Generate Onboarding QR</h3>
+        <p style="font-size:0.875rem; color:var(--text-muted);">This QR code will auto-approve the device for the selected employee and assign the branch.</p>
+        
+        <div class="form-group">
+            <label>Employee ID</label>
+            <input type="text" id="onboard_emp_id" placeholder="e.g. EMP001">
+        </div>
+        <div class="form-group">
+            <label>Branch ID</label>
+            <input type="number" id="onboard_branch_id" placeholder="e.g. 1">
+        </div>
+        <div class="form-group">
+            <label>API Key ID</label>
+            <input type="number" id="onboard_key_id" placeholder="e.g. 1">
+        </div>
+        
+        <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+            <button type="button" onclick="generateOnboardQR()" style="background:#10b981; flex: 1;">Generate</button>
+            <button type="button" onclick="closeOnboardingModal()" style="background:#64748b; flex: 1;">Cancel</button>
+        </div>
+        
+        <div id="onboardQrContainer" style="display:none; margin-top: 1.5rem; text-align: center;">
+            <img id="onboardQrImg" src="" style="width:200px; height:200px; border:1px solid var(--border); border-radius:0.5rem;">
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">Scan this from the Mobile App</p>
+        </div>
+    </div>
+</div>
+
 <div id="assignModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
     <div class="card" style="width: 400px; margin: 0; animation: slideUp 0.3s ease-out;">
         <div class="card-title" id="assignModalTitle">Assign Employee</div>
