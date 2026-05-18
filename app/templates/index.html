@@ -197,17 +197,10 @@
                                 {% for ba in device.branch_list %}
                                     <span style="display:inline-flex; align-items:center; gap:3px; background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:500;">
                                         {{ ba.name }}
-                                        <span onclick="removeDeviceBranch({{ device.id }}, {{ ba.id }})"
-                                              style="cursor:pointer; font-size:0.8rem; line-height:1;" title="Remove branch">×</span>
                                     </span>
                                 {% endfor %}
-                                {% if device.registration_status in ('approved', 'active') %}
-                                    <button type="button" onclick="addDeviceBranch({{ device.id }})"
-                                            style="background:#6366f1; color:white; border:none; border-radius:50%; width:22px; height:22px; font-size:14px; line-height:1; cursor:pointer; padding:0;"
-                                            title="Add branch">+</button>
-                                {% endif %}
                                 {% if not device.branch_list %}
-                                    <span style="font-size:0.7rem;color:#999;">None</span>
+                                    <span style="font-size:0.7rem;color:#999;">Any (No restriction)</span>
                                 {% endif %}
                             </div>
                         </td>
@@ -222,8 +215,8 @@
                                 <button class="btn-danger-sm" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
                                         onclick="approveDevice({{ device.id }})">↩ Re-approve</button>
                             {% endif %}
-                            <button class="btn-danger-sm" onclick="editDeviceLabel({{ device.id }}, '{{ device.device_label or '' }}')"
-                                    style="background:#e0e7ff;color:#4338ca;border-color:#c7d2fe;">Label</button>
+                            <button class="btn-danger-sm" onclick="openDeviceModal({{ device.id }}, '{{ device.device_label or '' }}')"
+                                    style="background:#e0e7ff;color:#4338ca;border-color:#c7d2fe;">✏️ Edit</button>
                             <button class="btn-danger-sm" onclick="unbindDevice({{ device.id }})">Unbind</button>
                         </td>
                     </tr>
@@ -244,25 +237,13 @@
 <!-- ═══════════════════ API KEYS TAB ═══════════════════ -->
 <div id="security" class="tab-content" style="display: none;">
     <div class="card">
-        <div class="card-title">API Key Management</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div class="card-title" style="margin: 0;">API Key Management</div>
+            <button type="button" onclick="openApiKeyModal()" style="background:#10b981; color:white; border:none; padding:0.5rem 1rem; border-radius:0.5rem; cursor:pointer;">➕ Generate New Key</button>
+        </div>
         <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
             Mobile clients must include an <code>X-API-Key</code> header with every punch request. Generate keys here and configure them in the mobile app settings.
         </p>
-
-        <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem;">
-            <div class="form-group" style="margin: 0; flex: 1;">
-                <label>Key Label (e.g. "Site A Phones")</label>
-                <input type="text" id="key_label" placeholder="Mobile Client" value="Mobile Client">
-            </div>
-            <button type="button" onclick="generateKey()">Generate New Key</button>
-        </div>
-
-        <!-- Generated key display -->
-        <div id="newKeyDisplay" style="display: none; background: #d1fae5; border: 1px solid #10b981; border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">
-            <p style="font-size: 0.8rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem;">⚠️ Copy this key NOW. It will not be shown again.</p>
-            <code id="newKeyValue" style="font-size: 0.85rem; word-break: break-all; color: #065f46;"></code>
-            <button type="button" onclick="copyKey()" style="margin-top: 0.75rem; width: 100%; background: #10b981;">📋 Copy to Clipboard</button>
-        </div>
 
         <div class="table-container">
             <table>
@@ -303,117 +284,30 @@
         </div>
     </div>
 
-    <div class="grid" style="grid-template-columns: 2fr 1fr; align-items: start;">
-        <!-- LEFT: Branch List -->
-        <div class="card" style="padding:0; overflow:hidden;">
-            <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-                <div class="card-title" style="margin:0;">Branch Sites</div>
-            </div>
-            <div class="table-container" style="border:none; border-radius:0;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Coordinates</th>
-                            <th>Radius</th>
-                            <th style="text-align:center;">QR</th>
-                            <th style="text-align:center;">NFC</th>
-                            <th style="text-align:center;">Devices</th>
-                            <th style="text-align:center;">Status</th>
-                            <th style="text-align:right; min-width: 120px;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="branchesTableBody">
-                        <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
+    <!-- LEFT: Branch List -->
+    <div class="card" style="padding:0; overflow:hidden;">
+        <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+            <div class="card-title" style="margin:0;">Branch Sites</div>
+            <button type="button" onclick="openBranchModal()" style="background:#10b981; color:white; border:none; padding:0.5rem 1rem; border-radius:0.5rem; cursor:pointer;">➕ Create New Branch</button>
         </div>
-
-        <!-- RIGHT: Map + Form -->
-        <div class="card">
-            <div class="card-title" id="branchFormTitle">📍 Create New Branch</div>
-            <form id="branchForm">
-                <input type="hidden" id="edit_branch_id" value="">
-                
-                <!-- Interactive Map -->
-                <div id="branchMap" style="height: 200px; border-radius: 0.5rem; margin-bottom: 0.75rem; border: 1px solid var(--border); background: #f1f5f9;"></div>
-                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom: 0.75rem;">
-                    <i class="ph ph-info"></i> Drag the marker or click the map to set coordinates
-                </p>
-                
-                <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                    <div class="form-group" style="margin:0;">
-                        <label>Latitude</label>
-                        <input type="number" step="any" id="branch_lat" placeholder="-6.175392" required oninput="onCoordChange()">
-                    </div>
-                    <div class="form-group" style="margin:0;">
-                        <label>Longitude</label>
-                        <input type="number" step="any" id="branch_lon" placeholder="106.827153" required oninput="onCoordChange()">
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label>Branch Name</label>
-                    <input type="text" id="branch_name" placeholder="E.g. Main Office" required>
-                </div>
-                
-                <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
-                    <div class="form-group" style="margin:0;">
-                        <label>Radius (meters)</label>
-                        <input type="number" id="branch_rad" value="50" min="1" required oninput="updateCircle()">
-                    </div>
-                    <div class="form-group" style="margin:0; display:flex; align-items:flex-end; padding-bottom:0.25rem;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin:0;">
-                            <input type="checkbox" id="branch_qr_enabled" onchange="toggleQrField()">
-                            <span>Enable QR</span>
-                        </label>
-                    </div>
-                    <div class="form-group" style="margin:0; display:flex; align-items:flex-end; padding-bottom:0.25rem;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin:0;">
-                            <input type="checkbox" id="branch_nfc_enabled" onchange="toggleNfcField()">
-                            <span>Enable NFC</span>
-                        </label>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="qr_data_group" style="display: none;">
-                    <label>QR Code Data</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: start;">
-                        <div style="flex:1;">
-                            <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="branch_qr_data" placeholder="e.g. BRANCH-OFFICE-001" style="flex: 1;" oninput="updateQrPreview()">
-                                <button type="button" onclick="generateQrData()" style="white-space: nowrap; padding: 0.5rem 0.75rem; background: #6366f1; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.8rem;">🎲 Generate</button>
-                            </div>
-                            <small style="color: var(--text-muted);">This data will be encoded as a QR code for mobile scan verification.</small>
-                        </div>
-                        <div id="qrPreview" style="width:72px; height:72px; background:white; border:1px solid var(--border); border-radius:0.5rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden;">
-                            <span style="font-size:0.65rem; color:var(--text-muted); text-align:center;">Live QR</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="nfc_data_group" style="display: none;">
-                    <label>NFC Tag Data</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: start;">
-                        <div style="flex:1;">
-                            <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="branch_nfc_data" placeholder="e.g. NFC-BRANCH-001" style="flex: 1;" oninput="updateNfcPreview()">
-                                <button type="button" onclick="generateNfcTag()" style="white-space: nowrap; padding: 0.5rem 0.75rem; background: #6366f1; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.8rem;">🏷️ Generate</button>
-                            </div>
-                            <small style="color: var(--text-muted);">Mobile app will scan this NFC tag for check-in verification.</small>
-                        </div>
-                        <div id="nfcPreview" style="width:72px; height:72px; background:#f0f4ff; border:1px solid var(--border); border-radius:0.5rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden;">
-                            <span id="nfcPreviewText" style="font-size:0.65rem; color:var(--text-muted); text-align:center;">NFC Tag</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                    <button type="button" id="saveBranchBtn" onclick="saveBranch()">📍 Save Branch</button>
-                    <button type="button" id="cancelEditBtn" onclick="cancelEdit()" style="display: none; background: #64748b; color: white;">Cancel Edit</button>
-                </div>
-            </form>
+        <div class="table-container" style="border:none; border-radius:0;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Coordinates</th>
+                        <th>Radius</th>
+                        <th style="text-align:center;">QR</th>
+                        <th style="text-align:center;">NFC</th>
+                        <th style="text-align:center;">Devices</th>
+                        <th style="text-align:center;">Status</th>
+                        <th style="text-align:right; min-width: 120px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="branchesTableBody">
+                    <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -582,7 +476,6 @@
         </form>
     </div>
 </div>
-
 <!-- ═══════════════════ USERS TAB ═══════════════════ -->
 <div id="profile" class="tab-content" style="display: none;">
     <div class="grid" style="grid-template-columns: 1fr 1fr; align-items: start;">
@@ -612,45 +505,25 @@
             </form>
         </div>
 
-        <!-- Create New User & User List -->
-        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-            <div class="card">
-                <div class="card-title" id="userFormTitle">Create Admin User</div>
-                <form id="newUserForm" style="display: flex; gap: 1rem; align-items: flex-end; margin-top: 1rem;">
-                    <input type="hidden" id="edit_user_id" value="">
-                    <div class="form-group" style="margin: 0; flex: 1;">
-                        <label>Username</label>
-                        <input type="text" id="new_user_name" placeholder="manager1" required>
-                    </div>
-                    <div class="form-group" style="margin: 0; flex: 1;">
-                        <label>Password</label>
-                        <input type="password" id="new_user_pwd" placeholder="Leave blank to keep" required>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button type="button" id="saveUserBtn" onclick="saveUser()">Add</button>
-                        <button type="button" id="cancelUserEditBtn" onclick="cancelUserEdit()" style="display: none; background: #64748b; color: white;">Cancel</button>
-                    </div>
-                </form>
+        <!-- User List -->
+        <div class="card" style="padding: 0; overflow: hidden;">
+            <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0;">System Administrators</h3>
+                <button type="button" onclick="openUserModal()" style="background:#10b981; color:white; border:none; padding:0.5rem 1rem; border-radius:0.5rem; cursor:pointer;">➕ Add User</button>
             </div>
-
-            <div class="card" style="padding: 0; overflow: hidden;">
-                <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);">
-                    <h3 style="font-size: 1rem; font-weight: 600;">System Administrators</h3>
-                </div>
-                <div class="table-container" style="border: none; border-radius: 0;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Username</th>
-                                <th>Created</th>
-                                <th style="text-align: right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usersTableBody">
-                            <tr><td colspan="3" style="text-align:center; padding: 1.5rem; color: var(--text-muted);">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="table-container" style="border: none; border-radius: 0;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Created</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <tr><td colspan="3" style="text-align:center; padding: 1.5rem; color: var(--text-muted);">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -1053,15 +926,102 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         else { const e = await res.json(); notify(e.detail || 'Failed', 'error'); }
     }
 
-    async function editDeviceLabel(id, currentLabel) {
-        const label = prompt(`Enter label for this device:`, currentLabel || '');
-        if (label === null) return;
-        const res = await fetch(`/ui/devices/${id}/label`, {
+    let _allBranches = [];
+
+    async function openDeviceModal(bindingId, currentLabel) {
+        document.getElementById('edit_device_id').value = bindingId;
+        document.getElementById('edit_device_label').value = currentLabel || '';
+        document.getElementById('deviceBranchesList').innerHTML = '<span style="font-size:0.85rem;color:var(--text-muted);">Loading assigned branches...</span>';
+        
+        if (_allBranches.length === 0) {
+            try {
+                const res = await fetch('/ui/branches');
+                _allBranches = await res.json();
+            } catch(e) {
+                console.error("Failed to load branches", e);
+            }
+        }
+
+        document.getElementById('deviceModal').style.display = 'flex';
+        await refreshDeviceBranches(bindingId);
+    }
+
+    async function refreshDeviceBranches(bindingId) {
+        try {
+            const res = await fetch(`/ui/devices/${bindingId}/branches`);
+            const assignedBranches = await res.json();
+            
+            const listDiv = document.getElementById('deviceBranchesList');
+            if (assignedBranches.length === 0) {
+                listDiv.innerHTML = '<span style="font-size:0.85rem;color:var(--text-muted);">No branches assigned yet. This device can punch anywhere!</span>';
+            } else {
+                listDiv.innerHTML = assignedBranches.map(b => `
+                    <span style="display:inline-flex; align-items:center; gap:6px; background:#e0e7ff; color:#4338ca; padding:4px 10px; border-radius:12px; font-size:0.75rem; font-weight:500;">
+                        ${b.name}
+                        <span onclick="removeDeviceBranchFromModal(${bindingId}, ${b.id})" style="cursor:pointer; font-size:0.9rem; font-weight:bold; line-height:1; color:#a5b4fc;" title="Remove branch">×</span>
+                    </span>
+                `).join('');
+            }
+
+            const assignedIds = new Set(assignedBranches.map(b => b.id));
+            const availableBranches = _allBranches.filter(b => !assignedIds.has(b.id));
+            
+            const select = document.getElementById('deviceBranchSelect');
+            if (availableBranches.length === 0) {
+                document.getElementById('addDeviceBranchGroup').style.display = 'none';
+            } else {
+                document.getElementById('addDeviceBranchGroup').style.display = 'flex';
+                select.innerHTML = availableBranches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+            }
+        } catch(e) {
+            notify('Error loading device branches', 'error');
+        }
+    }
+
+    async function removeDeviceBranchFromModal(bindingId, branchId) {
+        const res = await fetch(`/ui/devices/${bindingId}/branches/${branchId}`, {method: 'DELETE'});
+        if (res.ok) {
+            notify('Branch removed from device');
+            await refreshDeviceBranches(bindingId);
+        } else {
+            notify('Failed to remove branch', 'error');
+        }
+    }
+
+    async function submitAddDeviceBranch() {
+        const bindingId = document.getElementById('edit_device_id').value;
+        const select = document.getElementById('deviceBranchSelect');
+        const branchId = select.value;
+        if (!branchId) return;
+
+        const res = await fetch(`/ui/devices/${bindingId}/branches/${branchId}`, {method: 'POST'});
+        if (res.ok) {
+            notify('Branch added to device');
+            await refreshDeviceBranches(bindingId);
+        } else {
+            notify('Failed to add branch', 'error');
+        }
+    }
+
+    async function saveDeviceLabel() {
+        const bindingId = document.getElementById('edit_device_id').value;
+        const label = document.getElementById('edit_device_label').value.trim();
+        
+        const res = await fetch(`/ui/devices/${bindingId}/label`, {
             method: 'PUT', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({label: label.trim(), notes: ''})
+            body: JSON.stringify({label: label, notes: ''})
         });
-        if (res.ok) { notify('Label updated'); location.reload(); }
-        else notify('Failed to update label', 'error');
+        if (res.ok) {
+            notify('Device label updated successfully');
+            closeDeviceModal();
+            location.reload();
+        } else {
+            notify('Failed to update label', 'error');
+        }
+    }
+
+    function closeDeviceModal() {
+        document.getElementById('deviceModal').style.display = 'none';
     }
 
     // ── Branches (Geofence) ─────────────────────────────────────────────────────
@@ -1281,12 +1241,25 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         updateNfcPreview();
     }
 
+    function openBranchModal() {
+        cancelEdit();
+        document.getElementById('branchFormTitle').innerText = '📍 Create New Branch';
+        document.getElementById('saveBranchBtn').innerText = '📍 Save Branch';
+        document.getElementById('branchModal').style.display = 'flex';
+        setTimeout(() => {
+            initBranchMap();
+            if (branchMap) branchMap.invalidateSize();
+        }, 200);
+    }
+
+    function closeBranchModal() {
+        document.getElementById('branchModal').style.display = 'none';
+    }
+
     async function editBranch(id) {
-        // Ensure we have fresh data - reload if currentBranches is empty or stale
         if (!Array.isArray(currentBranches) || currentBranches.length === 0) {
             await loadBranches();
         }
-        // If still no data after reload, try fetching fresh
         if (!Array.isArray(currentBranches) || currentBranches.length === 0) {
             notify('No branch data available. Please reload the page.', 'error');
             return;
@@ -1296,13 +1269,12 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         if (!branch) {
             notify('Branch not found in current data. Refreshing...', 'error');
             await loadBranches();
-            // Try again after reload
             const reloaded = currentBranches.find(b => b.id === id);
             if (!reloaded) {
                 notify('Branch may have been deleted. Please refresh the page.', 'error');
                 return;
             }
-            return editBranch(id); // Recurse with fresh data (safe: max 1 extra call)
+            return editBranch(id);
         }
         
         document.getElementById('edit_branch_id').value = branch.id;
@@ -1319,18 +1291,24 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         toggleNfcField();
         updateNfcPreview();
         
-        // Update map marker
-        if (branchMarker) {
-            branchMarker.setLatLng([branch.latitude, branch.longitude]);
+        document.getElementById('branchModal').style.display = 'flex';
+        
+        setTimeout(() => {
+            initBranchMap();
+            if (branchMap) {
+                branchMap.invalidateSize();
+                branchMap.setView([branch.latitude, branch.longitude], 15);
+            }
+            if (branchMarker) {
+                branchMarker.setLatLng([branch.latitude, branch.longitude]);
+            }
             if (branchCircle) {
                 branchCircle.setLatLng([branch.latitude, branch.longitude]);
                 branchCircle.setRadius(branch.radius_meters);
             }
-            if (branchMap) branchMap.setView([branch.latitude, branch.longitude], 15);
-        }
+        }, 200);
         
         document.getElementById('branchFormTitle').innerText = '✏️ Edit Branch';
-        document.getElementById('cancelEditBtn').style.display = 'inline-block';
         document.getElementById('saveBranchBtn').innerText = '💾 Update Branch';
     }
 
@@ -1338,12 +1316,10 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         document.getElementById('edit_branch_id').value = '';
         document.getElementById('branchForm').reset();
         document.getElementById('branchFormTitle').innerText = '📍 Create New Branch';
-        document.getElementById('cancelEditBtn').style.display = 'none';
         document.getElementById('saveBranchBtn').innerText = '📍 Save Branch';
         document.getElementById('qr_data_group').style.display = 'none';
         document.getElementById('nfc_data_group').style.display = 'none';
         
-        // Reset map to default
         const defaultLat = -6.175392;
         const defaultLon = 106.827153;
         if (branchMarker) {
@@ -1357,6 +1333,8 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         document.getElementById('branch_lat').value = '';
         document.getElementById('branch_lon').value = '';
         document.getElementById('branch_rad').value = 50;
+        
+        closeBranchModal();
     }
 
     async function saveBranch() {
@@ -1568,24 +1546,56 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         }).join('');
     }
 
+    function openApiKeyModal() {
+        document.getElementById('keyGenerateForm').style.display = 'block';
+        document.getElementById('newKeyDisplay').style.display = 'none';
+        document.getElementById('apiKeyModal').style.display = 'flex';
+    }
+
+    function closeApiKeyModal() {
+        document.getElementById('apiKeyModal').style.display = 'none';
+    }
+
     async function generateKey() {
         const label = document.getElementById('key_label').value.trim() || 'Mobile Client';
         const res = await fetch(`/ui/api-keys?label=${encodeURIComponent(label)}`, {method: 'POST'});
         const data = await res.json();
         _generatedKey = data.key;
         document.getElementById('newKeyValue').innerText = data.key;
+        document.getElementById('keyGenerateForm').style.display = 'none';
         document.getElementById('newKeyDisplay').style.display = 'block';
         await loadApiKeys();
         notify('API key generated!');
     }
 
-    async function renameKey(id, currentLabel) {
-        const label = prompt('Rename this key:', currentLabel);
-        if (!label || label === currentLabel) return;
+    function openApiKeyEditModal(id, currentLabel) {
+        document.getElementById('edit_key_id').value = id;
+        document.getElementById('edit_key_label').value = currentLabel || '';
+        document.getElementById('apiKeyEditModal').style.display = 'flex';
+    }
+
+    function closeApiKeyEditModal() {
+        document.getElementById('apiKeyEditModal').style.display = 'none';
+    }
+
+    async function saveApiKeyRename() {
+        const id = document.getElementById('edit_key_id').value;
+        const label = document.getElementById('edit_key_label').value.trim();
+        if (!label) return;
+        
         const res = await fetch(`/ui/api-keys/${id}?label=${encodeURIComponent(label)}`, {method: 'PUT'});
         const data = await res.json();
-        if (res.ok) { await loadApiKeys(); notify('Key renamed'); }
-        else notify(data.detail || 'Failed to rename', 'error');
+        if (res.ok) {
+            closeApiKeyEditModal();
+            await loadApiKeys();
+            notify('Key renamed successfully');
+        } else {
+            notify(data.detail || 'Failed to rename', 'error');
+        }
+    }
+
+    async function renameKey(id, currentLabel) {
+        openApiKeyEditModal(id, currentLabel);
     }
 
     async function revokeKey(id) {
@@ -1768,6 +1778,17 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
             </tr>`).join('');
     }
 
+    function openUserModal() {
+        cancelUserEdit();
+        document.getElementById('userFormTitle').innerText = 'Create Admin User';
+        document.getElementById('saveUserBtn').innerText = 'Add';
+        document.getElementById('userModal').style.display = 'flex';
+    }
+
+    function closeUserModal() {
+        document.getElementById('userModal').style.display = 'none';
+    }
+
     function editUser(id) {
         const user = currentUsers.find(u => u.id === id);
         if (!user) return;
@@ -1778,8 +1799,8 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         document.getElementById('new_user_pwd').placeholder = 'Keep blank to stay same';
         
         document.getElementById('userFormTitle').innerText = 'Edit Admin User';
-        document.getElementById('cancelUserEditBtn').style.display = 'inline-block';
         document.getElementById('saveUserBtn').innerText = 'Save';
+        document.getElementById('userModal').style.display = 'flex';
     }
 
     function cancelUserEdit() {
@@ -1787,8 +1808,8 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         document.getElementById('newUserForm').reset();
         document.getElementById('new_user_pwd').placeholder = '••••••••';
         document.getElementById('userFormTitle').innerText = 'Create Admin User';
-        document.getElementById('cancelUserEditBtn').style.display = 'none';
         document.getElementById('saveUserBtn').innerText = 'Add';
+        closeUserModal();
     }
 
     async function saveUser() {
@@ -1908,20 +1929,84 @@ code { background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; 
         }
     }
 
-function openOnboardingModal() {
+async function openOnboardingModal() {
     document.getElementById('onboardQrContainer').style.display = 'none';
+    
+    // Set loading options
+    document.getElementById('onboard_emp_id').innerHTML = '<option value="">Loading employees...</option>';
+    document.getElementById('onboard_branch_id').innerHTML = '<option value="">Loading branch sites...</option>';
+    document.getElementById('onboard_key_id').innerHTML = '<option value="">Loading API keys...</option>';
+    
     document.getElementById('onboardModal').style.display = 'flex';
+
+    try {
+        // Parallel fetch for top speed
+        const [empRes, branchRes, keyRes] = await Promise.all([
+            fetch('/ui/employees/list'),
+            fetch('/ui/branches'),
+            fetch('/ui/api-keys')
+        ]);
+
+        const [employees, branches, keys] = await Promise.all([
+            empRes.json(),
+            branchRes.json(),
+            keyRes.json()
+        ]);
+
+        // Populate Employees
+        if (!employees || employees.length === 0) {
+            document.getElementById('onboard_emp_id').innerHTML = '<option value="">No employees found</option>';
+        } else {
+            document.getElementById('onboard_emp_id').innerHTML = employees.map(e => `
+                <option value="${e.employee_id}">${e.full_name} (${e.employee_id})</option>
+            `).join('');
+        }
+
+        // Populate Branches
+        if (!branches || branches.length === 0) {
+            document.getElementById('onboard_branch_id').innerHTML = '<option value="">No branches found. Create one first.</option>';
+        } else {
+            document.getElementById('onboard_branch_id').innerHTML = branches.map(b => `
+                <option value="${b.id}">${b.name}</option>
+            `).join('');
+        }
+
+        // Populate API Keys (automatically selected and hidden)
+        let activeKeys = keys.filter(k => k.is_active && k.expiry_status !== 'expired');
+        if (activeKeys.length === 0) {
+            // Auto-create a default API Key behind the scenes
+            const genRes = await fetch('/ui/api-keys?label=Default%20Mobile%20Key', {method: 'POST'});
+            if (genRes.ok) {
+                const updatedRes = await fetch('/ui/api-keys');
+                const updatedKeys = await updatedRes.json();
+                activeKeys = updatedKeys.filter(k => k.is_active && k.expiry_status !== 'expired');
+            }
+        }
+
+        if (activeKeys.length > 0) {
+            document.getElementById('onboard_key_id').innerHTML = activeKeys.map((k, i) => `
+                <option value="${k.id}" ${i === 0 ? 'selected' : ''}>${k.label} (${k.key_preview})</option>
+            `).join('');
+        } else {
+            document.getElementById('onboard_key_id').innerHTML = '<option value="">Failed to auto-provision key</option>';
+        }
+    } catch(e) {
+        notify('Failed to load onboarding options', 'error');
+        console.error(e);
+    }
 }
+
 function closeOnboardingModal() {
     document.getElementById('onboardModal').style.display = 'none';
 }
+
 async function generateOnboardQR() {
     const empId = document.getElementById('onboard_emp_id').value;
     const branchId = document.getElementById('onboard_branch_id').value;
     const keyId = document.getElementById('onboard_key_id').value;
     
     if (!empId || !branchId || !keyId) {
-        notify('Please fill all fields');
+        notify('Please select all required options', 'error');
         return;
     }
     
@@ -1955,31 +2040,223 @@ async function generateOnboardQR() {
 <!-- ═══════════════════ MODALS ═══════════════════ -->
 
 <div id="onboardModal" class="modal" style="display: none; position: fixed; z-index: 1002; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
-    <div class="card" style="width: 400px; max-width: 90%; max-height: 90vh; overflow-y: auto;">
+    <div class="card" style="width: 420px; max-width: 90%; max-height: 90vh; overflow-y: auto;">
         <h3 style="margin-top: 0;">📱 Generate Onboarding QR</h3>
-        <p style="font-size:0.875rem; color:var(--text-muted);">This QR code will auto-approve the device for the selected employee and assign the branch.</p>
+        <p style="font-size:0.875rem; color:var(--text-muted); margin-bottom: 1.25rem;">Select the employee and target branch site to create a secure, one-click onboarding setup.</p>
         
         <div class="form-group">
-            <label>Employee ID</label>
-            <input type="text" id="onboard_emp_id" placeholder="e.g. EMP001">
+            <label>Select Employee</label>
+            <select id="onboard_emp_id" class="input" style="width: 100%; border: 1px solid var(--border); padding: 0.625rem; border-radius: 0.375rem; background: var(--bg-card); color: var(--text-main);">
+                <option value="">Loading employees...</option>
+            </select>
         </div>
         <div class="form-group">
-            <label>Branch ID</label>
-            <input type="number" id="onboard_branch_id" placeholder="e.g. 1">
+            <label>Assign to Branch Site</label>
+            <select id="onboard_branch_id" class="input" style="width: 100%; border: 1px solid var(--border); padding: 0.625rem; border-radius: 0.375rem; background: var(--bg-card); color: var(--text-main);">
+                <option value="">Loading branches...</option>
+            </select>
         </div>
-        <div class="form-group">
-            <label>API Key ID</label>
-            <input type="number" id="onboard_key_id" placeholder="e.g. 1">
+        <div class="form-group" style="display: none;">
+            <label>Select API Access Key</label>
+            <select id="onboard_key_id" class="input" style="width: 100%; border: 1px solid var(--border); padding: 0.625rem; border-radius: 0.375rem; background: var(--bg-card); color: var(--text-main);">
+                <option value="">Loading API keys...</option>
+            </select>
         </div>
         
         <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
-            <button type="button" onclick="generateOnboardQR()" style="background:#10b981; flex: 1;">Generate</button>
+            <button type="button" onclick="generateOnboardQR()" style="background:#10b981; flex: 1;">Generate QR</button>
             <button type="button" onclick="closeOnboardingModal()" style="background:#64748b; flex: 1;">Cancel</button>
         </div>
         
         <div id="onboardQrContainer" style="display:none; margin-top: 1.5rem; text-align: center;">
-            <img id="onboardQrImg" src="" style="width:200px; height:200px; border:1px solid var(--border); border-radius:0.5rem;">
-            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">Scan this from the Mobile App</p>
+            <img id="onboardQrImg" src="" style="width:220px; height:220px; border:1px solid var(--border); border-radius:0.5rem;">
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">Scan this QR code from the Mobile App to complete setup instantly.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════ BRANCH MODAL ═══════════════════ -->
+<div id="branchModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="card" style="width: 500px; max-width: 90%; max-height: 90vh; overflow-y: auto; margin: 0; animation: slideUp 0.3s ease-out;">
+        <div class="card-title" id="branchFormTitle" style="margin-top: 0;">📍 Create New Branch</div>
+        <form id="branchForm">
+            <input type="hidden" id="edit_branch_id" value="">
+            
+            <!-- Interactive Map -->
+            <div id="branchMap" style="height: 200px; border-radius: 0.5rem; margin-bottom: 0.75rem; border: 1px solid var(--border); background: #f1f5f9;"></div>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom: 0.75rem;">
+                <i class="ph ph-info"></i> Drag the marker or click the map to set coordinates
+            </p>
+            
+            <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                <div class="form-group" style="margin:0;">
+                    <label>Latitude</label>
+                    <input type="number" step="any" id="branch_lat" placeholder="-6.175392" required oninput="onCoordChange()">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>Longitude</label>
+                    <input type="number" step="any" id="branch_lon" placeholder="106.827153" required oninput="onCoordChange()">
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-top: 0.75rem;">
+                <label>Branch Name</label>
+                <input type="text" id="branch_name" placeholder="E.g. Main Office" required>
+            </div>
+            
+            <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+                <div class="form-group" style="margin:0;">
+                    <label>Radius (meters)</label>
+                    <input type="number" id="branch_rad" value="50" min="1" required oninput="updateCircle()">
+                </div>
+                <div class="form-group" style="margin:0; display:flex; align-items:flex-end; padding-bottom:0.25rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin:0;">
+                        <input type="checkbox" id="branch_qr_enabled" onchange="toggleQrField()">
+                        <span>Enable QR</span>
+                    </label>
+                </div>
+                <div class="form-group" style="margin:0; display:flex; align-items:flex-end; padding-bottom:0.25rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin:0;">
+                        <input type="checkbox" id="branch_nfc_enabled" onchange="toggleNfcField()">
+                        <span>Enable NFC</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="form-group" id="qr_data_group" style="display: none; margin-top: 0.75rem;">
+                <label>QR Code Data</label>
+                <div style="display: flex; gap: 0.5rem; align-items: start;">
+                    <div style="flex:1;">
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="branch_qr_data" placeholder="e.g. BRANCH-OFFICE-001" style="flex: 1;" oninput="updateQrPreview()">
+                            <button type="button" onclick="generateQrData()" style="white-space: nowrap; padding: 0.5rem 0.75rem; background: #6366f1; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.8rem;">🎲 Generate</button>
+                        </div>
+                        <small style="color: var(--text-muted);">This data will be encoded as a QR code for mobile scan verification.</small>
+                    </div>
+                    <div id="qrPreview" style="width:72px; height:72px; background:white; border:1px solid var(--border); border-radius:0.5rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden;">
+                        <span style="font-size:0.65rem; color:var(--text-muted); text-align:center;">Live QR</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group" id="nfc_data_group" style="display: none; margin-top: 0.75rem;">
+                <label>NFC Tag Data</label>
+                <div style="display: flex; gap: 0.5rem; align-items: start;">
+                    <div style="flex:1;">
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="branch_nfc_data" placeholder="e.g. NFC-BRANCH-001" style="flex: 1;" oninput="updateNfcPreview()">
+                            <button type="button" onclick="generateNfcTag()" style="white-space: nowrap; padding: 0.5rem 0.75rem; background: #6366f1; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.8rem;">🏷️ Generate</button>
+                        </div>
+                        <small style="color: var(--text-muted);">Mobile app will scan this NFC tag for check-in verification.</small>
+                    </div>
+                    <div id="nfcPreview" style="width:72px; height:72px; background:#f0f4ff; border:1px solid var(--border); border-radius:0.5rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden;">
+                        <span id="nfcPreviewText" style="font-size:0.65rem; color:var(--text-muted); text-align:center;">NFC Tag</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button type="button" class="secondary" style="flex: 1;" onclick="closeBranchModal()">Cancel</button>
+                <button type="button" id="saveBranchBtn" style="flex: 1;" onclick="saveBranch()">📍 Save Branch</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ═══════════════════ USER MODAL ═══════════════════ -->
+<div id="userModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="card" style="width: 400px; max-width: 90%; margin: 0; animation: slideUp 0.3s ease-out;">
+        <div class="card-title" id="userFormTitle" style="margin-top: 0;">Create Admin User</div>
+        <form id="newUserForm">
+            <input type="hidden" id="edit_user_id" value="">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="new_user_name" placeholder="manager1" required>
+            </div>
+            <div class="form-group" style="margin-top: 0.75rem;">
+                <label>Password</label>
+                <input type="password" id="new_user_pwd" placeholder="Leave blank to keep" required>
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button type="button" class="secondary" style="flex: 1;" onclick="closeUserModal()">Cancel</button>
+                <button type="button" id="saveUserBtn" style="flex: 1;" onclick="saveUser()">Add</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ═══════════════════ API KEY MODAL ═══════════════════ -->
+<div id="apiKeyModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="card" style="width: 450px; max-width: 90%; margin: 0; animation: slideUp 0.3s ease-out;">
+        <div class="card-title" id="apiKeyModalTitle" style="margin-top: 0;">🔑 Generate API Key</div>
+        
+        <div id="keyGenerateForm">
+            <div class="form-group">
+                <label>Key Label (e.g. "Site A Phones")</label>
+                <input type="text" id="key_label" placeholder="Mobile Client" value="Mobile Client">
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button type="button" class="secondary" style="flex: 1;" onclick="closeApiKeyModal()">Cancel</button>
+                <button type="button" style="flex: 1;" onclick="generateKey()">Generate</button>
+            </div>
+        </div>
+
+        <!-- Generated key display -->
+        <div id="newKeyDisplay" style="display: none; margin-top: 1rem;">
+            <div style="background: #d1fae5; border: 1px solid #10b981; border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">
+                <p style="font-size: 0.8rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem; text-align: center;">⚠️ Copy this key NOW. It will not be shown again.</p>
+                <code id="newKeyValue" style="font-size: 0.85rem; word-break: break-all; color: #065f46; display: block; background: #fff; padding: 0.5rem; border-radius: 0.375rem; border: 1px solid #a7f3d0; text-align: center;"></code>
+                <button type="button" onclick="copyKey()" style="margin-top: 0.75rem; width: 100%; background: #10b981; border: none; padding: 0.5rem; border-radius: 0.375rem; color: white; cursor: pointer;">📋 Copy to Clipboard</button>
+            </div>
+            <button type="button" style="width: 100%;" onclick="closeApiKeyModal()">Done</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════ API KEY EDIT MODAL ═══════════════════ -->
+<div id="apiKeyEditModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="card" style="width: 400px; max-width: 90%; margin: 0; animation: slideUp 0.3s ease-out;">
+        <div class="card-title" style="margin-top: 0;">✏️ Rename API Key</div>
+        <input type="hidden" id="edit_key_id" value="">
+        <div class="form-group">
+            <label>Key Label</label>
+            <input type="text" id="edit_key_label" placeholder="Site A Phones" required>
+        </div>
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+            <button type="button" class="secondary" style="flex: 1;" onclick="closeApiKeyEditModal()">Cancel</button>
+            <button type="button" style="flex: 1;" onclick="saveApiKeyRename()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════ DEVICE MODAL ═══════════════════ -->
+<div id="deviceModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="card" style="width: 450px; max-width: 90%; margin: 0; animation: slideUp 0.3s ease-out;">
+        <div class="card-title" style="margin-top: 0;">📱 Edit Device Settings</div>
+        <input type="hidden" id="edit_device_id" value="">
+        
+        <div class="form-group">
+            <label>Device Label</label>
+            <input type="text" id="edit_device_label" placeholder="E.g. Front Door Tablet" required>
+        </div>
+
+        <div style="margin-top: 1.25rem;">
+            <label style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Assigned Branches</label>
+            <div id="deviceBranchesList" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem;">
+                <!-- Dynamically populated branch pills with an 'x' delete button -->
+            </div>
+            
+            <div id="addDeviceBranchGroup" style="display: flex; gap: 0.5rem; align-items: center;">
+                <select id="deviceBranchSelect" style="flex: 1; margin: 0;">
+                    <!-- Available branches dropdown -->
+                </select>
+                <button type="button" onclick="submitAddDeviceBranch()" style="white-space: nowrap; background: #6366f1; color: white;">➕ Add Branch</button>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+            <button type="button" class="secondary" style="flex: 1;" onclick="closeDeviceModal()">Close</button>
+            <button type="button" style="flex: 1;" onclick="saveDeviceLabel()">Save Label</button>
         </div>
     </div>
 </div>
