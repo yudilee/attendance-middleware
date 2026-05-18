@@ -1980,7 +1980,7 @@ async function openOnboardingModal() {
             document.getElementById('onboard_emp_id').innerHTML = '<option value="">No employees found</option>';
         } else {
             document.getElementById('onboard_emp_id').innerHTML = employees.map(e => `
-                <option value="${e.employee_id}">${e.full_name} (${e.employee_id})</option>
+                <option value="${e.id}">${e.name} (${e.id})</option>
             `).join('');
         }
 
