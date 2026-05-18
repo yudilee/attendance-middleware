@@ -650,48 +650,6 @@ async function loadSupervisorAssignments() {
 
 // Load on page load
 document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
-
-function openOnboardingModal() {
-    document.getElementById('onboardQrContainer').style.display = 'none';
-    document.getElementById('onboardModal').style.display = 'flex';
-}
-function closeOnboardingModal() {
-    document.getElementById('onboardModal').style.display = 'none';
-}
-async function generateOnboardQR() {
-    const empId = document.getElementById('onboard_emp_id').value;
-    const branchId = document.getElementById('onboard_branch_id').value;
-    const keyId = document.getElementById('onboard_key_id').value;
-    
-    if (!empId || !branchId || !keyId) {
-        notify('Please fill all fields');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/v1/admin/generate-onboard-qr', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                employee_id: empId,
-                branch_id: parseInt(branchId),
-                api_key_id: parseInt(keyId)
-            })
-        });
-        if (!response.ok) throw new Error('Failed to generate QR');
-        
-        const data = await response.json();
-        
-        // Generate QR code image url using a public API for simplicity
-        const qrData = encodeURIComponent(JSON.stringify(data));
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}`;
-        
-        document.getElementById('onboardQrImg').src = qrUrl;
-        document.getElementById('onboardQrContainer').style.display = 'block';
-    } catch(err) {
-        notify(err.message);
-    }
-}
 </script>
 
 {% endif %}
@@ -1979,9 +1937,12 @@ async function openOnboardingModal() {
         if (!employees || employees.length === 0) {
             document.getElementById('onboard_emp_id').innerHTML = '<option value="">No employees found</option>';
         } else {
-            document.getElementById('onboard_emp_id').innerHTML = employees.map(e => `
-                <option value="${e.id}">${e.name} (${e.id})</option>
-            `).join('');
+            document.getElementById('onboard_emp_id').innerHTML = employees.map(e => {
+                // If name is blank or a number, show only the employee ID number. Otherwise show: ID - Name
+                const isNameNumber = !e.name || !isNaN(e.name) || /^\d+$/.test(e.name.trim());
+                const display = isNameNumber ? e.id : `${e.id} - ${e.name}`;
+                return `<option value="${e.id}">${display}</option>`;
+            }).join('');
         }
 
         // Populate Branches
