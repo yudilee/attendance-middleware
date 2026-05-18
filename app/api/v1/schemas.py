@@ -50,6 +50,7 @@ class DeviceConfigResponse(BaseModel):
     message: Optional[str] = None           # Human-readable status message
     device_count: int = 1                   # How many devices registered for this employee
     max_devices: int = 5                    # System-wide max
+    employee_name: Optional[str] = None     # Employee full name
 
     model_config = ConfigDict(from_attributes=True)
 

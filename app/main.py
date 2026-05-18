@@ -1192,12 +1192,22 @@ async def get_device_config(
 
     # ── Device count for this employee ───────────────────────────────────────
     device_count = 0
+    employee_name = None
     if binding.employee_id:
         device_count = db.query(DeviceBinding).filter(
             DeviceBinding.employee_id == binding.employee_id,
             DeviceBinding.is_active == True,
             DeviceBinding.registration_status.in_(["approved", "active"]),
         ).count()
+        
+        # Try to get employee name from Employee or ADMSRegisteredEmployee table
+        emp = db.query(Employee).filter(Employee.employee_id == binding.employee_id).first()
+        if emp and emp.full_name:
+            employee_name = emp.full_name
+        else:
+            adms_emp = db.query(ADMSRegisteredEmployee).filter(ADMSRegisteredEmployee.employee_id == binding.employee_id).first()
+            if adms_emp and adms_emp.employee_name:
+                employee_name = adms_emp.employee_name
 
     # ── Status checks ───────────────────────────────────────────────────────
     status = binding.registration_status
@@ -1207,6 +1217,7 @@ async def get_device_config(
             message="Your device is pending admin approval. Please contact your HR Administrator.",
             device_count=device_count,
             max_devices=max_devices,
+            employee_name=employee_name,
         )
     if status == "suspended":
         raise HTTPException(status_code=403, detail="Device suspended. Please contact your HR Administrator.")
@@ -1224,6 +1235,7 @@ async def get_device_config(
             message="Device approved. Waiting for branch assignment by admin.",
             device_count=device_count,
             max_devices=max_devices,
+            employee_name=employee_name,
         )
 
     # Collect all active branches
@@ -1252,6 +1264,7 @@ async def get_device_config(
             message="All assigned branches are inactive.",
             device_count=device_count,
             max_devices=max_devices,
+            employee_name=employee_name,
         )
 
     response = DeviceConfigResponse(
@@ -1259,6 +1272,7 @@ async def get_device_config(
         branches=branches,
         device_count=device_count,
         max_devices=max_devices,
+        employee_name=employee_name,
     )
     # Cache the successful config for 5 minutes
     await set_cache(cache_key, response.model_dump_json(), ttl=300)
