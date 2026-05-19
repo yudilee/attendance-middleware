@@ -15,11 +15,12 @@ services:
       - "8999:8999"
     volumes:
       - ./data:/app/data
+    env_file:
+      - .env
     environment:
       - TZ=Asia/Jakarta
-      # Generate with: openssl rand -hex 32
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE_THIS_IN_PRODUCTION}
-      - DATABASE_URL=postgresql://attendance:secret_db_password@attendance_db:5432/attendance_db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - DATABASE_URL=postgresql://attendance:${DB_PASSWORD}@attendance_db:5432/attendance_db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       attendance_db:
@@ -39,7 +40,7 @@ services:
     restart: always
     environment:
       - POSTGRES_USER=attendance
-      - POSTGRES_PASSWORD=secret_db_password
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=attendance_db
     volumes:
       - ./pgdata:/var/lib/postgresql/data
@@ -60,8 +61,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - default
 
   worker:
     build:
@@ -74,14 +73,14 @@ services:
         condition: service_healthy
       attendance_db:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql://attendance:secret_db_password@attendance_db:5432/attendance_db
+      - DATABASE_URL=postgresql://attendance:${DB_PASSWORD}@attendance_db:5432/attendance_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ENV=${ENV:-development}
       - TZ=Asia/Jakarta
-    networks:
-      - default
 
 volumes:
   redis_data:

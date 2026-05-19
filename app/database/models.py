@@ -72,6 +72,30 @@ class Branch(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 
+class BranchCheckpoint(Base):
+    """
+    Multiple clock-in points per branch.
+    
+    Each branch can have multiple checkpoints (e.g., Main Gate, Building A Entrance,
+    Parking Lot), each with its own GPS coordinate and radius. When validating a punch,
+    the system checks if the GPS location falls within ANY checkpoint of the assigned
+    branches (in addition to the branch center point).
+    """
+    __tablename__ = "branch_checkpoints"
+    __table_args__ = (
+        Index('idx_checkpoint_branch', 'branch_id'),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)                    # e.g., "Main Gate", "Building A"
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    radius_meters = Column(Float, default=50.0)              # Smaller radius than branch
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
 class BindingBranch(Base):
     """Many-to-many: which branches a device binding is authorized to clock in from."""
     __tablename__ = "device_branch_assignments"
@@ -307,6 +331,36 @@ def init_db():
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'admin';" if engine.name != "sqlite" else "ALTER TABLE admin_users ADD COLUMN role VARCHAR(50) DEFAULT 'admin';",
         "UPDATE admin_users SET role = 'superadmin' WHERE username = 'admin';",
     ]
+    # Phase 2 migration: BranchCheckpoint table
+    migrations.append(
+        "CREATE TABLE IF NOT EXISTS branch_checkpoints ("
+        "id SERIAL PRIMARY KEY, "
+        "branch_id INTEGER NOT NULL REFERENCES branches(id), "
+        "name VARCHAR(200) NOT NULL, "
+        "latitude DOUBLE PRECISION NOT NULL, "
+        "longitude DOUBLE PRECISION NOT NULL, "
+        "radius_meters DOUBLE PRECISION DEFAULT 50.0, "
+        "is_active BOOLEAN DEFAULT TRUE, "
+        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        ");"
+    )
+    if engine.name == "sqlite":
+        migrations[-1] = (
+            "CREATE TABLE IF NOT EXISTS branch_checkpoints ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "branch_id INTEGER NOT NULL REFERENCES branches(id), "
+            "name VARCHAR(200) NOT NULL, "
+            "latitude REAL NOT NULL, "
+            "longitude REAL NOT NULL, "
+            "radius_meters REAL DEFAULT 50.0, "
+            "is_active INTEGER DEFAULT 1, "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ");"
+        )
+    migrations.append("CREATE INDEX IF NOT EXISTS idx_checkpoint_branch ON branch_checkpoints(branch_id);")
+
     with engine.connect() as conn:
         for sql in migrations:
             try:

@@ -91,6 +91,59 @@ class AppStatusResponse(BaseModel):
     message: Optional[str] = None
 
 
+# ═══════════════════ Admin UI Schemas ═══════════════════
+# These were previously defined inline in main.py and have been
+# extracted here for the route module refactoring.
+
+class ADMSConfigRequest(BaseModel):
+    server_url: str
+    serial_number: str
+    device_name: str
+    timezone_offset: int
+
+
+class AppConfigRequest(BaseModel):
+    max_devices_per_employee: int = 5
+
+
+class ProfileUpdateRequest(BaseModel):
+    username: str
+    new_password: str
+
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: Optional[str] = None
+    role: Optional[str] = "admin"
+
+
+class DeviceLabelRequest(BaseModel):
+    label: str
+    notes: str = ""
+
+
+class BranchRequest(BaseModel):
+    name: str
+    latitude: float
+    longitude: float
+    radius_meters: float
+    qr_code_enabled: bool = False
+    qr_code_data: Optional[str] = None
+    nfc_enabled: bool = False
+    nfc_tag_data: Optional[str] = None
+
+
+class PunchTypePayload(BaseModel):
+    code: str
+    label: str
+    adms_status_code: str
+    icon: str = "circle"
+    color_hex: str = "#000000"
+    display_order: int = 0
+    requires_geofence: bool = True
+    is_active: bool = True
+
+
 # ═══════════════════ Supervisor / Manager Schemas ═══════════════════
 
 class TeamAttendanceResponse(BaseModel):
@@ -130,3 +183,34 @@ class OnboardDeviceRequest(BaseModel):
     device_uuid: str
     device_label: Optional[str] = None
     token: str
+
+
+# ═══════════════════ Branch Checkpoint Schemas ═══════════════════
+
+class CheckpointInfo(BaseModel):
+    """Represents a single clock-in point within a branch."""
+    id: int
+    branch_id: int
+    name: str
+    latitude: float
+    longitude: float
+    radius_meters: float
+    is_active: bool
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class CheckpointCreate(BaseModel):
+    name: str
+    latitude: float
+    longitude: float
+    radius_meters: float = 50.0
+    is_active: bool = True
+
+
+class CheckpointUpdate(BaseModel):
+    name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    radius_meters: Optional[float] = None
+    is_active: Optional[bool] = None

@@ -3,57 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Attendance Aggregator</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/styles.css?v=2">
+    <title>Login — Attendance Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="/static/css/styles.css?v=3">
     <style>
         body {
-            background-color: var(--bg-base);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             margin: 0;
+            padding: 1rem;
+        }
+
+        .login-wrapper {
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .login-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+        }
+
+        .login-logo {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #6366f1, #818cf8);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.25rem;
+            color: white;
+            font-size: 1.75rem;
+        }
+
+        .login-title {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .login-title h1 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.35rem;
+        }
+
+        .login-title p {
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .login-error {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            font-size: 0.85rem;
+            border: 1px solid #fca5a5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .login-footer {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.75rem;
+            color: #94a3b8;
         }
     </style>
 </head>
 <body>
-    <div class="card" style="width: 100%; max-width: 400px; padding: 2.5rem 2rem; box-shadow: var(--shadow-md);">
-        <div style="text-align: center; margin-bottom: 2rem;">
-            <div style="width: 64px; height: 64px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border-radius: 1rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; color: white;">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-logo">
+                <i class="ph-fill ph-fingerprint"></i>
             </div>
-            <h2 style="font-size: 1.5rem; color: var(--text-dark); margin-bottom: 0.5rem;">Admin Login</h2>
-            <p style="color: var(--text-muted); font-size: 0.875rem;">Access the secure middleware dashboard</p>
-        </div>
+            
+            <div class="login-title">
+                <h1>Welcome Back</h1>
+                <p>Sign in to the attendance dashboard</p>
+            </div>
 
-        {% if error %}
-        <div style="background: #fef2f2; color: #ef4444; padding: 0.75rem; border-radius: 0.5rem; text-align: center; margin-bottom: 1.5rem; font-size: 0.875rem; border: 1px solid #fca5a5;">
-            {{ error }}
-        </div>
-        {% endif %}
+            {% if error %}
+            <div class="login-error">
+                <i class="ph ph-warning-circle"></i>
+                {{ error }}
+            </div>
+            {% endif %}
 
-        <form method="POST" action="/login">
-            <div class="form-group">
-                <label for="username" class="form-label">Username</label>
-                <input type="text" id="username" name="username" class="form-control" required autofocus placeholder="admin">
+            <form method="POST" action="/login">
+                <div class="form-group">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" id="username" name="username" class="form-control" 
+                           required autofocus placeholder="Enter your username"
+                           style="padding: 0.75rem 1rem; font-size: 0.95rem;">
+                </div>
+                <div class="form-group">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" id="password" name="password" class="form-control" 
+                           required placeholder="••••••••"
+                           style="padding: 0.75rem 1rem; font-size: 0.95rem;">
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-full" 
+                        style="margin-top: 0.5rem; padding: 0.8rem;">
+                    <i class="ph ph-sign-in"></i>
+                    Sign In
+                </button>
+            </form>
+
+            <div class="login-footer">
+                Virtual Attendance Middleware v1.0
             </div>
-            <div class="form-group">
-                <label for="password" class="form-label">Password</label>
-                <input type="password" id="password" name="password" class="form-control" required placeholder="••••••••">
-            </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; display: flex; justify-content: center; align-items: center; gap: 0.5rem;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
-                    <polyline points="10 17 15 12 10 7"></polyline>
-                    <line x1="15" y1="12" x2="3" y2="12"></line>
-                </svg>
-                Secure Login
-            </button>
-        </form>
+        </div>
     </div>
 </body>
 </html>

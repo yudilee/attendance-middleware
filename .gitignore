@@ -1,7 +1,39 @@
-__pycache__/
-*.pyc
-*.pyo
-venv/
+# Environment
 .env
-attendance.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Database
+*.db
+*.sqlite3
+pgdata/
+
+# Uploads
+uploads/selfies/*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test
+.coverage
+htmlcov/
 .pytest_cache/
+
+# Alembic
+alembic/versions/*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
