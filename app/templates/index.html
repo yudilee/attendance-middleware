@@ -1326,7 +1326,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
                 `).join('');
             }
 
-            const assignedIds = new Set(assignedBranches.map(b => b.id));
+            const assignedIds = new Set(assignedBranches.map(b => b.branch_id));
             const availableBranches = _allBranches.filter(b => !assignedIds.has(b.id));
             
             const select = document.getElementById('deviceBranchSelect');

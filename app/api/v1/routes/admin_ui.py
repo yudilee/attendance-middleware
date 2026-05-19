@@ -459,6 +459,7 @@ async def update_device_label(
     binding.device_label = req.label
     binding.notes = req.notes
     db.commit()
+    await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
     return {"status": "updated"}
 
 
@@ -556,6 +557,7 @@ async def assign_device_employee(
     binding.employee_id = employee_id
     binding.is_active = True
     db.commit()
+    await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
     return {"status": "success"}
 
 
