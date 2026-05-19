@@ -13,6 +13,7 @@ from fastapi import (
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from pydantic import BaseModel
 
 from app.database.models import (
@@ -135,20 +136,40 @@ async def dashboard_root(
             outerjoin(Employee, DeviceBinding.employee_id == Employee.employee_id).\
             outerjoin(ApiKey, DeviceBinding.api_key_id == ApiKey.id).all()
 
+        device_ids = [d.id for d, _, _ in devices_raw]
+        
+        # 1. Batch query all multi-branch assignments and branch details in one join query
+        branch_assignments_all = db.query(BindingBranch, Branch).\
+            join(Branch, BindingBranch.branch_id == Branch.id).\
+            filter(BindingBranch.binding_id.in_(device_ids)).all() if device_ids else []
+            
+        from collections import defaultdict
+        assignments_by_device = defaultdict(list)
+        for ba, branch in branch_assignments_all:
+            assignments_by_device[ba.binding_id].append({
+                "id": branch.id,
+                "name": branch.name,
+                "binding_branch_id": ba.id
+            })
+
+        # 2. Batch query for fallback device.branch_id values
+        needed_branch_ids = {d.branch_id for d, _, _ in devices_raw if d.branch_id}
+        branches_by_id = {}
+        if needed_branch_ids:
+            all_needed_branches = db.query(Branch).filter(Branch.id.in_(needed_branch_ids)).all()
+            branches_by_id = {b.id: b for b in all_needed_branches}
+
         devices = []
         for device, emp_name, key_label in devices_raw:
             device.employee_name = emp_name or "Unknown"
             device.api_key_label = key_label or "Legacy/Unknown"
-            branch_assignments = db.query(BindingBranch).filter(
-                BindingBranch.binding_id == device.id,
-            ).all()
-            device.branch_list = []
-            for ba in branch_assignments:
-                branch = db.query(Branch).filter(Branch.id == ba.branch_id).first()
-                if branch:
-                    device.branch_list.append({"id": branch.id, "name": branch.name, "binding_branch_id": ba.id})
+            
+            # Use pre-fetched branch assignments
+            device.branch_list = list(assignments_by_device.get(device.id, []))
+            
+            # Fallback to direct device.branch_id if multi-branch list is empty
             if not device.branch_list and device.branch_id:
-                branch = db.query(Branch).filter(Branch.id == device.branch_id).first()
+                branch = branches_by_id.get(device.branch_id)
                 if branch:
                     device.branch_list.append({"id": branch.id, "name": branch.name, "binding_branch_id": None})
             devices.append(device)
@@ -172,14 +193,17 @@ async def dashboard_root(
             PunchLog.punch_type.ilike('%out%'),
         ).count()
 
-        employee_device_counts = {}
+        # 3. Batch query the active device counts grouped by employee_id
+        employee_ids = [d.employee_id for d in devices if d.employee_id]
+        device_counts_raw = db.query(DeviceBinding.employee_id, func.count(DeviceBinding.id)).\
+            filter(
+                DeviceBinding.employee_id.in_(employee_ids),
+                DeviceBinding.is_active == True,
+            ).group_by(DeviceBinding.employee_id).all() if employee_ids else []
+        
+        employee_device_counts = {emp_id: count for emp_id, count in device_counts_raw}
+        
         for d in devices:
-            if d.employee_id not in employee_device_counts:
-                count = db.query(DeviceBinding).filter(
-                    DeviceBinding.employee_id == d.employee_id,
-                    DeviceBinding.is_active == True,
-                ).count()
-                employee_device_counts[d.employee_id] = count if d.employee_id else 0
             d.device_count_for_employee = employee_device_counts.get(d.employee_id, 0) if d.employee_id else 0
 
         return templates.TemplateResponse(
@@ -403,7 +427,7 @@ async def approve_device(
     binding.approved_at = datetime.utcnow()
     binding.approved_by = admin.username
     db.commit()
-    await invalidate_cache("device_config:*")
+    await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
     return {"status": "approved"}
 
 
@@ -418,7 +442,7 @@ async def suspend_device(
         raise HTTPException(status_code=404, detail="Device not found")
     binding.registration_status = "suspended"
     db.commit()
-    await invalidate_cache("device_config:*")
+    await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
     return {"status": "suspended"}
 
 
@@ -454,7 +478,14 @@ async def set_active_device(
         ).update({"is_active": False})
     binding.is_active = True
     db.commit()
-    await invalidate_cache("device_config:*")
+    await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
+    if binding.employee_id:
+        other_bindings = db.query(DeviceBinding).filter(
+            DeviceBinding.employee_id == binding.employee_id,
+            DeviceBinding.id != binding_id,
+        ).all()
+        for ob in other_bindings:
+            await invalidate_cache(f"device_config:{ob.api_key_id}:{ob.device_uuid}")
     return {"status": "updated"}
 
 
@@ -466,10 +497,10 @@ async def unbind_device(
 ):
     binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
     if binding:
+        await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
         db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).delete()
         db.delete(binding)
         db.commit()
-    await invalidate_cache("device_config:*")
     return {"status": "success"}
 
 
@@ -496,7 +527,7 @@ async def bind_device_to_branch(
         if not existing:
             db.add(BindingBranch(binding_id=binding.id, branch_id=int(branch_id)))
     db.commit()
-    await invalidate_cache("device_config:*")
+    await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
     return {"status": "success"}
 
 
@@ -578,7 +609,7 @@ async def assign_branch_to_device(
         raise HTTPException(status_code=400, detail="Branch already assigned to this device")
     db.add(BindingBranch(binding_id=binding_id, branch_id=branch_id))
     db.commit()
-    await invalidate_cache("device_config:*")
+    await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
     return {"status": "success"}
 
 
@@ -595,9 +626,11 @@ async def remove_branch_from_device(
     ).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Branch not assigned to this device")
+    binding = db.query(DeviceBinding).filter(DeviceBinding.id == binding_id).first()
     db.delete(assignment)
     db.commit()
-    await invalidate_cache("device_config:*")
+    if binding:
+        await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
     return {"status": "success"}
 
 
@@ -647,8 +680,8 @@ async def create_branch(
     )
     db.add(new_branch)
     db.commit()
-    await invalidate_cache("device_config:*")
-    return {"status": "success"}
+    db.refresh(new_branch)
+    return {"status": "success", "id": new_branch.id}
 
 
 @router.put("/ui/branches/{branch_id}")
@@ -670,7 +703,13 @@ async def update_branch(
     branch.nfc_enabled = req.nfc_enabled
     branch.nfc_tag_data = req.nfc_tag_data if req.nfc_enabled else None
     db.commit()
-    await invalidate_cache("device_config:*")
+    affected_bindings = db.query(DeviceBinding).outerjoin(
+        BindingBranch, DeviceBinding.id == BindingBranch.binding_id
+    ).filter(
+        (DeviceBinding.branch_id == branch_id) | (BindingBranch.branch_id == branch_id)
+    ).all()
+    for ab in affected_bindings:
+        await invalidate_cache(f"device_config:{ab.api_key_id}:{ab.device_uuid}")
     return {"status": "success"}
 
 
@@ -691,7 +730,6 @@ async def delete_branch(
         raise HTTPException(status_code=400, detail="Cannot delete branch while devices are linked via multi-branch assignment. Remove the device-branch links first.")
     db.delete(branch)
     db.commit()
-    await invalidate_cache("device_config:*")
     return {"status": "success"}
 
 
@@ -706,7 +744,13 @@ async def toggle_branch_status(
         raise HTTPException(status_code=404, detail="Branch not found")
     branch.is_active = not branch.is_active
     db.commit()
-    await invalidate_cache("device_config:*")
+    affected_bindings = db.query(DeviceBinding).outerjoin(
+        BindingBranch, DeviceBinding.id == BindingBranch.binding_id
+    ).filter(
+        (DeviceBinding.branch_id == branch_id) | (BindingBranch.branch_id == branch_id)
+    ).all()
+    for ab in affected_bindings:
+        await invalidate_cache(f"device_config:{ab.api_key_id}:{ab.device_uuid}")
     return {"status": "success", "is_active": branch.is_active}
 
 

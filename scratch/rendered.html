@@ -1,10 +1,102 @@
-{% extends "layout.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Attendance — Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Leaflet (Interactive Map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- QRCode.js -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css?v=3">
+    
+</head>
+<body>
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
 
-{% block content %}
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="ph-fill ph-fingerprint logo-icon"></i>
+                <div class="logo-text">Virtual<br>Attendance</div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="/ui/#dashboard" class="nav-item active" data-tab="dashboard">
+                    <i class="ph ph-squares-four"></i>
+                    <span>Overview</span>
+                </a>
+                <a href="/ui/adms-sync-status" class="nav-item" id="navAdmsSync">
+                    <i class="ph ph-arrows-clockwise"></i>
+                    <span>ADMS Sync</span>
+                    <span id="admsSidebarBadge" style="margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: #64748b; display: inline-block; flex-shrink: 0;" title="Checking..."></span>
+                </a>
+                <a href="/ui/#devices" class="nav-item" data-tab="devices">
+                    <i class="ph ph-devices"></i>
+                    <span>Devices</span>
+                </a>
+                <a href="/ui/#geofence" class="nav-item" data-tab="geofence">
+                    <i class="ph ph-map-pin"></i>
+                    <span>Branches</span>
+                </a>
+                <a href="/ui/#settings" class="nav-item" data-tab="settings">
+                    <i class="ph ph-gear"></i>
+                    <span>ADMS Config</span>
+                </a>
+                <a href="/ui/#security" class="nav-item" data-tab="security">
+                    <i class="ph ph-key"></i>
+                    <span>API Keys</span>
+                </a>
+                <a href="/ui/#punch-types" class="nav-item" data-tab="punch-types">
+                    <i class="ph ph-list-dashes"></i>
+                    <span>Punch Types</span>
+                </a>
+                <a href="/ui/#profile" class="nav-item" data-tab="profile">
+                    <i class="ph ph-users"></i>
+                    <span>Users</span>
+                </a>
+                <a href="/ui/supervisors" class="nav-item">
+                    <i class="ph ph-users-three"></i>
+                    <span>Supervisors</span>
+                </a>
+                <a href="/ui/help" class="nav-item">
+                    <i class="ph ph-question"></i>
+                    <span>Help & Docs</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="/logout" class="nav-item" style="color: var(--danger);margin-bottom:0.5rem;">
+                    <i class="ph ph-sign-out"></i>
+                    <span>Logout</span>
+                </a>
+                <div class="version-badge">Middleware v1.0</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="main-wrapper">
+            <header class="top-header">
+                <div class="header-title" id="page-title">Dashboard Overview</div>
+                <div class="header-actions">
+                    <div class="admin-profile">
+                        <i class="ph-fill ph-user-circle"></i>
+                        <span>Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="content-area">
+                
 <!-- Content is handled via sidebar tabs defined in layout.html -->
 
 <!-- ═══════════════════ DASHBOARD TAB ═══════════════════ -->
-{% if not section or section == "dashboard" %}
+
 <div id="dashboard" class="tab-content">
     <div class="stats-grid">
         <div class="stat-card primary">
@@ -15,28 +107,24 @@
                 Heartbeat Active
             </div>
             <div class="stat-footer" style="margin-top: 0.75rem;">
-                SN: <strong class="font-mono">{{ sn }}</strong><br>
-                Alias: <strong style="color: var(--primary);">{{ device_name }}</strong>
+                SN: <strong class="font-mono"></strong><br>
+                Alias: <strong style="color: var(--primary);">Mobile Gateway</strong>
             </div>
         </div>
         <div class="stat-card success">
             <i class="ph ph-list-checks stat-icon"></i>
             <div class="stat-label">Total Punches</div>
-            <div class="stat-value">{{ punch_count }}</div>
+            <div class="stat-value">0</div>
             <div class="stat-footer" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
-                <span class="badge badge-success">{{ uploaded_count }} uploaded</span>
-                {% if failed_count > 0 %}
-                <span class="badge badge-danger">{{ failed_count }} failed</span>
-                {% endif %}
-                {% if pending_count > 0 %}
-                <span class="badge badge-warning">{{ pending_count }} pending</span>
-                {% endif %}
+                <span class="badge badge-success">0 uploaded</span>
+                
+                
             </div>
         </div>
         <div class="stat-card">
             <i class="ph ph-devices stat-icon"></i>
             <div class="stat-label">Bound Handsets</div>
-            <div class="stat-value">{{ device_count }}</div>
+            <div class="stat-value">0</div>
             <div class="stat-footer">Unique device IDs registered</div>
         </div>
         <div class="stat-card">
@@ -44,11 +132,11 @@
             <div class="stat-label">Today's Punches</div>
             <div style="display:flex; gap:1.5rem; align-items:baseline;">
                 <div>
-                    <span style="font-size:1.6rem; font-weight:700; color:#16a34a;">{{ today_in }}</span>
+                    <span style="font-size:1.6rem; font-weight:700; color:#16a34a;">0</span>
                     <span style="color:var(--text-muted); font-size:0.8rem;"> In</span>
                 </div>
                 <div>
-                    <span style="font-size:1.6rem; font-weight:700; color:#dc2626;">{{ today_out }}</span>
+                    <span style="font-size:1.6rem; font-weight:700; color:#dc2626;">0</span>
                     <span style="color:var(--text-muted); font-size:0.8rem;"> Out</span>
                 </div>
             </div>
@@ -76,111 +164,35 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for log in logs %}
-                    <tr>
-                        <td>
-                            <strong>{{ log.employee_name }}</strong><br>
-                            <span style="font-size: 0.7rem; color: var(--text-muted);">ID: {{ log.employee_id }}</span>
-                        </td>
-                        <td class="local-time" data-utc="{{ log.timestamp.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                        <td>
-                            <span class="badge {{ 'badge-success' if log.punch_type == 'In' else 'badge-danger' }}">
-                                {{ '🟢 In' if log.punch_type == 'In' else '🔴 Out' }}
-                            </span>
-                        </td>
-                        <td style="color: var(--text-muted); font-size: 0.75rem; font-family: monospace;">
-                            {{ "%.5f"|format(log.latitude) }}, {{ "%.5f"|format(log.longitude) }}
-                        </td>
-                        <td>
-                            {% if log.adms_status == 'uploaded' %}
-                                <span class="badge badge-success">✅ Uploaded</span>
-                            {% elif log.adms_status == 'failed' %}
-                                <span class="badge badge-danger">❌ Failed</span>
-                            {% else %}
-                                <span class="badge badge-warning">⏳ Pending</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if log.selfie_filename %}
-                            <a href="/ui/selfie/{{ log.selfie_filename }}" target="_blank" class="btn btn-sm btn-info">
-                                <i class="fas fa-camera"></i> View
-                            </a>
-                            {% else %}
-                            <span class="text-muted">&mdash;</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
+                    
                     <tr>
                         <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">
                             No attendance logs yet. Waiting for first punch...
                         </td>
                     </tr>
-                    {% endfor %}
+                    
                 </tbody>
             </table>
         </div>
     </div>
 </div>
-{% endif %}
+
 
 <!-- ═══════════════════ DEVICES TAB ═══════════════════ -->
 <div id="devices" class="tab-content" style="display: none;">
     <!-- 1. Devices List Section -->
     <div id="devicesListSection">
-
-        <!-- Registration Methods Info Card -->
-        <div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
-            <div style="display: flex; gap: 1.5rem; align-items: stretch; flex-wrap: wrap;">
-                <!-- Method 1: QR Onboarding (Instant) -->
-                <div style="flex: 1; min-width: 250px; padding: 1rem; background: #d1fae5; border-radius: 0.75rem; border: 1px solid #6ee7b7;">
-                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
-                        <div style="width: 40px; height: 40px; background: #10b981; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.25rem;">
-                            <i class="ph ph-qr-code"></i>
-                        </div>
-                        <div>
-                            <div style="font-weight: 700; font-size: 0.95rem; color: #065f46;">⚡ QR Code Onboarding</div>
-                            <div style="font-size: 0.75rem; color: #065f46;">Instant — no approval needed</div>
-                        </div>
-                    </div>
-                    <p style="font-size: 0.8rem; color: #065f46; margin: 0 0 0.75rem;">
-                        Generate a QR code for an employee. When scanned from the mobile app, the device is automatically registered, assigned to a branch, and activated — all in one step.
-                    </p>
-                    <button onclick="openOnboardingModal()" class="btn btn-success btn-sm w-full">
-                        <i class="ph ph-qr-code"></i> Generate Onboarding QR
-                    </button>
-                </div>
-
-                <!-- Method 2: Manual Registration -->
-                <div style="flex: 1; min-width: 250px; padding: 1rem; background: #fef3c7; border-radius: 0.75rem; border: 1px solid #fcd34d;">
-                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
-                        <div style="width: 40px; height: 40px; background: #f59e0b; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.25rem;">
-                            <i class="ph ph-devices"></i>
-                        </div>
-                        <div>
-                            <div style="font-weight: 700; font-size: 0.95rem; color: #92400e;">📝 Manual Registration</div>
-                            <div style="font-size: 0.75rem; color: #92400e;">Requires admin approval</div>
-                        </div>
-                    </div>
-                    <p style="font-size: 0.8rem; color: #92400e; margin: 0 0 0.75rem;">
-                        Employees enter Server URL + API Key in the app manually. Devices appear here as <strong>"Pending Approval"</strong>. You must approve each device and assign at least one branch.
-                    </p>
-                    <div style="font-size: 0.75rem; color: #92400e; font-weight: 600;">
-                        <i class="ph ph-checks"></i> Steps: Approve → Assign Branch → Active
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <div>
                     <div class="card-title">Device Registration & Approval</div>
                     <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">
-                        Employees can register up to <strong>{{ max_devices }} devices</strong>. Multiple branches per device are supported.
+                        Employees can register up to 5 devices. Multiple branches per device are supported.
+                        New devices start as <strong>Pending Approval</strong> until an admin approves them.
                     </p>
                 </div>
-                <span class="badge badge-primary">{{ devices|length }} registered</span>
+            
+                <button onclick="openOnboardingModal()" style="background:#10b981; color:white; border:none; padding:0.5rem 1rem; border-radius:0.5rem; cursor:pointer;">📱 Generate Onboarding QR</button>
             </div>
             <div class="table-container">
                 <table>
@@ -196,88 +208,13 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for device in devices %}
-                        <tr style="{% if device.registration_status == 'pending_approval' %}background: #fffbeb;{% elif device.registration_status == 'suspended' %}background: #fef2f2; opacity: 0.8;{% endif %}">
-                            <td>
-                                {% if device.employee_id %}
-                                    <strong>{{ device.employee_name }}</strong><br>
-                                    <span style="font-size: 0.75rem; color: var(--text-muted);">
-                                        ID: {{ device.employee_id }} | {{ device.device_label or '(no label)' }}
-                                    </span><br>
-                                    <span style="font-size: 0.7rem; color: #6366f1; font-weight: 600;">
-                                        🔑 Key: {{ device.api_key_label }}
-                                    </span>
-                                {% else %}
-                                    <div style="background: #fffbeb; padding: 0.5rem; border: 1px dashed #f59e0b; border-radius: 0.5rem;">
-                                        <span style="font-size: 0.75rem; color: #b45309; display: block; margin-bottom: 0.25rem;">⚠️ No Employee Assigned</span>
-                                        <button type="button" class="badge" style="background: #f59e0b; color: white; border: none; cursor: pointer;" onclick="openAssignDialog({{ device.id }}, '{{ device.device_label or 'New Device' }}')">➕ Assign Employee</button>
-                                    </div>
-                                {% endif %}
-                            </td>
-                            <td style="font-family: monospace; font-size: 0.72rem; color: var(--primary);">
-                                {{ device.device_uuid[:16] }}...
-                            </td>
-                            <td style="text-align:center;">
-                                {% if device.device_count_for_employee %}
-                                    <span style="font-weight:600; {% if device.device_count_for_employee >= max_devices %}color:red;{% endif %}">
-                                        {{ device.device_count_for_employee }}/{{ max_devices }}
-                                    </span>
-                                {% else %}—{% endif %}
-                            </td>
-                            <td style="text-align:center;">
-                                {% if device.is_active %}
-                                    <span class="badge badge-success">Active</span>
-                                {% else %}
-                                    <span class="badge" style="background:#e0e7ff;color:#4338ca;">Inactive</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if device.registration_status == 'pending_approval' %}
-                                    <span class="badge badge-warning">⏳ Pending</span>
-                                {% elif device.registration_status == 'approved' or device.registration_status == 'active' %}
-                                    <span class="badge badge-success">✅ Approved</span>
-                                {% elif device.registration_status == 'suspended' %}
-                                    <span class="badge badge-danger">🚫 Suspended</span>
-                                {% else %}
-                                    <span class="badge">{{ device.registration_status }}</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
-                                    {% for ba in device.branch_list %}
-                                        <span style="display:inline-flex; align-items:center; gap:3px; background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:500;">
-                                            {{ ba.name }}
-                                        </span>
-                                    {% endfor %}
-                                    {% if not device.branch_list %}
-                                        <span style="font-size:0.7rem;color:#999;">Any (No restriction)</span>
-                                    {% endif %}
-                                </div>
-                            </td>
-                            <td style="text-align: right; white-space: nowrap;">
-                                {% if device.registration_status == 'pending_approval' %}
-                                    <button class="btn btn-sm btn-success" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
-                                            onclick="approveDevice({{ device.id }})">✅ Approve</button>
-                                {% elif device.registration_status in ('approved', 'active') %}
-                                    <button class="btn btn-sm btn-danger" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;"
-                                            onclick="suspendDevice({{ device.id }})">🚫 Suspend</button>
-                                {% elif device.registration_status == 'suspended' %}
-                                    <button class="btn btn-sm btn-success" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
-                                            onclick="approveDevice({{ device.id }})">↩ Re-approve</button>
-                                {% endif %}
-                                <button class="btn btn-sm btn-outline" onclick="openDeviceModal({{ device.id }}, '{{ device.device_label or '' }}')"
-                                        style="background:#e0e7ff;color:#4338ca;border-color:#c7d2fe;">✏️ Edit</button>
-                                <button class="btn btn-sm btn-outline" onclick="unbindDevice({{ device.id }})"
-                                        style="background:#fef2f2;color:#b91c1c;border-color:#fca5a5;">Unbind</button>
-                            </td>
-                        </tr>
-                        {% else %}
+                        
                         <tr>
                             <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
                                 No devices registered yet.
                             </td>
                         </tr>
-                        {% endfor %}
+                        
                     </tbody>
                 </table>
             </div>
@@ -350,7 +287,7 @@
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <div class="card-title" style="margin: 0;">API Key Management</div>
-                <button type="button" class="btn btn-success" onclick="openApiKeyModal()">➕ Generate New Key</button>
+                <button type="button" onclick="openApiKeyModal()" style="background:#10b981; color:white; border:none; padding:0.5rem 1rem; border-radius:0.5rem; cursor:pointer;">➕ Generate New Key</button>
             </div>
             <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
                 Mobile clients must include an <code>X-API-Key</code> header with every punch request. Generate keys here and configure them in the mobile app settings.
@@ -387,8 +324,8 @@
         
         <div id="keyGenerateForm">
             <div class="form-group">
-                <label class="form-label">Key Label (e.g. "Site A Phones")</label>
-                <input type="text" id="key_label" class="form-control" placeholder="Mobile Client" value="Mobile Client">
+                <label>Key Label (e.g. "Site A Phones")</label>
+                <input type="text" id="key_label" placeholder="Mobile Client" value="Mobile Client">
             </div>
             <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
                 <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeApiKeyModal()">Cancel</button>
@@ -401,7 +338,7 @@
             <div style="background: #d1fae5; border: 1px solid #10b981; border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">
                 <p style="font-size: 0.8rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem; text-align: center;">⚠️ Copy this key NOW. It will not be shown again.</p>
                 <code id="newKeyValue" style="font-size: 0.85rem; word-break: break-all; color: #065f46; display: block; background: #fff; padding: 0.5rem; border-radius: 0.375rem; border: 1px solid #a7f3d0; text-align: center;"></code>
-                <button type="button" class="btn btn-success" onclick="copyKey()" style="margin-top: 0.75rem; width: 100%;">📋 Copy to Clipboard</button>
+                <button type="button" onclick="copyKey()" style="margin-top: 0.75rem; width: 100%; background: #10b981; border: none; padding: 0.5rem; border-radius: 0.375rem; color: white; cursor: pointer;">📋 Copy to Clipboard</button>
             </div>
             <button type="button" class="btn btn-primary" style="width: 100%;" onclick="closeApiKeyModal()">Done</button>
         </div>
@@ -415,8 +352,8 @@
         </div>
         <input type="hidden" id="edit_key_id" value="">
         <div class="form-group">
-            <label class="form-label">Key Label</label>
-            <input type="text" id="edit_key_label" class="form-control" placeholder="Site A Phones" required>
+            <label>Key Label</label>
+            <input type="text" id="edit_key_label" placeholder="Site A Phones" required>
         </div>
         <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
             <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeApiKeyEditModal()">Cancel</button>
@@ -642,22 +579,22 @@
         <form id="admsForm">
             <div class="form-group">
                 <label class="form-label">ADMS Server URL</label>
-                <input type="text" id="server_url" class="form-control" value="{{ server_url }}" placeholder="https://adms.example.com">
+                <input type="text" id="server_url" class="form-control" value="" placeholder="https://adms.example.com">
                 <small style="color: var(--text-muted);">Include http:// or https:// — no trailing slash.</small>
             </div>
             <div class="form-group" style="margin-top: 1rem;">
                 <label class="form-label">Virtual Machine Serial Number (SN)</label>
-                <input type="text" id="serial_number" class="form-control" value="{{ sn }}" placeholder="VIRTUAL_MOBILE_01">
+                <input type="text" id="serial_number" class="form-control" value="" placeholder="VIRTUAL_MOBILE_01">
                 <small style="color: var(--text-muted);">This SN must be registered in your ADMS dashboard.</small>
             </div>
             <div class="form-group" style="margin-top: 1rem;">
                 <label class="form-label">Default Timezone Offset (GMT+)</label>
-                <input type="number" id="timezone_offset" class="form-control" value="{{ timezone_offset }}" placeholder="7">
+                <input type="number" id="timezone_offset" class="form-control" value="7" placeholder="7">
                 <small style="color: var(--text-muted);">Fallback offset used if device data is missing. Jakarta=7, Bali=8, Jayapura=9.</small>
             </div>
             <div class="form-group" style="margin-top: 1rem;">
                 <label class="form-label">Device Name (Alias)</label>
-                <input type="text" id="device_name" class="form-control" value="{{ device_name }}" placeholder="Mobile Gateway">
+                <input type="text" id="device_name" class="form-control" value="Mobile Gateway" placeholder="Mobile Gateway">
                 <small style="color: var(--text-muted);">The friendly name that appears in the ZKTeco console.</small>
             </div>
             <div style="display: flex; gap: 1rem; margin-top: 2rem;">
@@ -724,8 +661,8 @@
             Configure the types of punches available to mobile app users. Mobile users must tap "Sync Offline Data" in the app to see updates.
         </p>
         
-        <div class="table-container">
-            <table>
+        <div class="table-responsive">
+            <table class="table">
                 <thead>
                     <tr>
                         <th>Code</th>
@@ -734,7 +671,7 @@
                         <th>Icon</th>
                         <th>Color</th>
                         <th>Geo?</th>
-                        <th class="text-right" style="text-align: right;">Actions</th>
+                        <th class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="punchTypesTbody">
@@ -809,7 +746,7 @@
             <form id="profileForm">
                 <div class="form-group">
                     <label class="form-label">Admin Username</label>
-                    <input type="text" id="admin_username" value="{{ admin.username }}" readonly class="form-control" style="background: #f1f5f9; color: #64748b;">
+                    <input type="text" id="admin_username" value="admin" readonly class="form-control" style="background: #f1f5f9; color: #64748b;">
                 </div>
                 <div class="form-group" style="margin-top: 0.75rem;">
                     <label class="form-label">New Password</label>
@@ -883,131 +820,206 @@
 </div>
 
 <!-- ═══════════════════ SUPERVISORS TAB ═══════════════════ -->
-{% if section == "supervisors" %}
-<div class="supervisor-management">
-  <h2><i class="fas fa-users-cog"></i> Supervisor Management</h2>
-  
-  <!-- Assignment Form -->
-  <div class="card">
-    <h3>Assign Supervisor to Employee</h3>
-    <form id="supervisorForm" onsubmit="return assignSupervisor(event)">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Supervisor (Employee ID)</label>
-          <input type="text" id="supervisor_id" class="form-control" placeholder="e.g., SUP001" required>
+
+
+
+            </main>
         </div>
-        <div class="form-group">
-          <label>Team Member (Employee ID)</label>
-          <input type="text" id="employee_id" class="form-control" placeholder="e.g., EMP001" required>
-        </div>
-        <div class="form-group" style="align-self: flex-end;">
-          <button type="submit" class="btn btn-primary">Assign</button>
-        </div>
-      </div>
-    </form>
-  </div>
-  
-  <!-- Assignment List -->
-  <div class="card">
-    <h3>Current Assignments</h3>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Supervisor</th>
-          <th>Employee</th>
-          <th>Created</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="supervisorAssignments">
-        <tr><td colspan="5" class="text-muted">Loading...</td></tr>
-      </tbody>
-    </table>
-  </div>
-  
-  <!-- Pending Corrections -->
-  <div class="card">
-    <h3>Pending Attendance Corrections</h3>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Employee</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Date</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="pendingCorrections">
-        <tr><td colspan="5" class="text-muted">No pending corrections</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
+    </div>
 
-<script>
-async function assignSupervisor(event) {
-  event.preventDefault();
-  const supervisor_id = document.getElementById('supervisor_id').value;
-  const employee_id = document.getElementById('employee_id').value;
-  
-  const response = await fetch('/ui/supervisors/assign', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({supervisor_id, employee_id})
-  });
-  
-  if (response.ok) {
-    notify('Supervisor assigned successfully');
-    document.getElementById('supervisorForm').reset();
-    loadSupervisorAssignments();
-  } else {
-    const data = await response.json();
-    notify(data.detail || 'Failed to assign supervisor');
-  }
-}
+    <script>
+        // ── Toast Notification System ────────────────────────────────────
+        function notify(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
 
-async function removeAssignment(id) {
-  if (!confirm('Are you sure you want to remove this assignment?')) return;
-  
-  const response = await fetch(`/ui/supervisors/assign/${id}`, {method: 'DELETE'});
-  if (response.ok) {
-    notify('Assignment removed');
-    loadSupervisorAssignments();
-  }
-}
+            const icons = {
+                success: 'ph-check-circle',
+                error: 'ph-x-circle',
+                warning: 'ph-warning',
+                info: 'ph-info',
+            };
 
-async function loadSupervisorAssignments() {
-  const response = await fetch('/ui/supervisors/list');
-  const data = await response.json();
-  
-  const tbody = document.getElementById('supervisorAssignments');
-  if (data.assignments.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-muted">No assignments found</td></tr>';
-    return;
-  }
-  
-  tbody.innerHTML = data.assignments.map(a => `
-    <tr>
-      <td>${a.id}</td>
-      <td>${a.supervisor_id}</td>
-      <td>${a.employee_id}</td>
-      <td>${new Date(a.created_at).toLocaleDateString()}</td>
-      <td><button onclick="removeAssignment(${a.id})" class="btn btn-sm btn-danger">Remove</button></td>
-    </tr>
-  `).join('');
-}
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `<i class="ph ${icons[type] || icons.info}"></i> ${message}`;
+            toast.addEventListener('click', () => {
+                toast.classList.add('toast-out');
+                setTimeout(() => toast.remove(), 300);
+            });
+            container.appendChild(toast);
 
-// Load on page load
-document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
-</script>
+            setTimeout(() => {
+                if (toast.isConnected) {
+                    toast.classList.add('toast-out');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 4000);
+        }
 
-{% endif %}
+        // ── Modal Helpers ───────────────────────────────────────────────
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) {
+                modal.classList.add('active');
+                modal.style.display = 'flex';
+            }
+        }
 
-{% endblock %}
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) {
+                modal.classList.remove('active');
+                modal.style.display = 'none';
+            }
+        }
 
-{% block extra_js %}
+        // Close modal on overlay click
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal-overlay')) {
+                e.target.classList.remove('active');
+                e.target.style.display = 'none';
+            }
+        });
+
+        // ── Highlight active sidebar nav ────────────────────────────────
+        document.addEventListener('DOMContentLoaded', function() {
+            const path = window.location.pathname;
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            const pathMap = {
+                '/ui/adms-sync-status': 'ADMS Sync',
+                '/ui/supervisors': 'Supervisors',
+                '/ui/help': 'Help & Docs',
+            };
+            
+            const matchedTitle = pathMap[path];
+            if (matchedTitle) {
+                navItems.forEach(item => {
+                    item.classList.remove('active');
+                    if (item.innerText.trim() === matchedTitle) {
+                        item.classList.add('active');
+                    }
+                });
+                const titleEl = document.getElementById('page-title');
+                if (titleEl) titleEl.innerText = matchedTitle;
+            }
+
+            // ADMS Sidebar Status Badge
+            updateAdmsBadge();
+            setInterval(updateAdmsBadge, 15000);
+        });
+
+        async function updateAdmsBadge() {
+            const badge = document.getElementById('admsSidebarBadge');
+            if (!badge) return;
+            try {
+                const res = await fetch('/ui/adms-sync-info');
+                if (!res.ok) throw new Error('Not available');
+                const info = await res.json();
+                if (info.heartbeat_connected) {
+                    badge.style.background = '#10b981';
+                    badge.title = 'ADMS Connected';
+                } else {
+                    badge.style.background = '#ef4444';
+                    badge.title = info.heartbeat_last_error || 'ADMS Disconnected';
+                }
+            } catch {
+                badge.style.background = '#64748b';
+                badge.title = 'Status unknown';
+            }
+        }
+
+        // ── Confirmation Modal ──────────────────────────────────────────
+        function showConfirm(html, onConfirm) {
+            const modal = document.getElementById('confirmModal');
+            const msg = document.getElementById('confirmMsg');
+            const yesBtn = document.getElementById('confirmYesBtn');
+            const noBtn = document.getElementById('confirmNoBtn');
+            if (!modal || !msg || !yesBtn || !noBtn) return;
+
+            msg.innerHTML = html;
+            openModal('confirmModal');
+
+            const cleanup = () => {
+                closeModal('confirmModal');
+                yesBtn.onclick = null;
+                noBtn.onclick = null;
+            };
+
+            yesBtn.onclick = () => { cleanup(); onConfirm(); };
+            noBtn.onclick = cleanup;
+        }
+
+        // ── Tab Navigation ──────────────────────────────────────────────
+        function showTab(tabId) {
+            document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            const supervisorDiv = document.querySelector('.supervisor-management');
+            if (supervisorDiv) supervisorDiv.style.display = 'none';
+            
+            const content = document.getElementById(tabId);
+            if (content) {
+                content.style.display = 'block';
+                const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+                if (navItem) {
+                    navItem.classList.add('active');
+                    document.getElementById('page-title').innerText = navItem.innerText.trim();
+                }
+                
+                if (tabId === 'security') loadApiKeys();
+                if (tabId === 'geofence') { loadBranches(); initBranchMap(); }
+                if (tabId === 'profile') loadUsers();
+                if (tabId === 'punch-types') loadPunchTypes();
+                if (tabId === 'settings') loadAdmsSyncSettings();
+            }
+        }
+
+        document.querySelectorAll('.nav-item[data-tab]').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
+                    e.preventDefault();
+                    const targetTab = tab.dataset.tab;
+                    showTab(targetTab);
+                    window.location.hash = targetTab;
+                }
+            });
+        });
+
+        function localizeTimestamps() {
+            document.querySelectorAll('.local-time').forEach(el => {
+                const utcStr = el.getAttribute('data-utc');
+                if (utcStr) {
+                    const localDate = new Date(utcStr);
+                    if (!isNaN(localDate.getTime())) {
+                        const year = localDate.getFullYear();
+                        const month = String(localDate.getMonth() + 1).padStart(2, '0');
+                        const day = String(localDate.getDate()).padStart(2, '0');
+                        const hours = String(localDate.getHours()).padStart(2, '0');
+                        const minutes = String(localDate.getMinutes()).padStart(2, '0');
+                        const seconds = String(localDate.getSeconds()).padStart(2, '0');
+                        el.textContent = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                    }
+                }
+            });
+        }
+
+        window.addEventListener('load', () => {
+            localizeTimestamps();
+            if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
+                const hash = window.location.hash.replace('#', '') || 'dashboard';
+                showTab(hash);
+            }
+        });
+
+        window.addEventListener('hashchange', () => {
+            if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
+                const hash = window.location.hash.replace('#', '') || 'dashboard';
+                showTab(hash);
+            }
+        });
+    </script>
+    
 <!-- Confirmation Modal -->
 <div id="confirmModal" class="modal-overlay">
     <div class="modal modal-sm">
@@ -2031,12 +2043,12 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             const lastIp = k.last_used_ip || '—';
             const actions = [];
             if (k.is_active && k.expiry_status !== 'expired') {
-                actions.push(`<button class="btn btn-sm btn-outline" onclick="rotateKey(${k.id})" title="Rotate key (grace period)" style="color:var(--primary);border-color:var(--primary-light);">🔄 Rotate</button>`);
-                actions.push(`<button class="btn btn-sm btn-outline" onclick="revokeKey(${k.id})" title="Revoke" style="color:var(--danger);border-color:var(--danger);margin-left:4px;">Revoke</button>`);
+                actions.push(`<button class="btn-danger-sm" onclick="rotateKey(${k.id})" title="Rotate key (grace period)" style="background:#e0e7ff;color:#4338ca;">🔄 Rotate</button>`);
+                actions.push(`<button class="btn-danger-sm" onclick="revokeKey(${k.id})" title="Revoke">Revoke</button>`);
             } else {
-                actions.push(`<button class="btn btn-sm btn-danger" onclick="deleteKey(${k.id})" title="Permanently delete">Delete</button>`);
+                actions.push(`<button class="btn-danger-sm" onclick="deleteKey(${k.id})" title="Permanently delete" style="background:#991b1b;">Delete</button>`);
             }
-            actions.push(`<button class="btn btn-sm btn-outline" onclick="renameKey(${k.id},'${k.label.replace(/'/g,"\\'")}')" title="Rename" style="margin-left:4px;">✏️</button>`);
+            actions.push(`<button class="btn-sm" onclick="renameKey(${k.id},'${k.label.replace(/'/g,"\\'")}')" title="Rename" style="margin-left:4px;">✏️</button>`);
             return `
             <tr>
                 <td><strong>${k.label}</strong></td>
@@ -2202,9 +2214,9 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
                     </div>
                 </td>
                 <td>${pt.requires_geofence ? '✅' : '❌'}</td>
-                <td style="text-align:right; white-space:nowrap;">
-                    <button class="btn btn-sm btn-outline" style="color:var(--primary); border-color:var(--primary-light);" onclick="editPunchType('${pt.code}')">Edit</button>
-                    <button class="btn btn-sm btn-danger" onclick="deletePunchType('${pt.code}')" style="margin-left:4px;">Delete</button>
+                <td style="text-align:right;">
+                    <button class="btn-danger-sm" style="background:#e0e7ff; color:#4338ca; border-color:#c7d2fe;" onclick="editPunchType('${pt.code}')">Edit</button>
+                    <button class="btn-danger-sm" onclick="deletePunchType('${pt.code}')">Delete</button>
                 </td>
             </tr>`).join('');
     }
@@ -2714,4 +2726,6 @@ async function generateOnboardQR() {
     .employee-item.selected { background: #e0f2fe; border-left: 4px solid var(--primary); }
     .employee-item:last-child { border-bottom: none; }
 </style>
-{% endblock %}
+
+</body>
+</html>

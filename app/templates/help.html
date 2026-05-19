@@ -319,43 +319,97 @@ const helpDocs = {
                 {
                     id: 'registering_device',
                     title: 'Registering Your Device',
-                    content: `<p>Device registration links your phone to your employee account. This ensures only authorized devices can punch attendance.</p>
-<h3>Automatic Registration</h3>
-<p>When you first open the app and enter your API key, the app automatically sends a registration request containing your device's unique hardware ID, device name/model, and Employee ID (linked via API key).</p>
-<h3>Approval Flow</h3>
+                    content: `<p>Device registration links a phone to an employee account. This ensures only authorized devices can punch attendance.</p>
+
+<h3>Two Registration Methods</h3>
+
+<h4>⏺️ Method 1: Manual Registration</h4>
 <ol>
-<li>Registration request is sent to the server</li>
-<li>Admin reviews the request in the web dashboard</li>
-<li>Admin assigns your device to a branch (office location)</li>
-<li>Once approved, the device status changes to "Active"</li>
-<li>You'll see "Ready to Punch" on the home screen</li>
+<li>Employee opens the app and goes to Settings</li>
+<li>Enters the Server URL (provided by IT admin)</li>
+<li>Enters their API Key (generated from admin dashboard)</li>
+<li>Taps "Register to Server"</li>
+<li>The app sends a registration request with the device's unique hardware ID (Device UUID)</li>
+<li>Device appears in admin dashboard with status "Pending Approval"</li>
 </ol>
-<h3>Status Indicators</h3>
+
+<h4>⏺️ Method 2: QR Code Onboarding (Fast)</h4>
+<ol>
+<li>Admin generates an Onboarding QR code from the Devices tab</li>
+<li>Admin selects the employee, branch, and API key</li>
+<li>A QR code is generated containing an encrypted token</li>
+<li>Employee scans the QR code from the app's Settings screen</li>
+<li>The app auto-configures server URL, registers the device, and activates it immediately</li>
+<li><strong>No approval needed</strong> — the device is ready to punch instantly</li>
+</ol>
+
+<h3>Approval Flow (Manual Method)</h3>
+<ol>
+<li>Device appears as <strong>"Pending Approval"</strong> in the Devices tab</li>
+<li>Admin clicks <strong>"Approve"</strong> to accept the device</li>
+<li>Status changes to <strong>"Approved"</strong> — but the device still needs a branch assignment</li>
+<li>Admin assigns one or more branches to the device (click Edit → Add Branch)</li>
+<li>Once branches are assigned, the device becomes <strong>"Active"</strong></li>
+<li>Employee sees "Ready to Punch" on their home screen</li>
+</ol>
+
+<h3>Multi-Branch Assignment</h3>
+<p>A device can be assigned to <strong>multiple branches</strong> at once. This allows employees who work across multiple locations to clock in from any of them. To assign branches:</p>
+<ol>
+<li>Click <strong>"Edit"</strong> on a device in the Devices tab</li>
+<li>In the modal, use the dropdown to <strong>"Add Branch"</strong></li>
+<li>Repeat for each branch the employee should have access to</li>
+<li>To remove a branch, click the <strong>"×"</strong> next to it</li>
+</ol>
+
+<h3>Device Limit</h3>
+<p>The system enforces a maximum number of devices per employee (configurable in App Settings, default: <strong>5</strong>). When an employee reaches the limit:</p>
 <ul>
-<li><strong>"Pending Approval"</strong> — Waiting for admin to approve</li>
-<li><strong>"No Branch Assigned"</strong> — Approved but not yet linked to a branch</li>
-<li><strong>"Ready"</strong> — Fully active and ready to punch</li>
-<li><strong>"Suspended"</strong> — Device has been deactivated by admin</li>
-</ul>`
+<li>New registration attempts are rejected with "Max Devices Reached"</li>
+<li>The admin must deactivate or unbind an old device to free up a slot</li>
+<li>This prevents one employee from accumulating too many registered devices</li>
+</ul>
+
+<h3>Device Status Indicators</h3>
+<ul>
+<li><strong>⏳ Pending Approval</strong> — Waiting for admin action</li>
+<li><strong>✅ Approved</strong> — Approved but needs branch assignment</li>
+<li><strong>✅ Active</strong> — Fully functional, ready to punch</li>
+<li><strong>🚫 Suspended</strong> — Deactivated by admin (cannot punch)</li>
+<li><strong>⚠️ Max Devices</strong> — Employee has reached the device limit</li>
+</ul>
+
+<h3>Device Labels & Notes</h3>
+<p>Admins can add labels (e.g., "John's Samsung A55") and notes to each device for easy identification. These are visible in the device list and help track which device belongs to whom.</p>`
                 },
                 {
                     id: 'multi_device',
                     title: 'Using Multiple Devices',
-                    content: `<p>You can register multiple devices under the same employee account. This is useful if:</p>
+                    content: `<p>Employees can register multiple devices under the same account. This supports:</p>
 <ul>
-<li>You switch between phone and tablet</li>
-<li>You get a new phone and want both active during transition</li>
-<li>You use a work-provided device and a personal device</li>
+<li>Switching between phone and tablet</li>
+<li>Transition periods when upgrading phones</li>
+<li>Work-provided + personal devices</li>
+<li>Backup devices</li>
 </ul>
 <h3>Rules</h3>
 <ul>
-<li>Each device gets its own API key</li>
-<li>Each device registers independently</li>
+<li>Each device registers independently with its own API key</li>
 <li>All devices are linked to the same Employee ID</li>
-<li>Punches from any device are recorded under your name</li>
-<li>Admin can suspend individual devices if needed</li>
+<li>Punches from any device are recorded under the employee's name</li>
+<li>Server enforces a maximum of 5 active devices per employee (configurable)</li>
+<li>Admin can suspend individual devices (e.g., lost/stolen phone)</li>
+<li>Only one device needs to be marked as "Active" at a time</li>
 </ul>
-<p>To add another device, install the app on the new device and repeat the setup process with a new API key.</p>`
+<h3>Admin Actions</h3>
+<ul>
+<li><strong>Approve</strong> — Accept a pending device registration</li>
+<li><strong>Suspend</strong> — Deactivate a device (employee can't punch)</li>
+<li><strong>Set Active</strong> — Make this device the primary active one (deactivates others)</li>
+<li><strong>Unbind</strong> — Permanently remove a device registration</li>
+<li><strong>Assign Employee</strong> — Link an unregistered device to an employee</li>
+<li><strong>Edit Label</strong> — Rename or add notes to a device</li>
+</ul>`
                 }
             ]
         },
@@ -406,8 +460,18 @@ const helpDocs = {
 <ol>
 <li>Your company defines geofence zones around each office branch</li>
 <li>Each branch has a center point (lat/lng) and radius (in meters)</li>
-<li>When you punch, the app checks if your GPS location falls within any assigned branch's zone</li>
-<li>If you're outside all zones, the punch is rejected (for geofenced types)</li>
+<li>Additionally, branches can have <strong>checkpoints</strong> — specific clock-in points like "Main Gate" or "Building A Entrance", each with their own GPS coordinate and radius</li>
+<li>When a mobile user punches, the server checks if their GPS location falls within the branch center OR any of its checkpoints</li>
+<li>If they're outside all zones, the punch is rejected (for geofenced types)</li>
+</ol>
+<h3>Managing Checkpoints (Admin UI)</h3>
+<p>To add clock-in checkpoints to a branch:</p>
+<ol>
+<li>Go to <strong>Branches</strong> tab in the admin dashboard</li>
+<li>Click <strong>Edit</strong> on a branch, or create a new one</li>
+<li>Use the <strong>Checkpoints</strong> section to add locations like "Main Gate", "Parking Lot", "Building A"</li>
+<li>Each checkpoint has its own latitude, longitude, and radius (typically smaller than the branch radius)</li>
+<li>Toggle checkpoints on/off as needed</li>
 </ol>
 <h3>Tips</h3>
 <ul>
@@ -417,7 +481,7 @@ const helpDocs = {
 <li>If GPS is slow, wait a moment for the location to stabilize</li>
 </ul>
 <div class="info-box"><strong>Mock Location Detection:</strong> If your phone detects mock locations (GPS spoofing), the punch is flagged but not automatically rejected. The admin can review flagged punches.</div>`
-                },
+                    },
                 {
                     id: 'duplicate_protection',
                     title: 'Duplicate Punch Protection',
@@ -606,9 +670,34 @@ const helpDocs = {
 <li>Your fingerprint template is stored securely by your device's hardware</li>
 </ol>
 <h3>Biometric Session Timeout</h3>
-<p>You can set how often to re-authenticate: Every Punch, 30 seconds, 1 minute, or 5 minutes.</p>
-<div class="info-box"><strong>Device Security:</strong> If your device is rooted/jailbroken, punching is blocked and a red "Device Compromised" banner is shown. Contact your IT admin.</div>`
-                },
+<p>You can set how often to re-authenticate: Every Punch, 30 seconds, 1 minute, or 5 minutes.</p>`
+                    },
+                    {
+                        id: 'device_security_check',
+                        title: 'Device Security Check',
+                        content: `<p>The mobile app checks device security status on every launch and shows it on the Dashboard.</p>
+<h3>Security Status Indicators</h3>
+<ul>
+<li><strong>🟢 Device Secure</strong> — Green indicator on dashboard. No root access detected. You can punch normally.</li>
+<li><strong>🔴 Device Compromised</strong> — Red indicator. Root access (su binary) detected. Punching is blocked to prevent attendance fraud.</li>
+</ul>
+<h3>What This Means</h3>
+<p>The security check specifically looks for <strong>root access</strong> — the ability to run privileged commands (su binary) on the device. This is different from:</p>
+<ul>
+<li><strong>Unlocked Bootloader</strong> — NOT treated as compromise. Custom ROMs and developer phones can still use the app.</li>
+<li><strong>Developer Mode / USB Debugging</strong> — NOT treated as compromise. These are normal development tools.</li>
+<li><strong>Custom ROMs</strong> — NOT treated as compromise unless the ROM itself includes root access (superuser binaries).</li>
+</ul>
+<h3>What to Do If Blocked</h3>
+<p>If you see a red "Device Compromised" message:</p>
+<ol>
+<li>Check if your device has root management apps (Magisk, SuperSU)</li>
+<li>Temporarily disable root using your root manager's "hide" or "unroot" feature</li>
+<li>Restart the app and try punching again</li>
+<li>If you need root for other apps, contact your IT admin for guidance</li>
+</ol>
+<div class="info-box"><strong>Note:</strong> The security check runs on your device only. No root status data is sent to the server — it's purely a local check. If the check fails (e.g., can't determine status), the app assumes the device is secure (fail-open) to avoid blocking legitimate users.</div>`
+                    },
                 {
                     id: 'certificate_pinning',
                     title: 'Certificate Pinning',

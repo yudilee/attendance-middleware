@@ -174,9 +174,10 @@ async def get_punch_history(
     employee_id: Optional[str] = None,
     cursor: Optional[str] = None,
     limit: int = 50,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
-    """Paginated punch log history with cursor-based pagination."""
+    """Paginated punch log history with cursor-based or offset-based pagination."""
     query = db.query(PunchLog)
 
     if employee_id:
@@ -189,7 +190,7 @@ async def get_punch_history(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid cursor format. Use ISO timestamp.")
 
-    logs = query.order_by(PunchLog.timestamp.desc()).limit(limit + 1).all()
+    logs = query.order_by(PunchLog.timestamp.desc()).offset(offset).limit(limit + 1).all()
 
     has_more = len(logs) > limit
     if has_more:

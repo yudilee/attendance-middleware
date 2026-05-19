@@ -16,7 +16,7 @@ from app.database.models import (
     AppConfig,
 )
 from app.services.auth import verify_api_key
-from app.services.auth_ui import SECRET_KEY, ALGORITHM
+from app.services.auth_ui import SECRET_KEY, ALGORITHM, get_current_admin
 from app.api.v1.schemas import (
     DeviceConfigResponse, BranchInfo,
     AppStatusResponse, OnboardGenerateRequest, OnboardDeviceRequest,
@@ -270,7 +270,7 @@ async def update_fcm_token(
 async def generate_onboard_qr(
     req: OnboardGenerateRequest,
     db: Session = Depends(get_db),
-    admin=Depends(verify_api_key),  # Will use get_current_admin in main.py wiring
+    admin=Depends(get_current_admin),
 ):
     """Generates a secure QR payload for device onboarding."""
     payload = {

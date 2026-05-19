@@ -10,7 +10,15 @@ from sqlalchemy.orm import sessionmaker
 
 # Database setup
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://attendance:attendance123@db:5432/attendance_db")
-engine = create_engine(DATABASE_URL)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True
+    )
 SessionLocal = sessionmaker(bind=engine)
 
 async def sync_punches_to_adms(ctx, punch_log_id: int) -> dict:

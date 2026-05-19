@@ -47,16 +47,18 @@ async def get_team_attendance(
     request: "Request",
     device_uuid: Optional[str] = None,
     date: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
     api_key=Depends(verify_api_key),
     db: Session = Depends(get_db),
 ):
-    """Get attendance status of all team members for a supervisor."""
+    """Get attendance status of all team members for a supervisor with pagination."""
     binding = resolve_binding(api_key, device_uuid, db)
     supervisor_id = binding.employee_id
 
     team = db.query(EmployeeSupervisor).filter(
         EmployeeSupervisor.supervisor_id == supervisor_id
-    ).all()
+    ).offset(offset).limit(limit).all()
 
     if not team:
         return {"team": []}
@@ -104,17 +106,19 @@ async def get_team_attendance(
 async def get_employee_history(
     employee_id: str,
     days: int = 7,
+    limit: int = 50,
+    offset: int = 0,
     device_uuid: Optional[str] = None,
     api_key=Depends(verify_api_key),
     db: Session = Depends(get_db),
 ):
-    """Get detailed punch history for a specific team member."""
+    """Get detailed punch history for a specific team member with pagination."""
     start_date = datetime.utcnow() - timedelta(days=days)
 
     punches = db.query(PunchLog).filter(
         PunchLog.employee_id == employee_id,
         PunchLog.timestamp >= start_date,
-    ).order_by(PunchLog.timestamp.desc()).limit(100).all()
+    ).order_by(PunchLog.timestamp.desc()).offset(offset).limit(limit).all()
 
     return {
         "employee_id": employee_id,
@@ -158,11 +162,13 @@ async def request_correction(
 
 @router.get("/api/v1/supervisor/corrections")
 async def get_pending_corrections(
+    limit: int = 50,
+    offset: int = 0,
     device_uuid: Optional[str] = None,
     api_key=Depends(verify_api_key),
     db: Session = Depends(get_db),
 ):
-    """Get pending correction requests for the supervisor's team."""
+    """Get pending correction requests for the supervisor's team with pagination."""
     binding = resolve_binding(api_key, device_uuid, db)
 
     team = db.query(EmployeeSupervisor).filter(
@@ -173,7 +179,7 @@ async def get_pending_corrections(
     corrections = db.query(AttendanceCorrection).filter(
         AttendanceCorrection.employee_id.in_(employee_ids),
         AttendanceCorrection.status == 'pending',
-    ).order_by(AttendanceCorrection.created_at.desc()).all()
+    ).order_by(AttendanceCorrection.created_at.desc()).offset(offset).limit(limit).all()
 
     return {
         "corrections": [
