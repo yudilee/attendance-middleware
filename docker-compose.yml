@@ -15,8 +15,6 @@ services:
       - "8999:8999"
     volumes:
       - ./data:/app/data
-    env_file:
-      - .env
     environment:
       - TZ=Asia/Jakarta
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
@@ -73,8 +71,6 @@ services:
         condition: service_healthy
       attendance_db:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
       - DATABASE_URL=postgresql://attendance:${DB_PASSWORD}@attendance_db:5432/attendance_db
       - REDIS_HOST=redis
