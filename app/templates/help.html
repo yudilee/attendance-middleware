@@ -330,11 +330,26 @@ const helpDocs = {
                 {
                     id: 'first_time_setup',
                     title: 'First-Time Setup Guide',
-                    content: `<p>Follow these steps to set up the app for the first time:</p>
+                    content: `<p>Follow these steps to set up the app for the first time. There are two simple ways to get started:</p>
+                    
+<div class="info-box" style="background:#e6fffa; border-left-color:#319795; margin-bottom:1.5rem;">
+    <strong style="color:#234e52;">⚡ Recommended (Instant QR Setup)</strong><br>
+    The fastest way to configure the app without typing any long server URLs or API keys manually:
+    <ol style="margin-top:0.5rem; margin-bottom:0;">
+        <li>Ask your IT administrator to generate your <strong>Onboarding QR Code</strong> on their dashboard.</li>
+        <li>Open the Mobile App and go to <strong>Settings</strong>.</li>
+        <li>Tap the green <strong>"Scan QR to Auto-Setup"</strong> button.</li>
+        <li>Scan the QR code from the admin screen. The app automatically fills your URL, registers your device, and assigns your branch instantly!</li>
+    </ol>
+</div>
+
+<h3>⏺️ Alternative (Manual Entry)</h3>
+<p>If you don't have an onboarding QR code, configure the app manually:</p>
 <ol class="step-list">
 <li><strong>Launch the App</strong><br>Open the app. You'll see the Settings screen.</li>
 <li><strong>Enter Server URL</strong><br>Tap "Server URL" and enter the backend address provided by your IT admin.</li>
 <li><strong>Enter API Key</strong><br>Tap "API Key" and enter the key provided by your admin.</li>
+<li><strong>Register Device</strong><br>Tap "Register to Server" to submit your device identity. Wait for admin approval.</li>
 <li><strong>Configure Security (Recommended)</strong><br>Enable biometric authentication and certificate pinning in Settings.</li>
 <li><strong>Enable Location</strong><br>The app will ask for location permissions. Grant "Allow all the time" for automatic geofence detection.</li>
 <li><strong>Test Connection</strong><br>Tap the fingerprint icon in the Punch tab. If configured correctly, you'll see the punch interface ready to use.</li>
