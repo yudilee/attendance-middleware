@@ -17,8 +17,8 @@ services:
       - ./data:/app/data
     environment:
       - TZ=Asia/Jakarta
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - DATABASE_URL=postgresql://attendance:${DB_PASSWORD}@attendance_db:5432/attendance_db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE_THIS_IN_PRODUCTION}
+      - DATABASE_URL=postgresql://attendance:${DB_PASSWORD:-secret_db_password}@attendance_db:5432/attendance_db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       attendance_db:
@@ -38,7 +38,7 @@ services:
     restart: always
     environment:
       - POSTGRES_USER=attendance
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-secret_db_password}
       - POSTGRES_DB=attendance_db
     volumes:
       - ./pgdata:/var/lib/postgresql/data
@@ -72,7 +72,7 @@ services:
       attendance_db:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://attendance:${DB_PASSWORD}@attendance_db:5432/attendance_db
+      - DATABASE_URL=postgresql://attendance:${DB_PASSWORD:-secret_db_password}@attendance_db:5432/attendance_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ENV=${ENV:-development}
