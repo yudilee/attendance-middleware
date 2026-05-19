@@ -6,113 +6,126 @@
 <!-- ═══════════════════ DASHBOARD TAB ═══════════════════ -->
 {% if not section or section == "dashboard" %}
 <div id="dashboard" class="tab-content">
-    <div class="stats-grid">
-        <div class="stat-card primary">
-            <i class="ph-fill ph-fingerprint stat-icon"></i>
-            <div class="stat-label">Virtual Machine</div>
-            <div class="stat-value" style="display: flex; align-items: center; gap: 0.5rem; font-size: 1.1rem;">
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all border-l-4 border-l-indigo-500 overflow-hidden">
+            <i class="ph-fill ph-fingerprint absolute top-4 right-4 text-3xl opacity-10 text-slate-800"></i>
+            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Virtual Machine</div>
+            <div class="flex items-center gap-2 text-base font-bold text-slate-800">
                 <span class="pulse-dot"></span>
                 Heartbeat Active
             </div>
-            <div class="stat-footer" style="margin-top: 0.75rem;">
-                SN: <strong class="font-mono">{{ sn }}</strong><br>
-                Alias: <strong style="color: var(--primary);">{{ device_name }}</strong>
+            <div class="mt-3 text-xs text-slate-500">
+                SN: <strong class="font-mono text-slate-700">{{ sn }}</strong><br>
+                Alias: <strong class="text-indigo-600">{{ device_name }}</strong>
             </div>
         </div>
-        <div class="stat-card success">
-            <i class="ph ph-list-checks stat-icon"></i>
-            <div class="stat-label">Total Punches</div>
-            <div class="stat-value">{{ punch_count }}</div>
-            <div class="stat-footer" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
-                <span class="badge badge-success">{{ uploaded_count }} uploaded</span>
+        
+        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all border-l-4 border-l-emerald-500 overflow-hidden">
+            <i class="ph ph-list-checks absolute top-4 right-4 text-3xl opacity-10 text-slate-800"></i>
+            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Total Punches</div>
+            <div class="text-3xl font-bold text-slate-800 mb-2">{{ punch_count }}</div>
+            <div class="flex flex-wrap gap-2">
+                <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">{{ uploaded_count }} uploaded</span>
                 {% if failed_count > 0 %}
-                <span class="badge badge-danger">{{ failed_count }} failed</span>
+                <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">{{ failed_count }} failed</span>
                 {% endif %}
                 {% if pending_count > 0 %}
-                <span class="badge badge-warning">{{ pending_count }} pending</span>
+                <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{{ pending_count }} pending</span>
                 {% endif %}
             </div>
         </div>
-        <div class="stat-card">
-            <i class="ph ph-devices stat-icon"></i>
-            <div class="stat-label">Bound Handsets</div>
-            <div class="stat-value">{{ device_count }}</div>
-            <div class="stat-footer">Unique device IDs registered</div>
+        
+        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all overflow-hidden">
+            <i class="ph ph-devices absolute top-4 right-4 text-3xl opacity-10 text-slate-800"></i>
+            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Bound Handsets</div>
+            <div class="text-3xl font-bold text-slate-800 mb-2">{{ device_count }}</div>
+            <div class="text-xs text-slate-500">Unique device IDs registered</div>
         </div>
-        <div class="stat-card">
-            <i class="ph ph-clock stat-icon"></i>
-            <div class="stat-label">Today's Punches</div>
-            <div style="display:flex; gap:1.5rem; align-items:baseline;">
+        
+        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all overflow-hidden">
+            <i class="ph ph-clock absolute top-4 right-4 text-3xl opacity-10 text-slate-800"></i>
+            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Today's Punches</div>
+            <div class="flex gap-6 items-baseline">
                 <div>
-                    <span style="font-size:1.6rem; font-weight:700; color:#16a34a;">{{ today_in }}</span>
-                    <span style="color:var(--text-muted); font-size:0.8rem;"> In</span>
+                    <span class="text-2xl font-bold text-emerald-600">{{ today_in }}</span>
+                    <span class="text-xs text-slate-400"> In</span>
                 </div>
                 <div>
-                    <span style="font-size:1.6rem; font-weight:700; color:#dc2626;">{{ today_out }}</span>
-                    <span style="color:var(--text-muted); font-size:0.8rem;"> Out</span>
+                    <span class="text-2xl font-bold text-red-500">{{ today_out }}</span>
+                    <span class="text-xs text-slate-400"> Out</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card" style="padding: 0; overflow: hidden;">
-        <div style="padding: 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="font-size: 1rem; font-weight: 600;">Recent Attendance Logs</h3>
-            <div style="display:flex; gap:0.5rem; align-items:center;">
-                <span style="font-size: 0.75rem; color: var(--text-muted);">Last 20 records</span>
-                <a href="/ui/logs/export" download style="font-size:0.75rem; color:var(--primary); text-decoration:none; padding:0.25rem 0.75rem; border:1px solid var(--primary); border-radius:6px;">📥 Export CSV</a>
+    <!-- Recent Attendance Logs -->
+    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+            <h3 class="text-sm font-semibold text-slate-800">Recent Attendance Logs</h3>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">Last 20 records</span>
+                <a href="/ui/logs/export" download class="text-xs font-medium text-indigo-600 hover:text-indigo-700 px-3 py-1.5 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors">
+                    <i class="ph ph-download-simple mr-1"></i>Export CSV
+                </a>
             </div>
         </div>
-        <div class="table-container" style="border: none; border-radius: 0;">
-            <table>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
                 <thead>
-                    <tr>
-                        <th>Employee</th>
-                        <th>Timestamp (Local)</th>
-                        <th>Type</th>
-                        <th>GPS Coordinates</th>
-                        <th>ADMS Status</th>
-                        <th>Selfie</th>
+                    <tr class="bg-slate-50 border-b border-slate-200">
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Employee</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Timestamp (Local)</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Type</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">GPS Coordinates</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">ADMS Status</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Selfie</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-slate-100">
                     {% for log in logs %}
-                    <tr>
-                        <td>
-                            <strong>{{ log.employee_name }}</strong><br>
-                            <span style="font-size: 0.7rem; color: var(--text-muted);">ID: {{ log.employee_id }}</span>
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-5 py-4">
+                            <strong class="text-slate-800">{{ log.employee_name }}</strong><br>
+                            <span class="text-xs text-slate-400">ID: {{ log.employee_id }}</span>
                         </td>
-                        <td class="local-time" data-utc="{{ log.timestamp.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                        <td>
-                            <span class="badge {{ 'badge-success' if log.punch_type == 'In' else 'badge-danger' }}">
-                                {{ '🟢 In' if log.punch_type == 'In' else '🔴 Out' }}
+                        <td class="px-5 py-4 text-sm text-slate-700 local-time" data-utc="{{ log.timestamp.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td class="px-5 py-4">
+                            {% if log.punch_type == 'In' %}
+                            <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                                🟢 In
                             </span>
-                        </td>
-                        <td style="color: var(--text-muted); font-size: 0.75rem; font-family: monospace;">
-                            {{ "%.5f"|format(log.latitude) }}, {{ "%.5f"|format(log.longitude) }}
-                        </td>
-                        <td>
-                            {% if log.adms_status == 'uploaded' %}
-                                <span class="badge badge-success">✅ Uploaded</span>
-                            {% elif log.adms_status == 'failed' %}
-                                <span class="badge badge-danger">❌ Failed</span>
                             {% else %}
-                                <span class="badge badge-warning">⏳ Pending</span>
+                            <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+                                🔴 Out
+                            </span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="px-5 py-4 text-xs text-slate-400 font-mono">
+                            {{ "%.5f"|format(log.latitude) }}, {{ "%.5f"|format(log.longitude) }}
+                        </td>
+                        <td class="px-5 py-4">
+                            {% if log.adms_status == 'uploaded' %}
+                                <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✅ Uploaded</span>
+                            {% elif log.adms_status == 'failed' %}
+                                <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">❌ Failed</span>
+                            {% else %}
+                                <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">⏳ Pending</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-4">
                             {% if log.selfie_filename %}
-                            <a href="/ui/selfie/{{ log.selfie_filename }}" target="_blank" class="btn btn-sm btn-info">
-                                <i class="fas fa-camera"></i> View
+                            <a href="/ui/selfie/{{ log.selfie_filename }}" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors">
+                                <i class="ph ph-camera"></i> View
                             </a>
                             {% else %}
-                            <span class="text-muted">&mdash;</span>
+                            <span class="text-slate-400">&mdash;</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                        <td colspan="6" class="text-center py-8 text-sm text-slate-400">
                             No attendance logs yet. Waiting for first punch...
                         </td>
                     </tr>
@@ -125,155 +138,153 @@
 {% endif %}
 
 <!-- ═══════════════════ DEVICES TAB ═══════════════════ -->
-<div id="devices" class="tab-content" style="display: none;">
-    <!-- 1. Devices List Section -->
+<div id="devices" class="tab-content hidden">
+    <!-- Devices List Section -->
     <div id="devicesListSection">
-
-        <!-- Registration Methods Info Card -->
-        <div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
-            <div style="display: flex; gap: 1.5rem; align-items: stretch; flex-wrap: wrap;">
-                <!-- Method 1: QR Onboarding (Instant) -->
-                <div style="flex: 1; min-width: 250px; padding: 1rem; background: #d1fae5; border-radius: 0.75rem; border: 1px solid #6ee7b7;">
-                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
-                        <div style="width: 40px; height: 40px; background: #10b981; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.25rem;">
+        <!-- Registration Methods Info Cards -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+            <div class="flex gap-6 items-stretch flex-wrap">
+                <!-- Method 1: QR Onboarding -->
+                <div class="flex-1 min-w-[250px] p-4 bg-emerald-50 rounded-xl border border-emerald-300">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white text-lg">
                             <i class="ph ph-qr-code"></i>
                         </div>
                         <div>
-                            <div style="font-weight: 700; font-size: 0.95rem; color: #065f46;">⚡ QR Code Onboarding</div>
-                            <div style="font-size: 0.75rem; color: #065f46;">Instant — no approval needed</div>
+                            <div class="font-bold text-sm text-emerald-800">⚡ QR Code Onboarding</div>
+                            <div class="text-xs text-emerald-700">Instant — no approval needed</div>
                         </div>
                     </div>
-                    <p style="font-size: 0.8rem; color: #065f46; margin: 0 0 0.75rem;">
+                    <p class="text-xs text-emerald-800 mb-3">
                         Generate a QR code for an employee. When scanned from the mobile app, the device is automatically registered, assigned to a branch, and activated — all in one step.
                     </p>
-                    <button onclick="openOnboardingModal()" class="btn btn-success btn-sm w-full">
+                    <button onclick="openOnboardingModal()" class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-all shadow-sm">
                         <i class="ph ph-qr-code"></i> Generate Onboarding QR
                     </button>
                 </div>
 
                 <!-- Method 2: Manual Registration -->
-                <div style="flex: 1; min-width: 250px; padding: 1rem; background: #fef3c7; border-radius: 0.75rem; border: 1px solid #fcd34d;">
-                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
-                        <div style="width: 40px; height: 40px; background: #f59e0b; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.25rem;">
+                <div class="flex-1 min-w-[250px] p-4 bg-amber-50 rounded-xl border border-amber-300">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white text-lg">
                             <i class="ph ph-devices"></i>
                         </div>
                         <div>
-                            <div style="font-weight: 700; font-size: 0.95rem; color: #92400e;">📝 Manual Registration</div>
-                            <div style="font-size: 0.75rem; color: #92400e;">Requires admin approval</div>
+                            <div class="font-bold text-sm text-amber-800">📝 Manual Registration</div>
+                            <div class="text-xs text-amber-700">Requires admin approval</div>
                         </div>
                     </div>
-                    <p style="font-size: 0.8rem; color: #92400e; margin: 0 0 0.75rem;">
+                    <p class="text-xs text-amber-800 mb-3">
                         Employees enter Server URL + API Key in the app manually. Devices appear here as <strong>"Pending Approval"</strong>. You must approve each device and assign at least one branch.
                     </p>
-                    <div style="font-size: 0.75rem; color: #92400e; font-weight: 600;">
+                    <div class="text-xs font-semibold text-amber-800">
                         <i class="ph ph-checks"></i> Steps: Approve → Assign Branch → Active
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <!-- Device Table Card -->
+        <div class="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
                 <div>
-                    <div class="card-title">Device Registration & Approval</div>
-                    <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">
-                        Employees can register up to <strong>{{ max_devices }} devices</strong>. Multiple branches per device are supported.
+                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Device Registration & Approval</div>
+                    <p class="text-xs text-slate-400 mt-1">
+                        Employees can register up to <strong class="text-slate-700">{{ max_devices }} devices</strong>. Multiple branches per device are supported.
                     </p>
                 </div>
-                <span class="badge badge-primary">{{ devices|length }} registered</span>
+                <span class="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{{ devices|length }} registered</span>
             </div>
-            <div class="table-container">
-                <table>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
                     <thead>
-                        <tr>
-                            <th>Employee / Label</th>
-                            <th>UUID</th>
-                            <th>Devices</th>
-                            <th>Active</th>
-                            <th>Status</th>
-                            <th>Assigned Branches</th>
-                            <th style="text-align: right;">Actions</th>
+                        <tr class="bg-slate-50 border-b border-slate-200">
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Employee / Label</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">UUID</th>
+                            <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">Devices</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Active</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Assigned Branches</th>
+                            <th class="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="divide-y divide-slate-100">
                         {% for device in devices %}
-                        <tr style="{% if device.registration_status == 'pending_approval' %}background: #fffbeb;{% elif device.registration_status == 'suspended' %}background: #fef2f2; opacity: 0.8;{% endif %}">
-                            <td>
+                        <tr class="hover:bg-slate-50 transition-colors {% if device.registration_status == 'pending_approval' %}bg-amber-50/50{% elif device.registration_status == 'suspended' %}bg-red-50/50 opacity-80{% endif %}">
+                            <td class="px-5 py-4">
                                 {% if device.employee_id %}
-                                    <strong>{{ device.employee_name }}</strong><br>
-                                    <span style="font-size: 0.75rem; color: var(--text-muted);">
+                                    <strong class="text-slate-800">{{ device.employee_name }}</strong><br>
+                                    <span class="text-xs text-slate-400">
                                         ID: {{ device.employee_id }} | {{ device.device_label or '(no label)' }}
                                     </span><br>
-                                    <span style="font-size: 0.7rem; color: #6366f1; font-weight: 600;">
+                                    <span class="text-xs font-semibold text-indigo-500">
                                         🔑 Key: {{ device.api_key_label }}
                                     </span>
                                 {% else %}
-                                    <div style="background: #fffbeb; padding: 0.5rem; border: 1px dashed #f59e0b; border-radius: 0.5rem;">
-                                        <span style="font-size: 0.75rem; color: #b45309; display: block; margin-bottom: 0.25rem;">⚠️ No Employee Assigned</span>
-                                        <button type="button" class="badge" style="background: #f59e0b; color: white; border: none; cursor: pointer;" onclick="openAssignDialog({{ device.id }}, '{{ device.device_label or 'New Device' }}')">➕ Assign Employee</button>
+                                    <div class="bg-amber-50 p-2 border border-dashed border-amber-400 rounded-lg">
+                                        <span class="text-xs text-amber-700 block mb-1">⚠️ No Employee Assigned</span>
+                                        <button type="button" class="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white border-0 cursor-pointer hover:bg-amber-600" onclick="openAssignDialog({{ device.id }}, '{{ device.device_label or 'New Device' }}')">➕ Assign Employee</button>
                                     </div>
                                 {% endif %}
                             </td>
-                            <td style="font-family: monospace; font-size: 0.72rem; color: var(--primary);">
+                            <td class="px-5 py-4 font-mono text-xs text-indigo-600">
                                 {{ device.device_uuid[:16] }}...
                             </td>
-                            <td style="text-align:center;">
+                            <td class="px-5 py-4 text-center">
                                 {% if device.device_count_for_employee %}
-                                    <span style="font-weight:600; {% if device.device_count_for_employee >= max_devices %}color:red;{% endif %}">
+                                    <span class="font-semibold {% if device.device_count_for_employee >= max_devices %}text-red-500{% else %}text-slate-700{% endif %}">
                                         {{ device.device_count_for_employee }}/{{ max_devices }}
                                     </span>
-                                {% else %}—{% endif %}
+                                {% else %}&mdash;{% endif %}
                             </td>
-                            <td style="text-align:center;">
+                            <td class="px-5 py-4">
                                 {% if device.is_active %}
-                                    <span class="badge badge-success">Active</span>
+                                    <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Active</span>
                                 {% else %}
-                                    <span class="badge" style="background:#e0e7ff;color:#4338ca;">Inactive</span>
+                                    <span class="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-600">Inactive</span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="px-5 py-4">
                                 {% if device.registration_status == 'pending_approval' %}
-                                    <span class="badge badge-warning">⏳ Pending</span>
+                                    <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">⏳ Pending</span>
                                 {% elif device.registration_status == 'approved' or device.registration_status == 'active' %}
-                                    <span class="badge badge-success">✅ Approved</span>
+                                    <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✅ Approved</span>
                                 {% elif device.registration_status == 'suspended' %}
-                                    <span class="badge badge-danger">🚫 Suspended</span>
+                                    <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">🚫 Suspended</span>
                                 {% else %}
-                                    <span class="badge">{{ device.registration_status }}</span>
+                                    <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{{ device.registration_status }}</span>
                                 {% endif %}
                             </td>
-                            <td>
-                                <div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+                            <td class="px-5 py-4">
+                                <div class="flex flex-wrap gap-1 items-center">
                                     {% for ba in device.branch_list %}
-                                        <span style="display:inline-flex; align-items:center; gap:3px; background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:500;">
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
                                             {{ ba.name }}
                                         </span>
                                     {% endfor %}
                                     {% if not device.branch_list %}
-                                        <span style="font-size:0.7rem;color:#999;">Any (No restriction)</span>
+                                        <span class="text-xs text-slate-400">Any (No restriction)</span>
                                     {% endif %}
                                 </div>
                             </td>
-                            <td style="text-align: right; white-space: nowrap;">
+                            <td class="px-5 py-4 text-right whitespace-nowrap">
                                 {% if device.registration_status == 'pending_approval' %}
-                                    <button class="btn btn-sm btn-success" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
+                                    <button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
                                             onclick="approveDevice({{ device.id }})">✅ Approve</button>
                                 {% elif device.registration_status in ('approved', 'active') %}
-                                    <button class="btn btn-sm btn-danger" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;"
+                                    <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
                                             onclick="suspendDevice({{ device.id }})">🚫 Suspend</button>
                                 {% elif device.registration_status == 'suspended' %}
-                                    <button class="btn btn-sm btn-success" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
+                                    <button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
                                             onclick="approveDevice({{ device.id }})">↩ Re-approve</button>
                                 {% endif %}
-                                <button class="btn btn-sm btn-outline" onclick="openDeviceModal({{ device.id }}, '{{ device.device_label or '' }}')"
-                                        style="background:#e0e7ff;color:#4338ca;border-color:#c7d2fe;">✏️ Edit</button>
-                                <button class="btn btn-sm btn-outline" onclick="unbindDevice({{ device.id }})"
-                                        style="background:#fef2f2;color:#b91c1c;border-color:#fca5a5;">Unbind</button>
+                                <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="openDeviceModal({{ device.id }}, '{{ device.device_label or '' }}')">✏️ Edit</button>
+                                <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors" onclick="unbindDevice({{ device.id }})">Unbind</button>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                            <td colspan="7" class="text-center py-8 text-sm text-slate-400">
                                 No devices registered yet.
                             </td>
                         </tr>
@@ -284,345 +295,342 @@
         </div>
     </div>
 
-    <!-- 2. Device Edit Form Section -->
-    <div id="deviceFormSection" class="card" style="display: none; max-width: 600px; margin: 0 auto 2rem auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
-            <div class="card-title" style="margin: 0;">📱 Edit Device Settings</div>
-            <button type="button" class="btn btn-sm btn-outline" onclick="closeDeviceModal()">← Back to List</button>
+    <!-- Device Edit Form Section -->
+    <div id="deviceFormSection" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm hidden max-w-2xl mx-auto mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">📱 Edit Device Settings</div>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeDeviceModal()">← Back to List</button>
         </div>
         <input type="hidden" id="edit_device_id" value="">
         
-        <div class="form-group">
-            <label class="form-label">Device Label</label>
-            <input type="text" id="edit_device_label" class="form-control" placeholder="E.g. Front Door Tablet" required>
+        <div class="mb-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Device Label</label>
+            <input type="text" id="edit_device_label" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="E.g. Front Door Tablet" required>
         </div>
 
-        <div style="margin-top: 1.25rem;">
-            <label class="form-label">Assigned Branches</label>
-            <div id="deviceBranchesList" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem;">
-                <!-- Dynamically populated branch pills with an 'x' delete button -->
+        <div class="mt-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Assigned Branches</label>
+            <div id="deviceBranchesList" class="flex flex-wrap gap-1.5 mb-4">
+                <!-- Dynamically populated branch pills -->
             </div>
             
-            <div id="addDeviceBranchGroup" style="display: flex; gap: 0.5rem; align-items: center;">
-                <select id="deviceBranchSelect" class="form-control" style="flex: 1; margin: 0;">
+            <div id="addDeviceBranchGroup" class="flex gap-2 items-center">
+                <select id="deviceBranchSelect" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-1">
                     <!-- Available branches dropdown -->
                 </select>
-                <button type="button" class="btn btn-primary" onclick="submitAddDeviceBranch()" style="white-space: nowrap; background: #6366f1; color: white; border-color: #6366f1;">➕ Add Branch</button>
+                <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm whitespace-nowrap" onclick="submitAddDeviceBranch()">➕ Add Branch</button>
             </div>
         </div>
 
-        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-            <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeDeviceModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" style="flex: 1;" onclick="saveDeviceLabel()">Save Label</button>
+        <div class="flex gap-4 mt-8">
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeDeviceModal()">Cancel</button>
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="saveDeviceLabel()">Save Label</button>
         </div>
     </div>
 
-    <!-- 3. Assign Employee Form Section -->
-    <div id="assignFormSection" class="card" style="display: none; max-width: 500px; margin: 0 auto 2rem auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
-            <div class="card-title" id="assignModalTitle" style="margin: 0;">Assign Employee</div>
-            <button type="button" class="btn btn-sm btn-outline" onclick="closeAssignModal()">← Back to List</button>
+    <!-- Assign Employee Form Section -->
+    <div id="assignFormSection" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm hidden max-w-lg mx-auto mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-sm font-semibold text-slate-800" id="assignModalTitle">Assign Employee</div>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeAssignModal()">← Back to List</button>
         </div>
-        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Select an employee to bind this device to. Only bound employees can punch.</p>
+        <p class="text-xs text-slate-500 mb-4">Select an employee to bind this device to. Only bound employees can punch.</p>
         
         <input type="hidden" id="assignBindingId">
         <input type="hidden" id="selectedEmployeeId">
-        <div class="form-group">
-            <label>Search Employee</label>
-            <input type="text" id="employeeSearch" placeholder="Type name or PIN..." oninput="filterEmployees()">
+        <div class="mb-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Search Employee</label>
+            <input type="text" id="employeeSearch" placeholder="Type name or PIN..." oninput="filterEmployees()" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
         </div>
-        <div id="employeeList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 0.5rem; margin-top: 0.5rem; background: white; margin-bottom: 1.5rem;">
+        <div id="employeeList" class="max-h-48 overflow-y-auto border border-slate-200 rounded-lg bg-white mb-6">
             <!-- Employees injected here -->
         </div>
         
-        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-            <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeAssignModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" id="btnConfirmAssign" style="flex: 1;" disabled onclick="confirmAssign()">Confirm Binding</button>
+        <div class="flex gap-4">
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeAssignModal()">Cancel</button>
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" id="btnConfirmAssign" disabled onclick="confirmAssign()">Confirm Binding</button>
         </div>
     </div>
 </div>
 
 
 <!-- ═══════════════════ API KEYS TAB ═══════════════════ -->
-<div id="security" class="tab-content" style="display: none;">
-    <!-- 1. API Key List Section -->
+<div id="security" class="tab-content hidden">
+    <!-- API Key List Section -->
     <div id="apiKeyListSection">
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <div class="card-title" style="margin: 0;">API Key Management</div>
-                <button type="button" class="btn btn-success" onclick="openApiKeyModal()">➕ Generate New Key</button>
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">API Key Management</div>
+                <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-all shadow-sm" onclick="openApiKeyModal()">➕ Generate New Key</button>
             </div>
-            <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
-                Mobile clients must include an <code>X-API-Key</code> header with every punch request. Generate keys here and configure them in the mobile app settings.
+            <p class="text-sm text-slate-500 mb-6">
+                Mobile clients must include an <code class="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-mono text-indigo-600">X-API-Key</code> header with every punch request. Generate keys here and configure them in the mobile app settings.
             </p>
-
-            <div class="table-container">
-                <table>
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="w-full text-sm">
                     <thead>
-                        <tr>
-                            <th>Label</th>
-                            <th>Key Preview</th>
-                            <th>Status</th>
-                            <th>Expires</th>
-                            <th>Devices</th>
-                            <th>Last Used</th>
-                            <th>Last IP</th>
-                            <th style="text-align: right;">Actions</th>
+                        <tr class="bg-slate-50 border-b border-slate-200">
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Label</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Key Preview</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Expires</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Devices</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Last Used</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Last IP</th>
+                            <th class="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="keysTableBody">
-                        <tr><td colspan="8" style="text-align:center; padding: 1.5rem; color: var(--text-muted);">Loading...</td></tr>
+                    <tbody id="keysTableBody" class="divide-y divide-slate-100">
+                        <tr><td colspan="8" class="text-center py-8 text-sm text-slate-400">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <!-- 2. Generate API Key Section -->
-    <div id="apiKeyFormSection" class="card" style="display: none; max-width: 500px; margin: 0 auto 2rem auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
-            <div class="card-title" id="apiKeyModalTitle" style="margin: 0;">🔑 Generate API Key</div>
-            <button type="button" class="btn btn-sm btn-outline" onclick="closeApiKeyModal()">← Back to List</button>
+    <!-- Generate API Key Section -->
+    <div id="apiKeyFormSection" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm hidden max-w-lg mx-auto mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-sm font-semibold text-slate-800" id="apiKeyModalTitle">🔑 Generate API Key</div>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeApiKeyModal()">← Back to List</button>
         </div>
         
         <div id="keyGenerateForm">
-            <div class="form-group">
-                <label class="form-label">Key Label (e.g. "Site A Phones")</label>
-                <input type="text" id="key_label" class="form-control" placeholder="Mobile Client" value="Mobile Client">
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Key Label (e.g. "Site A Phones")</label>
+                <input type="text" id="key_label" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="Mobile Client" value="Mobile Client">
             </div>
-            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-                <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeApiKeyModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" style="flex: 1;" onclick="generateKey()">Generate</button>
+            <div class="flex gap-4">
+                <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeApiKeyModal()">Cancel</button>
+                <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="generateKey()">Generate</button>
             </div>
         </div>
 
         <!-- Generated key display -->
-        <div id="newKeyDisplay" style="display: none; margin-top: 1rem;">
-            <div style="background: #d1fae5; border: 1px solid #10b981; border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">
-                <p style="font-size: 0.8rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem; text-align: center;">⚠️ Copy this key NOW. It will not be shown again.</p>
-                <code id="newKeyValue" style="font-size: 0.85rem; word-break: break-all; color: #065f46; display: block; background: #fff; padding: 0.5rem; border-radius: 0.375rem; border: 1px solid #a7f3d0; text-align: center;"></code>
-                <button type="button" class="btn btn-success" onclick="copyKey()" style="margin-top: 0.75rem; width: 100%;">📋 Copy to Clipboard</button>
+        <div id="newKeyDisplay" class="hidden mt-4">
+            <div class="bg-emerald-50 border border-emerald-400 rounded-xl p-4 mb-6">
+                <p class="text-xs font-semibold text-emerald-800 mb-2 text-center">⚠️ Copy this key NOW. It will not be shown again.</p>
+                <code id="newKeyValue" class="text-sm text-emerald-800 block bg-white px-4 py-3 rounded-lg border border-emerald-200 text-center break-all"></code>
+                <button type="button" class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 mt-3 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 transition-all shadow-sm" onclick="copyKey()">📋 Copy to Clipboard</button>
             </div>
-            <button type="button" class="btn btn-primary" style="width: 100%;" onclick="closeApiKeyModal()">Done</button>
+            <button type="button" class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="closeApiKeyModal()">Done</button>
         </div>
     </div>
 
-    <!-- 3. Edit API Key Section -->
-    <div id="apiKeyEditFormSection" class="card" style="display: none; max-width: 450px; margin: 0 auto 2rem auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
-            <div class="card-title" style="margin: 0;">✏️ Rename API Key</div>
-            <button type="button" class="btn btn-sm btn-outline" onclick="closeApiKeyEditModal()">← Back to List</button>
+    <!-- Edit API Key Section -->
+    <div id="apiKeyEditFormSection" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm hidden max-w-md mx-auto mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-sm font-semibold text-slate-800">✏️ Rename API Key</div>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeApiKeyEditModal()">← Back to List</button>
         </div>
         <input type="hidden" id="edit_key_id" value="">
-        <div class="form-group">
-            <label class="form-label">Key Label</label>
-            <input type="text" id="edit_key_label" class="form-control" placeholder="Site A Phones" required>
+        <div class="mb-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Key Label</label>
+            <input type="text" id="edit_key_label" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="Site A Phones" required>
         </div>
-        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-            <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeApiKeyEditModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" style="flex: 1;" onclick="saveApiKeyRename()">Save Changes</button>
+        <div class="flex gap-4">
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeApiKeyEditModal()">Cancel</button>
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="saveApiKeyRename()">Save Changes</button>
         </div>
     </div>
 </div>
 
-<div id="geofence" class="tab-content" style="display: none;">
-    <!-- 1. List View Section -->
+<!-- ═══════════════════ BRANCHES (GEOFENCE) TAB ═══════════════════ -->
+<div id="geofence" class="tab-content hidden">
+    <!-- Branch List Section -->
     <div id="branchListSection">
         <!-- Search & Filter Bar -->
-        <div class="card" style="margin-bottom: 1.5rem;">
-            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                <div class="form-group" style="margin:0; flex:1; min-width:200px;">
-                    <input type="text" id="branchSearch" placeholder="🔍 Search branches by name..." oninput="filterBranches()">
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm mb-6">
+            <div class="flex gap-4 items-center flex-wrap">
+                <div class="flex-1 min-w-[200px]">
+                    <input type="text" id="branchSearch" placeholder="🔍 Search branches by name..." oninput="filterBranches()" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
                 </div>
-                <select id="branchFilter" onchange="filterBranches()" style="width: auto; min-width:140px;">
+                <select id="branchFilter" onchange="filterBranches()" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 min-w-[140px]">
                     <option value="all">📋 All Branches</option>
                     <option value="active">🟢 Active Only</option>
                     <option value="inactive">🔴 Inactive Only</option>
                 </select>
-                <span id="branchCount" style="font-size:0.85rem; color:var(--text-muted); white-space:nowrap;"></span>
+                <span id="branchCount" class="text-sm text-slate-400 whitespace-nowrap"></span>
             </div>
         </div>
 
-        <!-- LEFT: Branch List -->
-        <div class="card" style="padding:0; overflow:hidden;">
-            <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-                <div class="card-title" style="margin:0;">Branch Sites</div>
-                <button type="button" onclick="openBranchModal()" style="background:#10b981; color:white; border:none; padding:0.5rem 1rem; border-radius:0.5rem; cursor:pointer;">➕ Create New Branch</button>
+        <!-- Branch Table -->
+        <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Branch Sites</div>
+                <button type="button" onclick="openBranchModal()" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-all shadow-sm">➕ Create New Branch</button>
             </div>
-            <div class="table-container" style="border:none; border-radius:0;">
-                <table>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
                     <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Coordinates</th>
-                            <th>Radius</th>
-                            <th style="text-align:center;">QR</th>
-                            <th style="text-align:center;">NFC</th>
-                            <th style="text-align:center;">Devices</th>
-                            <th style="text-align:center;">Status</th>
-                            <th style="text-align:right; min-width: 120px;">Action</th>
+                        <tr class="bg-slate-50 border-b border-slate-200">
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Name</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Coordinates</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Radius</th>
+                            <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">QR</th>
+                            <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">NFC</th>
+                            <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">Devices</th>
+                            <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                            <th class="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 min-w-[120px]">Action</th>
                         </tr>
                     </thead>
-                    <tbody id="branchesTableBody">
-                        <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading...</td></tr>
+                    <tbody id="branchesTableBody" class="divide-y divide-slate-100">
+                        <tr><td colspan="8" class="text-center py-8 text-sm text-slate-400">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <!-- 2. Create / Edit Section -->
-    <!-- 2. Unified Branch Edit & Checkpoints Section -->
-    <div id="branchFormSection" style="display: none; max-width: 1300px; margin: 0 auto 2rem auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
-            <div class="card-title" id="branchFormTitle" style="margin: 0; font-size: 1.25rem; font-weight: 700;">📍 Edit Branch & Checkpoints</div>
-            <button type="button" class="btn btn-sm btn-outline" onclick="cancelEdit()">← Back to List</button>
+    <!-- Unified Branch Edit & Checkpoints Section -->
+    <div id="branchFormSection" class="hidden max-w-7xl mx-auto mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-lg font-bold text-slate-800" id="branchFormTitle">📍 Edit Branch & Checkpoints</div>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="cancelEdit()">← Back to List</button>
         </div>
 
-        <div class="grid grid-cols-2" style="gap: 1.5rem; align-items: start;" id="unifiedBranchGrid">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start" id="unifiedBranchGrid">
             <!-- Left Card: Branch Details -->
-            <div class="card" style="margin:0;">
-                <div style="font-weight: 700; font-size: 1rem; color: var(--text-main); margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
-                    ⚙️ Primary Branch Details
-                </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="font-bold text-sm text-slate-800 mb-4 border-b border-slate-200 pb-3">⚙️ Primary Branch Details</div>
                 <form id="branchForm">
                     <input type="hidden" id="edit_branch_id" value="">
                     
                     <!-- Interactive Map -->
-                    <div id="branchMap" style="height: 250px; border-radius: 0.5rem; margin-bottom: 0.75rem; border: 1px solid var(--border); background: #f1f5f9; position: relative; z-index: 1;"></div>
-                    <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom: 0.75rem;">
+                    <div id="branchMap" class="h-64 rounded-lg mb-3 border border-slate-200 bg-slate-100" style="position: relative; z-index: 1;"></div>
+                    <p class="text-xs text-slate-400 mb-3">
                         <i class="ph ph-info"></i> Drag the marker or click the map to set primary coordinates
                     </p>
                     
-                    <div class="grid grid-cols-2" style="gap: 0.75rem;">
-                        <div class="form-group" style="margin:0;">
-                            <label class="form-label">Latitude</label>
-                            <input type="number" step="any" id="branch_lat" class="form-control" placeholder="-6.175392" required oninput="onCoordChange()">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="mb-0">
+                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Latitude</label>
+                            <input type="number" step="any" id="branch_lat" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="-6.175392" required oninput="onCoordChange()">
                         </div>
-                        <div class="form-group" style="margin:0;">
-                            <label class="form-label">Longitude</label>
-                            <input type="number" step="any" id="branch_lon" class="form-control" placeholder="106.827153" required oninput="onCoordChange()">
+                        <div class="mb-0">
+                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Longitude</label>
+                            <input type="number" step="any" id="branch_lon" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="106.827153" required oninput="onCoordChange()">
                         </div>
                     </div>
                     
-                    <div class="form-group" style="margin-top: 0.75rem;">
-                        <label class="form-label">Branch Name</label>
-                        <input type="text" id="branch_name" class="form-control" placeholder="E.g. Main Office" required>
+                    <div class="mt-3">
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Branch Name</label>
+                        <input type="text" id="branch_name" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="E.g. Main Office" required>
                     </div>
                     
-                    <div class="grid grid-cols-3" style="gap: 0.75rem; margin-top: 0.75rem;">
-                        <div class="form-group" style="margin:0;">
-                            <label class="form-label">Radius (meters)</label>
-                            <input type="number" id="branch_rad" class="form-control" value="50" min="1" required oninput="updateCircle()">
+                    <div class="grid grid-cols-3 gap-3 mt-3">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Radius (meters)</label>
+                            <input type="number" id="branch_rad" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="50" min="1" required oninput="updateCircle()">
                         </div>
-                        <div class="form-group" style="margin:0; display:flex; align-items:flex-end; padding-bottom:0.4rem;">
-                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin:0; font-size: 0.85rem; font-weight: 500;">
-                                <input type="checkbox" id="branch_qr_enabled" onchange="toggleQrField()">
+                        <div class="flex items-end pb-1.5">
+                            <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                                <input type="checkbox" id="branch_qr_enabled" onchange="toggleQrField()" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4">
                                 <span>Enable QR</span>
                             </label>
                         </div>
-                        <div class="form-group" style="margin:0; display:flex; align-items:flex-end; padding-bottom:0.4rem;">
-                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin:0; font-size: 0.85rem; font-weight: 500;">
-                                <input type="checkbox" id="branch_nfc_enabled" onchange="toggleNfcField()">
+                        <div class="flex items-end pb-1.5">
+                            <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                                <input type="checkbox" id="branch_nfc_enabled" onchange="toggleNfcField()" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4">
                                 <span>Enable NFC</span>
                             </label>
                         </div>
                     </div>
                     
-                    <div class="form-group" id="qr_data_group" style="display: none; margin-top: 0.75rem;">
-                        <label class="form-label">QR Code Data</label>
-                        <div style="display: flex; gap: 0.5rem; align-items: start;">
-                            <div style="flex:1;">
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <input type="text" id="branch_qr_data" class="form-control" placeholder="e.g. BRANCH-OFFICE-001" style="flex: 1;" oninput="updateQrPreview()">
-                                    <button type="button" class="btn btn-outline" onclick="generateQrData()" style="white-space: nowrap; height: 38px; padding: 0 0.75rem; background: #6366f1; color: white; border: none;">🎲 Generate</button>
+                    <div class="mt-3 hidden" id="qr_data_group">
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">QR Code Data</label>
+                        <div class="flex gap-2 items-start">
+                            <div class="flex-1">
+                                <div class="flex gap-2">
+                                    <input type="text" id="branch_qr_data" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-1" placeholder="e.g. BRANCH-OFFICE-001" oninput="updateQrPreview()">
+                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm whitespace-nowrap" onclick="generateQrData()">🎲 Generate</button>
                                 </div>
-                                <small style="color: var(--text-muted); font-size: 0.75rem;">This data will be encoded as a QR code for mobile scan verification.</small>
+                                <small class="text-xs text-slate-400 mt-1 block">This data will be encoded as a QR code for mobile scan verification.</small>
                             </div>
-                            <div id="qrPreview" style="width:72px; height:72px; background:white; border:1px solid var(--border); border-radius:0.5rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden;">
-                                <span style="font-size:0.65rem; color:var(--text-muted); text-align:center;">Live QR</span>
+                            <div id="qrPreview" class="w-[72px] h-[72px] bg-white border border-slate-200 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                <span class="text-xs text-slate-400 text-center">Live QR</span>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="form-group" id="nfc_data_group" style="display: none; margin-top: 0.75rem;">
-                        <label class="form-label">NFC Tag Data</label>
-                        <div style="display: flex; gap: 0.5rem; align-items: start;">
-                            <div style="flex:1;">
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <input type="text" id="branch_nfc_data" class="form-control" placeholder="e.g. NFC-BRANCH-001" style="flex: 1;" oninput="updateNfcPreview()">
-                                    <button type="button" class="btn btn-outline" onclick="generateNfcTag()" style="white-space: nowrap; height: 38px; padding: 0 0.75rem; background: #6366f1; color: white; border: none;">🏷️ Generate</button>
+                    <div class="mt-3 hidden" id="nfc_data_group">
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">NFC Tag Data</label>
+                        <div class="flex gap-2 items-start">
+                            <div class="flex-1">
+                                <div class="flex gap-2">
+                                    <input type="text" id="branch_nfc_data" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-1" placeholder="e.g. NFC-BRANCH-001" oninput="updateNfcPreview()">
+                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm whitespace-nowrap" onclick="generateNfcTag()">🏷️ Generate</button>
                                 </div>
-                                <small style="color: var(--text-muted); font-size: 0.75rem;">Mobile app will scan this NFC tag for check-in verification.</small>
+                                <small class="text-xs text-slate-400 mt-1 block">Mobile app will scan this NFC tag for check-in verification.</small>
                             </div>
-                            <div id="nfcPreview" style="width:72px; height:72px; background:#f0f4ff; border:1px solid var(--border); border-radius:0.5rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden;">
-                                <span id="nfcPreviewText" style="font-size:0.65rem; color:var(--text-muted); text-align:center;">NFC Tag</span>
+                            <div id="nfcPreview" class="w-[72px] h-[72px] bg-indigo-50 border border-slate-200 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                <span id="nfcPreviewText" class="text-xs text-slate-400 text-center">NFC Tag</span>
                             </div>
                         </div>
                     </div>
                     
-                    <div style="display: flex; gap: 1rem; margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.25rem;">
-                        <button type="button" class="btn btn-outline" style="flex: 1;" onclick="cancelEdit()">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="saveBranchBtn" style="flex: 1;" onclick="saveBranch()">📍 Save Branch</button>
+                    <div class="flex gap-4 mt-6 pt-5 border-t border-slate-200">
+                        <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="cancelEdit()">Cancel</button>
+                        <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" id="saveBranchBtn" onclick="saveBranch()">📍 Save Branch</button>
                     </div>
                 </form>
             </div>
 
-            <!-- Right Card: Branch Checkpoints (only loaded when editing an existing branch) -->
-            <div class="card" id="branchCheckpointsCard" style="margin:0; min-height: 100%;">
-                <div style="font-weight: 700; font-size: 1rem; color: var(--text-main); margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; display:flex; justify-content:space-between; align-items:center;">
-                    <span>📍 Multiple Clock-in Checkpoints</span>
-                    <span id="checkpointCountBadge" class="badge" style="background:#e0f2fe; color:#0369a1; font-weight: 600; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem;">0 Points</span>
+            <!-- Right Card: Branch Checkpoints -->
+            <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm min-h-full" id="branchCheckpointsCard">
+                <div class="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
+                    <span class="font-bold text-sm text-slate-800">📍 Multiple Clock-in Checkpoints</span>
+                    <span id="checkpointCountBadge" class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700">0 Points</span>
                 </div>
                 
-                <div id="checkpointNewBranchAlert" style="display: none; padding: 2rem 1.5rem; text-align: center; color: var(--text-muted); background: #f8fafc; border: 1px dashed var(--border); border-radius: 0.5rem;">
-                    <span style="font-size: 1.75rem;">💡</span>
-                    <p style="margin: 0.75rem 0 0 0; font-size: 0.85rem; line-height: 1.4;">Save this new branch first to start adding multiple geofenced checkpoints / points.</p>
+                <div id="checkpointNewBranchAlert" class="hidden text-center py-8 text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-lg mb-4">
+                    <span class="text-2xl">💡</span>
+                    <p class="mt-3 text-sm leading-relaxed">Save this new branch first to start adding multiple geofenced checkpoints / points.</p>
                 </div>
 
                 <div id="checkpointContainer">
                     <input type="hidden" id="checkpoint_branch_id" value="">
                     
                     <!-- Checkpoint List Table -->
-                    <div style="min-height: 120px; max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 1.5rem; background: var(--bg-base);">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                    <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-lg mb-6 bg-white">
+                        <table class="w-full text-xs">
                             <thead>
-                                <tr style="background: #f1f5f9; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10;">
-                                    <th style="padding: 0.5rem 0.75rem; text-align: left; font-weight: 600; color: var(--text-muted);">Name</th>
-                                    <th style="padding: 0.5rem 0.75rem; text-align: left; font-weight: 600; color: var(--text-muted);">Coordinates</th>
-                                    <th style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 600; color: var(--text-muted);">Radius</th>
-                                    <th style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 600; color: var(--text-muted);">Status</th>
-                                    <th style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 600; color: var(--text-muted);">Action</th>
+                                <tr class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                                    <th class="px-3 py-2 text-left font-semibold text-slate-500">Name</th>
+                                    <th class="px-3 py-2 text-left font-semibold text-slate-500">Coordinates</th>
+                                    <th class="px-3 py-2 text-center font-semibold text-slate-500">Radius</th>
+                                    <th class="px-3 py-2 text-center font-semibold text-slate-500">Status</th>
+                                    <th class="px-3 py-2 text-right font-semibold text-slate-500">Action</th>
                                 </tr>
                             </thead>
-                            <tbody id="checkpointsTableBody">
+                            <tbody id="checkpointsTableBody" class="divide-y divide-slate-100">
                                 <!-- Dynamic check-in points list -->
                             </tbody>
                         </table>
                     </div>
 
                     <!-- Add Checkpoint Form -->
-                    <div style="border-top: 1px dashed var(--border); padding-top: 1.25rem;">
-                        <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-main); margin-bottom: 0.75rem;">➕ Add New Geofence Point</div>
-                        <form id="checkpointForm" onsubmit="event.preventDefault(); submitAddCheckpoint();" class="grid" style="grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                            <div class="form-group" style="grid-column: span 2; margin: 0;">
-                                <label class="form-label">Point Name</label>
-                                <input type="text" id="cp_name" class="form-control" placeholder="e.g. Back Warehouse Entrance, Delivery Bay" required>
+                    <div class="border-t border-dashed border-slate-200 pt-5">
+                        <div class="font-bold text-sm text-slate-800 mb-3">➕ Add New Geofence Point</div>
+                        <form id="checkpointForm" onsubmit="event.preventDefault(); submitAddCheckpoint();" class="grid grid-cols-2 gap-3">
+                            <div class="col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Point Name</label>
+                                <input type="text" id="cp_name" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g. Back Warehouse Entrance, Delivery Bay" required>
                             </div>
-                            <div class="form-group" style="margin: 0;">
-                                <label class="form-label">Latitude</label>
-                                <input type="number" step="any" id="cp_lat" class="form-control" placeholder="-6.17539" required>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Latitude</label>
+                                <input type="number" step="any" id="cp_lat" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="-6.17539" required>
                             </div>
-                            <div class="form-group" style="margin: 0;">
-                                <label class="form-label">Longitude</label>
-                                <input type="number" step="any" id="cp_lon" class="form-control" placeholder="106.82715" required>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Longitude</label>
+                                <input type="number" step="any" id="cp_lon" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="106.82715" required>
                             </div>
-                            <div class="form-group" style="margin: 0; grid-column: span 2; display: flex; gap: 0.75rem; align-items: flex-end;">
-                                <div style="flex: 1;">
-                                    <label class="form-label">Radius (meters)</label>
-                                    <input type="number" id="cp_rad" class="form-control" value="50" min="1" required>
+                            <div class="col-span-2 flex gap-3 items-end">
+                                <div class="flex-1">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Radius (meters)</label>
+                                    <input type="number" id="cp_rad" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="50" min="1" required>
                                 </div>
-                                <button type="submit" class="btn btn-primary" style="height: 40px; white-space: nowrap; margin-bottom: 1px; background:#7c3aed; border-color:#7c3aed;">Add Point</button>
+                                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm h-[42px] whitespace-nowrap">Add Point</button>
                             </div>
                         </form>
                     </div>
@@ -633,83 +641,83 @@
 </div>
 
 <!-- ═══════════════════ SETTINGS TAB ═══════════════════ -->
-<div id="settings" class="tab-content" style="display: none;">
-    <div class="card">
-        <div class="card-title">ADMS Push Settings</div>
-        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+<div id="settings" class="tab-content hidden">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">ADMS Push Settings</div>
+        <p class="text-sm text-slate-500 mb-6">
             Configure the target ADMS server. The middleware emulates a ZKTeco fingerprint machine using the iclock push protocol.
         </p>
         <form id="admsForm">
-            <div class="form-group">
-                <label class="form-label">ADMS Server URL</label>
-                <input type="text" id="server_url" class="form-control" value="{{ server_url }}" placeholder="https://adms.example.com">
-                <small style="color: var(--text-muted);">Include http:// or https:// — no trailing slash.</small>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">ADMS Server URL</label>
+                <input type="text" id="server_url" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="{{ server_url }}" placeholder="https://adms.example.com">
+                <small class="text-xs text-slate-400 mt-1 block">Include http:// or https:// — no trailing slash.</small>
             </div>
-            <div class="form-group" style="margin-top: 1rem;">
-                <label class="form-label">Virtual Machine Serial Number (SN)</label>
-                <input type="text" id="serial_number" class="form-control" value="{{ sn }}" placeholder="VIRTUAL_MOBILE_01">
-                <small style="color: var(--text-muted);">This SN must be registered in your ADMS dashboard.</small>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Virtual Machine Serial Number (SN)</label>
+                <input type="text" id="serial_number" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="{{ sn }}" placeholder="VIRTUAL_MOBILE_01">
+                <small class="text-xs text-slate-400 mt-1 block">This SN must be registered in your ADMS dashboard.</small>
             </div>
-            <div class="form-group" style="margin-top: 1rem;">
-                <label class="form-label">Default Timezone Offset (GMT+)</label>
-                <input type="number" id="timezone_offset" class="form-control" value="{{ timezone_offset }}" placeholder="7">
-                <small style="color: var(--text-muted);">Fallback offset used if device data is missing. Jakarta=7, Bali=8, Jayapura=9.</small>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Default Timezone Offset (GMT+)</label>
+                <input type="number" id="timezone_offset" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="{{ timezone_offset }}" placeholder="7">
+                <small class="text-xs text-slate-400 mt-1 block">Fallback offset used if device data is missing. Jakarta=7, Bali=8, Jayapura=9.</small>
             </div>
-            <div class="form-group" style="margin-top: 1rem;">
-                <label class="form-label">Device Name (Alias)</label>
-                <input type="text" id="device_name" class="form-control" value="{{ device_name }}" placeholder="Mobile Gateway">
-                <small style="color: var(--text-muted);">The friendly name that appears in the ZKTeco console.</small>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Device Name (Alias)</label>
+                <input type="text" id="device_name" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="{{ device_name }}" placeholder="Mobile Gateway">
+                <small class="text-xs text-slate-400 mt-1 block">The friendly name that appears in the ZKTeco console.</small>
             </div>
-            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-                <button type="button" class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
-                <button type="button" class="btn btn-outline" onclick="testConnection()">🔌 Test Handshake</button>
+            <div class="flex gap-4">
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="saveSettings()">💾 Save Settings</button>
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="testConnection()">🔌 Test Handshake</button>
             </div>
         </form>
-        <div id="testResult" style="margin-top: 1.5rem; padding: 1rem; border-radius: 0.75rem; font-family: monospace; font-size: 0.875rem; display: none; white-space: pre-wrap; border: 1px solid transparent;"></div>
+        <div id="testResult" class="hidden mt-6 p-4 rounded-xl font-mono text-sm border whitespace-pre-wrap"></div>
     </div>
     
-    <div class="card" style="margin-top: 2rem;">
-        <div class="card-title">ADMS Employee Sync</div>
-        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">ADMS Employee Sync</div>
+        <p class="text-sm text-slate-500 mb-6">
             Configure credentials to automatically download employee names and data from the ADMS web interface.
         </p>
         <form id="admsSyncForm">
-            <div class="form-group">
-                <label class="form-label">ADMS Web URL</label>
-                <input type="text" id="sync_url" class="form-control" placeholder="http://10.101.24.125:8081">
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">ADMS Web URL</label>
+                <input type="text" id="sync_url" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="http://10.101.24.125:8081">
             </div>
-            <div class="form-group" style="margin-top: 1rem;">
-                <label class="form-label">Username</label>
-                <input type="text" id="sync_username" class="form-control" placeholder="admin">
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
+                <input type="text" id="sync_username" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="admin">
             </div>
-            <div class="form-group" style="margin-top: 1rem;">
-                <label class="form-label">Password</label>
-                <input type="password" id="sync_password" class="form-control" placeholder="admin">
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                <input type="password" id="sync_password" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="admin">
             </div>
-            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-                <button type="button" class="btn btn-primary" onclick="saveAdmsSyncSettings()">💾 Save Credentials</button>
-                <button type="button" class="btn btn-outline" onclick="triggerAdmsSync()" id="btnSyncNow">🔄 Sync Now</button>
+            <div class="flex gap-4">
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="saveAdmsSyncSettings()">💾 Save Credentials</button>
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="triggerAdmsSync()" id="btnSyncNow">🔄 Sync Now</button>
             </div>
         </form>
 
         <!-- Sync History / Status -->
-        <div id="syncStatus" style="margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;">
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+        <div id="syncStatus" class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+            <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <span style="color: var(--text-muted); display: block;">Last Sync</span>
-                    <strong id="statLastSync">Loading...</strong>
+                    <span class="text-xs text-slate-400 block">Last Sync</span>
+                    <strong id="statLastSync" class="text-sm text-slate-800">Loading...</strong>
                 </div>
                 <div>
-                    <span style="color: var(--text-muted); display: block;">Employees Found</span>
-                    <strong id="statLastCount">-</strong>
+                    <span class="text-xs text-slate-400 block">Employees Found</span>
+                    <strong id="statLastCount" class="text-sm text-slate-800">-</strong>
                 </div>
                 <div>
-                    <span style="color: var(--text-muted); display: block;">Database Total</span>
-                    <strong id="statTotalEmployees">-</strong>
+                    <span class="text-xs text-slate-400 block">Database Total</span>
+                    <strong id="statTotalEmployees" class="text-sm text-slate-800">-</strong>
                 </div>
                 <div>
-                    <span style="color: var(--text-muted); display: block;">Latest Status</span>
-                    <span id="statStatus" class="badge" style="font-size: 0.75rem;">-</span>
+                    <span class="text-xs text-slate-400 block">Latest Status</span>
+                    <span id="statStatus" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold">-</span>
                 </div>
             </div>
         </div>
@@ -717,166 +725,165 @@
 </div>
 
 <!-- ═══════════════════ PUNCH TYPES TAB ═══════════════════ -->
-<div id="punch-types" class="tab-content" style="display: none;">
-    <div class="card" style="margin-bottom: 2rem;">
-        <h2 class="card-title">Manage Punch Types</h2>
-        <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.875rem;">
+<div id="punch-types" class="tab-content hidden">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Manage Punch Types</h2>
+        <p class="text-sm text-slate-500 mb-6">
             Configure the types of punches available to mobile app users. Mobile users must tap "Sync Offline Data" in the app to see updates.
         </p>
         
-        <div class="table-container">
-            <table>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-sm">
                 <thead>
-                    <tr>
-                        <th>Code</th>
-                        <th>Label</th>
-                        <th>ADMS Code</th>
-                        <th>Icon</th>
-                        <th>Color</th>
-                        <th>Geo?</th>
-                        <th class="text-right" style="text-align: right;">Actions</th>
+                    <tr class="bg-slate-50 border-b border-slate-200">
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Code</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Label</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">ADMS Code</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Icon</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Color</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Geo?</th>
+                        <th class="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="punchTypesTbody">
+                <tbody id="punchTypesTbody" class="divide-y divide-slate-100">
                     <!-- Populated by JS -->
                 </tbody>
             </table>
         </div>
     </div>
 
-    <div class="card" style="max-width: 600px;">
-        <h2 class="card-title" id="ptFormTitle">Create New Punch Type</h2>
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-lg">
+        <h2 class="text-sm font-semibold text-slate-800 mb-4" id="ptFormTitle">Create New Punch Type</h2>
         <form id="ptForm" onsubmit="event.preventDefault(); savePunchType();">
             <input type="hidden" id="edit_pt_id">
-            <div class="grid" style="grid-template-columns: 1fr 1fr;">
-                <div class="form-group">
-                    <label class="form-label">Code</label>
-                    <input type="text" id="pt_code" class="form-control" placeholder="e.g., In, Out, Break_Start" required>
-                    <div class="form-help">Unique identifier</div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="mb-0">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Code</label>
+                    <input type="text" id="pt_code" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., In, Out, Break_Start" required>
+                    <div class="text-xs text-slate-400 mt-1">Unique identifier</div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Display Label</label>
-                    <input type="text" id="pt_label" class="form-control" placeholder="e.g., Clock In" required>
+                <div class="mb-0">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Display Label</label>
+                    <input type="text" id="pt_label" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., Clock In" required>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">ADMS Status Code</label>
-                    <input type="text" id="pt_adms_code" class="form-control" placeholder="e.g., 0, 1, 4" required>
-                    <div class="form-help">ZKTeco code (0=In, 1=Out)</div>
+                <div class="mb-0">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">ADMS Status Code</label>
+                    <input type="text" id="pt_adms_code" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., 0, 1, 4" required>
+                    <div class="text-xs text-slate-400 mt-1">ZKTeco code (0=In, 1=Out)</div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Icon Name</label>
-                    <input type="text" id="pt_icon" class="form-control" placeholder="e.g., login, logout" required>
-                    <div class="form-help">Material icon name</div>
+                <div class="mb-0">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Icon Name</label>
+                    <input type="text" id="pt_icon" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., login, logout" required>
+                    <div class="text-xs text-slate-400 mt-1">Material icon name</div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Color (Hex)</label>
-                    <input type="color" id="pt_color" class="form-control" value="#16a34a" style="height: 42px; padding: 0.25rem;">
+                <div class="mb-0">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Color (Hex)</label>
+                    <input type="color" id="pt_color" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm h-[42px] shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="#16a34a">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Display Order</label>
-                    <input type="number" id="pt_order" class="form-control" value="0" required>
+                <div class="mb-0">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Display Order</label>
+                    <input type="number" id="pt_order" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="0" required>
                 </div>
             </div>
             
-            <div class="form-group" style="margin-top: 1rem;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="pt_requires_geo" checked style="width: 1.25rem; height: 1.25rem; accent-color: var(--primary);">
-                    <span style="font-weight: 500; color: var(--text-main);">Requires Geofence Validation</span>
+            <div class="mt-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="pt_requires_geo" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4">
+                    <span class="text-sm font-medium text-slate-700">Requires Geofence Validation</span>
                 </label>
             </div>
 
-            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-                <button type="submit" class="btn btn-primary" id="savePtBtn">
+            <div class="flex gap-4 mt-6">
+                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" id="savePtBtn">
                     <i class="ph ph-plus"></i> Add Punch Type
                 </button>
-                <button type="button" class="btn btn-outline" id="cancelPtEditBtn" style="display: none;" onclick="cancelPtEdit()">
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors hidden" id="cancelPtEditBtn" onclick="cancelPtEdit()">
                     Cancel
                 </button>
             </div>
         </form>
     </div>
 </div>
+
 <!-- ═══════════════════ USERS TAB ═══════════════════ -->
-<div id="profile" class="tab-content" style="display: none;">
-    <!-- 1. List Section -->
-    <div id="userListSection" class="grid" style="grid-template-columns: 1fr 1fr; align-items: start;">
+<div id="profile" class="tab-content hidden">
+    <!-- User List Section -->
+    <div id="userListSection" class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <!-- Change Own Password -->
-        <div class="card">
-            <div class="card-title">My Security Credentials</div>
-            <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">My Security Credentials</div>
+            <p class="text-sm text-slate-500 mb-6">
                 Update your dashboard access password.
             </p>
             <form id="profileForm">
-                <div class="form-group">
-                    <label class="form-label">Admin Username</label>
-                    <input type="text" id="admin_username" value="{{ admin.username }}" readonly class="form-control" style="background: #f1f5f9; color: #64748b;">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Admin Username</label>
+                    <input type="text" id="admin_username" value="{{ admin.username }}" readonly class="block w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-2.5 text-sm text-slate-500 cursor-not-allowed">
                 </div>
-                <div class="form-group" style="margin-top: 0.75rem;">
-                    <label class="form-label">New Password</label>
-                    <input type="password" id="admin_password" class="form-control" placeholder="••••••••" required>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">New Password</label>
+                    <input type="password" id="admin_password" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="••••••••" required>
                 </div>
-                <div class="form-group" style="margin-top: 0.75rem;">
-                    <label class="form-label">Confirm New Password</label>
-                    <input type="password" id="admin_password_confirm" class="form-control" placeholder="••••••••" required>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Confirm New Password</label>
+                    <input type="password" id="admin_password_confirm" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="••••••••" required>
                 </div>
-                <div style="margin-top: 1.5rem;">
-                    <button type="button" class="btn btn-primary" onclick="updateProfile()" style="width: 100%;">🔐 Update Password</button>
-                </div>
+                <button type="button" class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="updateProfile()">🔐 Update Password</button>
             </form>
         </div>
 
         <!-- User List -->
-        <div class="card" style="padding: 0; overflow: hidden;">
-            <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="font-size: 1rem; font-weight: 600; margin: 0;">System Administrators</h3>
-                <button type="button" class="btn btn-sm btn-success" onclick="openUserModal()">➕ Add User</button>
+        <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <h3 class="text-sm font-semibold text-slate-800">System Administrators</h3>
+                <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-all shadow-sm" onclick="openUserModal()">➕ Add User</button>
             </div>
-            <div class="table-container" style="border: none; border-radius: 0;">
-                <table>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
                     <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>Role</th>
-                            <th>Created</th>
-                            <th style="text-align: right;">Actions</th>
+                        <tr class="bg-slate-50 border-b border-slate-200">
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Username</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Role</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Created</th>
+                            <th class="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="usersTableBody">
-                        <tr><td colspan="4" style="text-align:center; padding: 1.5rem; color: var(--text-muted);">Loading...</td></tr>
+                    <tbody id="usersTableBody" class="divide-y divide-slate-100">
+                        <tr><td colspan="4" class="text-center py-8 text-sm text-slate-400">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <!-- 2. Admin User Form Section -->
-    <div id="userFormSection" class="card" style="display: none; max-width: 500px; margin: 0 auto 2rem auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
-            <div class="card-title" id="userFormTitle" style="margin: 0;">Create Admin User</div>
-            <button type="button" class="btn btn-sm btn-outline" onclick="closeUserModal()">← Back to List</button>
+    <!-- Admin User Form Section -->
+    <div id="userFormSection" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm hidden max-w-lg mx-auto mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-sm font-semibold text-slate-800" id="userFormTitle">Create Admin User</div>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeUserModal()">← Back to List</button>
         </div>
         <form id="newUserForm">
             <input type="hidden" id="edit_user_id" value="">
-            <div class="form-group">
-                <label class="form-label">Username</label>
-                <input type="text" id="new_user_name" class="form-control" placeholder="manager1" required>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
+                <input type="text" id="new_user_name" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="manager1" required>
             </div>
-            <div class="form-group" style="margin-top: 0.75rem;">
-                <label class="form-label">Password</label>
-                <input type="password" id="new_user_pwd" class="form-control" placeholder="Leave blank to keep" required>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                <input type="password" id="new_user_pwd" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="Leave blank to keep" required>
             </div>
-            <div class="form-group" style="margin-top: 0.75rem;">
-                <label class="form-label">Role</label>
-                <select id="new_user_role" class="form-control" style="width: 100%; border: 1px solid var(--border); padding: 0.625rem; border-radius: 0.375rem; background: var(--card-bg); color: var(--text-main);">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Role</label>
+                <select id="new_user_role" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
                     <option value="superadmin">Super Admin (Full Access)</option>
                     <option value="admin" selected>Admin (Standard Access)</option>
                     <option value="manager">Manager (View Logs & Assign Supervisors)</option>
                     <option value="operator">Operator (Read-Only Access)</option>
                 </select>
             </div>
-            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-                <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeUserModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveUserBtn" style="flex: 1;" onclick="saveUser()">Add</button>
+            <div class="flex gap-4">
+                <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeUserModal()">Cancel</button>
+                <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" id="saveUserBtn" onclick="saveUser()">Add</button>
             </div>
         </form>
     </div>
@@ -885,65 +892,68 @@
 <!-- ═══════════════════ SUPERVISORS TAB ═══════════════════ -->
 {% if section == "supervisors" %}
 <div class="supervisor-management">
-  <h2><i class="fas fa-users-cog"></i> Supervisor Management</h2>
-  
-  <!-- Assignment Form -->
-  <div class="card">
-    <h3>Assign Supervisor to Employee</h3>
-    <form id="supervisorForm" onsubmit="return assignSupervisor(event)">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Supervisor (Employee ID)</label>
-          <input type="text" id="supervisor_id" class="form-control" placeholder="e.g., SUP001" required>
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+        <h3 class="text-sm font-semibold text-slate-800 mb-4">Assign Supervisor to Employee</h3>
+        <form id="supervisorForm" onsubmit="return assignSupervisor(event)">
+            <div class="flex gap-4 items-end flex-wrap">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Supervisor (Employee ID)</label>
+                    <input type="text" id="supervisor_id" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., SUP001" required>
+                </div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Team Member (Employee ID)</label>
+                    <input type="text" id="employee_id" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., EMP001" required>
+                </div>
+                <div>
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm">Assign</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <div class="rounded-xl border border-slate-200 bg-white shadow-sm mb-6">
+        <div class="px-6 py-4 border-b border-slate-200">
+            <h3 class="text-sm font-semibold text-slate-800">Current Assignments</h3>
         </div>
-        <div class="form-group">
-          <label>Team Member (Employee ID)</label>
-          <input type="text" id="employee_id" class="form-control" placeholder="e.g., EMP001" required>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200">
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">ID</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Supervisor</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Employee</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Created</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="supervisorAssignments" class="divide-y divide-slate-100">
+                    <tr><td colspan="5" class="text-sm text-slate-400 px-5 py-4">Loading...</td></tr>
+                </tbody>
+            </table>
         </div>
-        <div class="form-group" style="align-self: flex-end;">
-          <button type="submit" class="btn btn-primary">Assign</button>
+    </div>
+    
+    <div class="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200">
+            <h3 class="text-sm font-semibold text-slate-800">Pending Attendance Corrections</h3>
         </div>
-      </div>
-    </form>
-  </div>
-  
-  <!-- Assignment List -->
-  <div class="card">
-    <h3>Current Assignments</h3>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Supervisor</th>
-          <th>Employee</th>
-          <th>Created</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="supervisorAssignments">
-        <tr><td colspan="5" class="text-muted">Loading...</td></tr>
-      </tbody>
-    </table>
-  </div>
-  
-  <!-- Pending Corrections -->
-  <div class="card">
-    <h3>Pending Attendance Corrections</h3>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Employee</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Date</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="pendingCorrections">
-        <tr><td colspan="5" class="text-muted">No pending corrections</td></tr>
-      </tbody>
-    </table>
-  </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200">
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Employee</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Type</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Description</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Date</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="pendingCorrections" class="divide-y divide-slate-100">
+                    <tr><td colspan="5" class="text-sm text-slate-400 px-5 py-4">No pending corrections</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -984,17 +994,17 @@ async function loadSupervisorAssignments() {
   
   const tbody = document.getElementById('supervisorAssignments');
   if (data.assignments.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-muted">No assignments found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-sm text-slate-400 px-5 py-4 text-center">No assignments found</td></tr>';
     return;
   }
   
   tbody.innerHTML = data.assignments.map(a => `
-    <tr>
-      <td>${a.id}</td>
-      <td>${a.supervisor_id}</td>
-      <td>${a.employee_id}</td>
-      <td>${new Date(a.created_at).toLocaleDateString()}</td>
-      <td><button onclick="removeAssignment(${a.id})" class="btn btn-sm btn-danger">Remove</button></td>
+    <tr class="hover:bg-slate-50 transition-colors">
+      <td class="px-5 py-4 text-sm text-slate-700">${a.id}</td>
+      <td class="px-5 py-4 text-sm text-slate-700">${a.supervisor_id}</td>
+      <td class="px-5 py-4 text-sm text-slate-700">${a.employee_id}</td>
+      <td class="px-5 py-4 text-sm text-slate-500">${new Date(a.created_at).toLocaleDateString()}</td>
+      <td class="px-5 py-4"><button onclick="removeAssignment(${a.id})" class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors">Remove</button></td>
     </tr>
   `).join('');
 }
@@ -1009,21 +1019,22 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
 
 {% block extra_js %}
 <!-- Confirmation Modal -->
-<div id="confirmModal" class="modal-overlay">
-    <div class="modal modal-sm">
-        <div class="modal-header">
-            <div class="modal-title">Confirm Action</div>
-            <button class="modal-close" onclick="closeModal('confirmModal')">&times;</button>
+<div id="confirmModal" class="modal-overlay fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div class="modal-animated w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+            <div class="text-base font-bold text-slate-800">Confirm Action</div>
+            <button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all text-xl border-0 bg-transparent cursor-pointer" onclick="closeModal('confirmModal')">&times;</button>
         </div>
-        <div class="modal-body" id="confirmMsg" style="font-size:0.9rem; line-height:1.5;"></div>
-        <div class="modal-footer">
-            <button class="btn btn-ghost" id="confirmNoBtn">Cancel</button>
-            <button class="btn btn-danger" id="confirmYesBtn">Confirm</button>
+        <div class="px-6 py-5 text-sm text-slate-700 leading-relaxed" id="confirmMsg"></div>
+        <div class="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
+            <button class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" id="confirmNoBtn">Cancel</button>
+            <button class="inline-flex items-center justify-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-all shadow-sm" id="confirmYesBtn">Confirm</button>
         </div>
     </div>
 </div>
+
 <script>
-    // Helper to switch tabs
+    // Helper to reset all views
     function resetAllViews() {
         // Reset Devices Tab
         const devForm = document.getElementById('deviceFormSection');
@@ -1069,14 +1080,14 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         if (confirmM) confirmM.style.display = 'none';
     }
 
-    // Helper to switch tabs
+    // Helper to switch tabs (re-definition for proper scope)
     function showTab(tabId) {
-        // Reset all editable/form views and close active modals to align with Laravel non-persistent flow
+        // Reset all editable/form views
         resetAllViews();
 
         document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-        // Hide standalone sections (e.g., supervisor management) that may be visible
+        // Hide standalone sections
         const supervisorDiv = document.querySelector('.supervisor-management');
         if (supervisorDiv) supervisorDiv.style.display = 'none';
         
@@ -1098,10 +1109,9 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         }
     }
 
-    // Navigation switching
+    // Navigation switching (re-bind to avoid duplication with layout)
     document.querySelectorAll('.nav-item[data-tab]').forEach(tab => {
         tab.addEventListener('click', (e) => {
-            // Only intercept when on the main dashboard page, not on standalone pages like /ui/supervisors
             if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
                 e.preventDefault();
                 const targetTab = tab.dataset.tab;
@@ -1132,7 +1142,6 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
     // Handle initial load and back/forward navigation
     window.addEventListener('load', () => {
         localizeTimestamps();
-        // Only run tab logic if we are on the main dashboard root
         if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
             const hash = window.location.hash.replace('#', '') || 'dashboard';
             showTab(hash);
@@ -1167,7 +1176,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         const timezone_offset = parseInt(document.getElementById('timezone_offset').value) || 7;
         const board = document.getElementById('testResult');
         board.style.display = 'block';
-        board.style.background = '#f1f5f9'; board.style.borderColor = '#e2e8f0';
+        board.className = 'mt-6 p-4 rounded-xl font-mono text-sm border border-slate-200 bg-slate-50 whitespace-pre-wrap';
         board.innerText = '> Sending handshake to ADMS server...\n> SN: ' + sn + ' (' + device_name + ')';
         try {
             const res = await fetch('/ui/test-connection', {
@@ -1180,11 +1189,12 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
                 })
             });
             const data = await res.json();
-            board.style.background = data.success ? '#d1fae5' : '#fee2e2';
-            board.style.borderColor = data.success ? '#10b981' : '#ef4444';
+            board.className = data.success 
+                ? 'mt-6 p-4 rounded-xl font-mono text-sm border border-emerald-300 bg-emerald-50 text-emerald-800 whitespace-pre-wrap'
+                : 'mt-6 p-4 rounded-xl font-mono text-sm border border-red-300 bg-red-50 text-red-700 whitespace-pre-wrap';
             board.innerText = '> Status: ' + (data.success ? 'SUCCESS ✅' : 'FAILED ❌') + '\n> ' + data.message;
         } catch(e) {
-            board.style.background = '#fee2e2';
+            board.className = 'mt-6 p-4 rounded-xl font-mono text-sm border border-red-300 bg-red-50 text-red-700 whitespace-pre-wrap';
             board.innerText = '> Error: Could not reach the middleware server.';
         }
     }
@@ -1211,11 +1221,11 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             const statusEl = document.getElementById('statStatus');
             statusEl.innerText = data.last_status.toUpperCase();
             if (data.last_status === 'success') {
-                statusEl.style.background = '#d1fae5'; statusEl.style.color = '#065f46';
+                statusEl.className = 'inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700';
             } else if (data.last_status.startsWith('failed')) {
-                statusEl.style.background = '#fee2e2'; statusEl.style.color = '#991b1b';
+                statusEl.className = 'inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700';
             } else {
-                statusEl.style.background = '#f1f5f9'; statusEl.style.color = '#475569';
+                statusEl.className = 'inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600';
             }
         } catch(e) {}
     }
@@ -1282,7 +1292,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
     async function openDeviceModal(bindingId, currentLabel) {
         document.getElementById('edit_device_id').value = bindingId;
         document.getElementById('edit_device_label').value = currentLabel || '';
-        document.getElementById('deviceBranchesList').innerHTML = '<span style="font-size:0.85rem;color:var(--text-muted);">Loading assigned branches...</span>';
+        document.getElementById('deviceBranchesList').innerHTML = '<span class="text-sm text-slate-400">Loading assigned branches...</span>';
         
         if (_allBranches.length === 0) {
             try {
@@ -1306,12 +1316,12 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             
             const listDiv = document.getElementById('deviceBranchesList');
             if (assignedBranches.length === 0) {
-                listDiv.innerHTML = '<span style="font-size:0.85rem;color:var(--text-muted);">No branches assigned yet. This device can punch anywhere!</span>';
+                listDiv.innerHTML = '<span class="text-sm text-slate-400">No branches assigned yet. This device can punch anywhere!</span>';
             } else {
                 listDiv.innerHTML = assignedBranches.map(b => `
-                    <span style="display:inline-flex; align-items:center; gap:6px; background:#e0e7ff; color:#4338ca; padding:4px 10px; border-radius:12px; font-size:0.75rem; font-weight:500;">
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
                         ${b.branch_name}
-                        <span onclick="removeDeviceBranchFromModal(${bindingId}, ${b.branch_id})" style="cursor:pointer; font-size:0.9rem; font-weight:bold; line-height:1; color:#a5b4fc;" title="Remove branch">×</span>
+                        <span onclick="removeDeviceBranchFromModal(${bindingId}, ${b.branch_id})" class="cursor-pointer text-sm font-bold leading-none text-indigo-300 hover:text-indigo-500" title="Remove branch">×</span>
                     </span>
                 `).join('');
             }
@@ -1388,7 +1398,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
 
     function initBranchMap() {
         const container = document.getElementById('branchMap');
-        if (!container || container._leaflet_id) return; // Already initialized
+        if (!container || container._leaflet_id) return;
 
         const defaultLat = -6.175392;
         const defaultLon = 106.827153;
@@ -1404,7 +1414,6 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             radius: 50, color: '#6366f1', fillColor: '#6366f1', fillOpacity: 0.1, weight: 2
         }).addTo(branchMap);
 
-        // Sync marker → inputs
         branchMarker.on('dragend', function() {
             const pos = branchMarker.getLatLng();
             document.getElementById('branch_lat').value = pos.lat.toFixed(6);
@@ -1412,7 +1421,6 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             updateCircle();
         });
 
-        // Sync click → marker + inputs
         branchMap.on('click', function(e) {
             branchMarker.setLatLng(e.latlng);
             document.getElementById('branch_lat').value = e.latlng.lat.toFixed(6);
@@ -1420,7 +1428,6 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             updateCircle();
         });
 
-        // Fix map rendering for hidden tab: invalidate size after short delay
         setTimeout(() => { branchMap.invalidateSize(); }, 100);
         branchMapInitialized = true;
     }
@@ -1452,7 +1459,6 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         const filter = document.getElementById('branchFilter').value;
         const tbody = document.getElementById('branchesTableBody');
         
-        // Defensive: ensure currentBranches is an array
         const branches = Array.isArray(currentBranches) ? currentBranches : [];
 
         const filtered = branches.filter(b => {
@@ -1466,33 +1472,30 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         document.getElementById('branchCount').innerText = `${filtered.length} / ${branches.length} branches`;
 
         if (!filtered.length) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">No matching branches.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-slate-400">No matching branches.</td></tr>';
             return;
         }
 
         tbody.innerHTML = filtered.map(b => `
-            <tr style="${b.is_active ? '' : 'opacity:0.55;'}">
-                <td><strong>${b.name}</strong></td>
-                <td style="font-family:monospace;font-size:0.75rem;">${b.latitude.toFixed(5)}, ${b.longitude.toFixed(5)}</td>
-                <td>${b.radius_meters}m</td>
-                <td style="text-align:center;">${b.qr_code_enabled ? '<span style="color:#16a34a;font-weight:600;">✓</span>' : '<span style="color:#94a3b8;">—</span>'}</td>
-                <td style="text-align:center;">${b.nfc_enabled ? '<span style="color:#6366f1;font-weight:600;">✓</span>' : '<span style="color:#94a3b8;">—</span>'}</td>
-                <td style="text-align:center;">
-                    <span style="display:inline-flex;align-items:center;gap:3px;background:${b.device_count > 0 ? '#e0e7ff' : '#f1f5f9'};color:${b.device_count > 0 ? '#4338ca' : '#94a3b8'};padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;">
+            <tr class="${b.is_active ? 'hover:bg-slate-50' : 'opacity-60 hover:bg-slate-50'} transition-colors">
+                <td class="px-5 py-4"><strong class="text-slate-800">${b.name}</strong></td>
+                <td class="px-5 py-4 font-mono text-xs text-slate-500">${b.latitude.toFixed(5)}, ${b.longitude.toFixed(5)}</td>
+                <td class="px-5 py-4 text-sm text-slate-700">${b.radius_meters}m</td>
+                <td class="px-5 py-4 text-center">${b.qr_code_enabled ? '<span class="text-emerald-600 font-semibold">✓</span>' : '<span class="text-slate-300">—</span>'}</td>
+                <td class="px-5 py-4 text-center">${b.nfc_enabled ? '<span class="text-indigo-600 font-semibold">✓</span>' : '<span class="text-slate-300">—</span>'}</td>
+                <td class="px-5 py-4 text-center">
+                    <span class="inline-flex items-center gap-1 rounded-full ${b.device_count > 0 ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-400'} px-2.5 py-0.5 text-xs font-semibold">
                         <i class="ph ph-devices"></i> ${b.device_count}
                     </span>
                 </td>
-                <td style="text-align:center;">
-                    <label class="toggle-switch" style="cursor:pointer;" onclick="event.stopPropagation(); toggleBranchStatus(${b.id}, ${b.is_active})">
-                        <input type="checkbox" ${b.is_active ? 'checked' : ''} style="display:none;">
-                        <span class="toggle-slider" style="display:inline-block;width:36px;height:20px;background:${b.is_active ? '#10b981' : '#cbd5e1'};border-radius:10px;position:relative;transition:all 0.2s;vertical-align:middle;">
-                            <span style="content:'';position:absolute;top:2px;left:${b.is_active ? '18px' : '2px'};width:16px;height:16px;background:white;border-radius:50%;transition:all 0.2s;"></span>
-                        </span>
+                <td class="px-5 py-4 text-center">
+                    <label class="cursor-pointer" onclick="event.stopPropagation(); toggleBranchStatus(${b.id}, ${b.is_active})">
+                        <span class="toggle-slider ${b.is_active ? 'active' : 'inactive'}"></span>
                     </label>
                 </td>
-                <td style="text-align:right;white-space:nowrap;">
-                    <button class="btn btn-sm btn-outline" style="background:#e0e7ff; color:#4338ca; border-color:#c7d2fe;" onclick="editBranch(${b.id})">✏️ Edit</button>
-                    <button class="btn btn-sm btn-outline" style="background:#fef2f2; color:#b91c1c; border-color:#fca5a5;" onclick="confirmDeleteBranch(${b.id}, '${b.name.replace(/'/g, "\\'")}')">🗑️</button>
+                <td class="px-5 py-4 text-right whitespace-nowrap">
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="editBranch(${b.id})">✏️ Edit</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors" onclick="confirmDeleteBranch(${b.id}, '${b.name.replace(/'/g, "\\'")}')">🗑️</button>
                 </td>
             </tr>`).join('');
     }
@@ -1538,11 +1541,10 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         const container = document.getElementById('qrPreview');
         if (!container) return;
         
-        // Clear previous
         container.innerHTML = '';
         
         if (!data) {
-            container.innerHTML = '<span style="font-size:0.65rem;color:var(--text-muted);text-align:center;">Live QR</span>';
+            container.innerHTML = '<span class="text-xs text-slate-400 text-center">Live QR</span>';
             return;
         }
         
@@ -1556,7 +1558,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
                 correctLevel: QRCode.CorrectLevel.H
             });
         } catch(e) {
-            container.innerHTML = '<span style="font-size:0.65rem;color:#ef4444;">Error</span>';
+            container.innerHTML = '<span class="text-xs text-red-500">Error</span>';
         }
     }
 
@@ -1585,7 +1587,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         const textEl = document.getElementById('nfcPreviewText');
         if (!textEl) return;
         textEl.innerText = data ? data.length > 18 ? data.substring(0, 16) + '…' : data : 'NFC Tag';
-        textEl.style.color = data ? '#4338ca' : 'var(--text-muted)';
+        textEl.className = data ? 'text-xs text-indigo-700 text-center' : 'text-xs text-slate-400 text-center';
     }
 
     function generateNfcTag() {
@@ -1603,13 +1605,11 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         document.getElementById('branchFormTitle').innerText = '📍 Create New Branch';
         document.getElementById('saveBranchBtn').innerText = '📍 Save Branch';
         
-        // Reset form
         document.getElementById('edit_branch_id').value = '';
         document.getElementById('branchForm').reset();
         document.getElementById('qr_data_group').style.display = 'none';
         document.getElementById('nfc_data_group').style.display = 'none';
         
-        // Show new branch alert, hide checkpoint container
         document.getElementById('checkpointNewBranchAlert').style.display = 'block';
         document.getElementById('checkpointContainer').style.display = 'none';
         
@@ -1661,13 +1661,11 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         toggleNfcField();
         updateNfcPreview();
         
-        // Prefill default coordinates for checkpoints form to match branch coordinates
         document.getElementById('cp_lat').value = branch.latitude;
         document.getElementById('cp_lon').value = branch.longitude;
         document.getElementById('cp_name').value = '';
         document.getElementById('cp_rad').value = 50;
         
-        // Show checkpoint container, hide new branch alert, load checkpoints
         document.getElementById('checkpointNewBranchAlert').style.display = 'none';
         document.getElementById('checkpointContainer').style.display = 'block';
         loadCheckpoints(branch.id);
@@ -1759,7 +1757,6 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
                 notify(editId ? 'Branch updated successfully!' : 'Branch added successfully!');
                 await loadBranches();
                 if (!editId && resData && resData.id) {
-                    // Instantly open the newly created branch in the unified edit/points mode so they can add points!
                     editBranch(resData.id);
                 } else {
                     cancelEdit();
@@ -1801,7 +1798,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
 
     function confirmDeleteBranch(id, name) {
         showConfirm(
-            `Delete branch <strong>${name}</strong>?<br><small style="color:var(--text-muted);">This cannot be undone. Remove all device assignments first before deleting.</small>`,
+            `Delete branch <strong>${name}</strong>?<br><small class="text-slate-400">This cannot be undone. Remove all device assignments first before deleting.</small>`,
             async () => {
                 try {
                     const res = await fetch(`/ui/branches/${id}`, {method: 'DELETE'});
@@ -1834,7 +1831,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
 
     async function loadCheckpoints(branchId) {
         const tbody = document.getElementById('checkpointsTableBody');
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1rem;">⏳ Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-slate-400">⏳ Loading...</td></tr>';
         
         try {
             const res = await fetch(`/ui/branches/${branchId}/checkpoints`);
@@ -1842,7 +1839,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             const data = await res.json();
             
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--text-muted);">No check-in checkpoints configured yet. This branch only uses the primary center coordinate.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-slate-400">No check-in checkpoints configured yet. This branch only uses the primary center coordinate.</td></tr>';
                 const badge = document.getElementById('checkpointCountBadge');
                 if (badge) badge.innerText = '0 Points';
                 return;
@@ -1851,24 +1848,22 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             if (badge) badge.innerText = `${data.length} Point${data.length === 1 ? '' : 's'}`;
             
             tbody.innerHTML = data.map(cp => `
-                <tr style="${cp.is_active ? '' : 'opacity:0.55;'}">
-                    <td><strong>${cp.name}</strong></td>
-                    <td style="font-family:monospace;font-size:0.75rem;">${cp.latitude.toFixed(5)}, ${cp.longitude.toFixed(5)}</td>
-                    <td>${cp.radius_meters}m</td>
-                    <td style="text-align:center;">
-                        <label class="toggle-switch" style="cursor:pointer;" onclick="toggleCheckpointStatus(${branchId}, ${cp.id}, ${cp.is_active})">
-                            <span class="toggle-slider" style="display:inline-block;width:32px;height:16px;background:${cp.is_active ? '#10b981' : '#cbd5e1'};border-radius:8px;position:relative;transition:all 0.2s;vertical-align:middle;">
-                                <span style="content:'';position:absolute;top:1px;left:${cp.is_active ? '17px' : '1px'};width:14px;height:14px;background:white;border-radius:50%;transition:all 0.2s;"></span>
-                            </span>
+                <tr class="${cp.is_active ? 'hover:bg-slate-50' : 'opacity-60 hover:bg-slate-50'} transition-colors">
+                    <td class="px-3 py-2.5 text-sm font-semibold text-slate-800">${cp.name}</td>
+                    <td class="px-3 py-2.5 font-mono text-xs text-slate-500">${cp.latitude.toFixed(5)}, ${cp.longitude.toFixed(5)}</td>
+                    <td class="px-3 py-2.5 text-sm text-center text-slate-700">${cp.radius_meters}m</td>
+                    <td class="px-3 py-2.5 text-center">
+                        <label class="cursor-pointer" onclick="toggleCheckpointStatus(${branchId}, ${cp.id}, ${cp.is_active})">
+                            <span class="toggle-slider ${cp.is_active ? 'active' : 'inactive'}" style="width:32px;height:16px;"></span>
                         </label>
                     </td>
-                    <td style="text-align:right;">
-                        <button class="btn btn-sm btn-outline" onclick="deleteCheckpoint(${branchId}, ${cp.id})" style="padding:2px 6px;color:#dc2626;border-color:#fca5a5;background:#fef2f2;font-size:0.75rem;">🗑️</button>
+                    <td class="px-3 py-2.5 text-right">
+                        <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors" onclick="deleteCheckpoint(${branchId}, ${cp.id})">🗑️</button>
                     </td>
                 </tr>
             `).join('');
         } catch(e) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1rem;color:#ef4444;">Failed to load checkpoints.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-red-500">Failed to load checkpoints.</td></tr>';
         }
     }
 
@@ -1895,7 +1890,6 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             
             if (res.ok) {
                 notify('Checkpoint added successfully!');
-                // Reset form inputs except lat/lon to make rapid entry easy
                 document.getElementById('cp_name').value = '';
                 document.getElementById('cp_rad').value = 50;
                 loadCheckpoints(branchId);
@@ -1942,78 +1936,20 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         });
     }
 
-    // ── Multi-Branch Device Management ──────────────────────────────────────────
-    async function addDeviceBranch(bindingId) {
-        const res = await fetch('/ui/branches');
-        const branches = await res.json();
-        if (!branches.length) { notify('No branches defined yet. Create one first.', 'error'); return; }
-
-        let options = 'Choose a branch to add:\n\n';
-        branches.forEach((b, i) => { options += `${i + 1}. ${b.name}\n`; });
-        const choice = prompt(`${options}\nEnter number:`);
-        if (!choice) return;
-        const idx = parseInt(choice) - 1;
-        if (isNaN(idx) || idx < 0 || idx >= branches.length) { notify('Invalid selection', 'error'); return; }
-
-        const addRes = await fetch(`/ui/devices/${bindingId}/branches/${branches[idx].id}`, {method: 'POST'});
-        if (addRes.ok) { notify(`Branch "${branches[idx].name}" added to device`); location.reload(); }
-        else { const err = await addRes.json(); notify(err.detail || 'Failed to add branch', 'error'); }
-    }
-
-    async function removeDeviceBranch(bindingId, branchId) {
-        const res = await fetch(`/ui/devices/${bindingId}/branches/${branchId}`, {method: 'DELETE'});
-        if (res.ok) { notify('Branch removed from device'); location.reload(); }
-        else { const err = await res.json(); notify(err.detail || 'Failed to remove branch', 'error'); }
-    }
-
-    // Legacy — kept for backward compat
-    async function bindBranch(employeeId, branchId) {
-        const res = await fetch(`/ui/devices/${employeeId}/bind-branch`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({branch_id: branchId})
-        });
-        if (res.ok) { notify('Device branch assigned successfully!'); }
-        else { notify('Failed to assign branch', 'error'); }
-    }
-
-    // ── Custom Confirmation Modal ────────────────────────────────────────────────
-    function showConfirm(html, onConfirm) {
-        const modal = document.getElementById('confirmModal');
-        const msg = document.getElementById('confirmMsg');
-        const yesBtn = document.getElementById('confirmYesBtn');
-        const noBtn = document.getElementById('confirmNoBtn');
-        if (!modal || !msg || !yesBtn || !noBtn) return;
-        
-        msg.innerHTML = html;
-        modal.style.display = 'flex';
-        
-        const cleanup = () => {
-            modal.style.display = 'none';
-            yesBtn.onclick = null;
-            noBtn.onclick = null;
-        };
-        
-        yesBtn.onclick = () => { cleanup(); onConfirm(); };
-        noBtn.onclick = cleanup;
-        // Click outside to close
-        modal.onclick = (e) => { if (e.target === modal) cleanup(); };
-    }
-
     // ── API Keys ───────────────────────────────────────────────────────────────
     let _generatedKey = '';
 
     function expiryBadgeHtml(k) {
-        if (!k.expires_at) return '<span class="badge" style="background:#e2e8f0;color:#64748b;">Never</span>';
+        if (!k.expires_at) return '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Never</span>';
         if (k.expiry_status === 'expired') {
-            return '<span class="badge" style="background:#fef2f2;color:#dc2626;font-weight:600;">⛔ Expired</span>';
+            return '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">⛔ Expired</span>';
         }
         if (k.expiry_status === 'expiring_soon') {
             const days = k.expires_in_days;
             const label = days === 0 ? 'Expires today' : days < 0 ? 'Expired' : `Expires in ${days}d`;
-            return `<span class="badge" style="background:#fef9c3;color:#a16207;font-weight:600;">⚠️ ${label}</span>`;
+            return `<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">⚠️ ${label}</span>`;
         }
-        // More than 30 days
-        return `<span class="badge" style="background:#d1fae5;color:#065f46;">✅ ${k.expires_in_days}d</span>`;
+        return `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✅ ${k.expires_in_days}d</span>`;
     }
 
     async function loadApiKeys() {
@@ -2021,7 +1957,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         const keys = await res.json();
         const tbody = document.getElementById('keysTableBody');
         if (!keys.length) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--text-muted);">No API keys yet. Generate one above.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-slate-400">No API keys yet. Generate one above.</td></tr>';
             return;
         }
         tbody.innerHTML = keys.map(k => {
@@ -2031,26 +1967,26 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             const lastIp = k.last_used_ip || '—';
             const actions = [];
             if (k.is_active && k.expiry_status !== 'expired') {
-                actions.push(`<button class="btn btn-sm btn-outline" onclick="rotateKey(${k.id})" title="Rotate key (grace period)" style="color:var(--primary);border-color:var(--primary-light);">🔄 Rotate</button>`);
-                actions.push(`<button class="btn btn-sm btn-outline" onclick="revokeKey(${k.id})" title="Revoke" style="color:var(--danger);border-color:var(--danger);margin-left:4px;">Revoke</button>`);
+                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="rotateKey(${k.id})" title="Rotate key (grace period)">🔄 Rotate</button>`);
+                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1" onclick="revokeKey(${k.id})" title="Revoke">Revoke</button>`);
             } else {
-                actions.push(`<button class="btn btn-sm btn-danger" onclick="deleteKey(${k.id})" title="Permanently delete">Delete</button>`);
+                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg bg-red-500 border border-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors ml-1" onclick="deleteKey(${k.id})" title="Permanently delete">Delete</button>`);
             }
-            actions.push(`<button class="btn btn-sm btn-outline" onclick="renameKey(${k.id},'${k.label.replace(/'/g,"\\'")}')" title="Rename" style="margin-left:4px;">✏️</button>`);
+            actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors ml-1" onclick="renameKey(${k.id},'${k.label.replace(/'/g,"\\'")}')" title="Rename">✏️</button>`);
             return `
-            <tr>
-                <td><strong>${k.label}</strong></td>
-                <td style="font-family:monospace;font-size:0.8rem;color:var(--primary);">${k.key_preview}</td>
-                <td>
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-5 py-4"><strong class="text-slate-800">${k.label}</strong></td>
+                <td class="px-5 py-4 font-mono text-sm text-indigo-600">${k.key_preview}</td>
+                <td class="px-5 py-4">
                     ${k.is_active && k.expiry_status !== 'expired'
-                        ? '<span class="badge badge-success">Active</span>'
-                        : '<span class="badge badge-danger">Revoked</span>'}
+                        ? '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Active</span>'
+                        : '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">Revoked</span>'}
                 </td>
-                <td>${expiryBadgeHtml(k)}</td>
-                <td style="text-align:center;font-size:0.85rem;">${k.device_count ?? 0}</td>
-                <td style="font-size:0.8rem;color:var(--text-muted);">${lastUsed}</td>
-                <td style="font-size:0.75rem;font-family:monospace;color:var(--text-muted);">${lastIp}</td>
-                <td style="text-align:right;white-space:nowrap;">${actions.join('')}</td>
+                <td class="px-5 py-4">${expiryBadgeHtml(k)}</td>
+                <td class="px-5 py-4 text-center text-sm text-slate-700">${k.device_count ?? 0}</td>
+                <td class="px-5 py-4 text-sm text-slate-400">${lastUsed}</td>
+                <td class="px-5 py-4 text-xs font-mono text-slate-400">${lastIp}</td>
+                <td class="px-5 py-4 text-right whitespace-nowrap">${actions.join('')}</td>
             </tr>`;
         }).join('');
     }
@@ -2080,6 +2016,10 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         document.getElementById('newKeyDisplay').style.display = 'block';
         await loadApiKeys();
         notify('API key generated!');
+    }
+
+    function copyKey() {
+        navigator.clipboard.writeText(_generatedKey).then(() => notify('Key copied to clipboard!'));
     }
 
     function openApiKeyEditModal(id, currentLabel) {
@@ -2148,10 +2088,6 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         }
     }
 
-    function copyKey() {
-        navigator.clipboard.writeText(_generatedKey).then(() => notify('Key copied to clipboard!'));
-    }
-
     // ── Admin Profile ──────────────────────────────────────────────────────────
     async function updateProfile() {
         const username = document.getElementById('admin_username').value;
@@ -2190,21 +2126,21 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         currentPunchTypes = await res.json();
         const tbody = document.getElementById('punchTypesTbody');
         tbody.innerHTML = currentPunchTypes.map(pt => `
-            <tr>
-                <td><strong>${pt.code}</strong></td>
-                <td>${pt.label}</td>
-                <td><span style="font-family:monospace; background:#f1f5f9; padding:2px 6px; border-radius:4px;">${pt.adms_status_code}</span></td>
-                <td><i class="ph ph-${pt.icon}"></i> ${pt.icon}</td>
-                <td>
-                    <div style="display:flex; align-items:center; gap:0.5rem;">
-                        <div style="width:16px;height:16px;border-radius:4px;background-color:${pt.color_hex};"></div>
-                        ${pt.color_hex}
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-5 py-4"><strong class="text-slate-800">${pt.code}</strong></td>
+                <td class="px-5 py-4 text-sm text-slate-700">${pt.label}</td>
+                <td class="px-5 py-4"><span class="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">${pt.adms_status_code}</span></td>
+                <td class="px-5 py-4 text-sm text-slate-600"><i class="ph ph-${pt.icon}"></i> ${pt.icon}</td>
+                <td class="px-5 py-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded" style="background-color:${pt.color_hex};"></div>
+                        <span class="text-sm text-slate-600">${pt.color_hex}</span>
                     </div>
                 </td>
-                <td>${pt.requires_geofence ? '✅' : '❌'}</td>
-                <td style="text-align:right; white-space:nowrap;">
-                    <button class="btn btn-sm btn-outline" style="color:var(--primary); border-color:var(--primary-light);" onclick="editPunchType('${pt.code}')">Edit</button>
-                    <button class="btn btn-sm btn-danger" onclick="deletePunchType('${pt.code}')" style="margin-left:4px;">Delete</button>
+                <td class="px-5 py-4">${pt.requires_geofence ? '<span class="text-emerald-600">✅</span>' : '<span class="text-slate-300">❌</span>'}</td>
+                <td class="px-5 py-4 text-right whitespace-nowrap">
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="editPunchType('${pt.code}')">Edit</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1" onclick="deletePunchType('${pt.code}')">Delete</button>
                 </td>
             </tr>`).join('');
     }
@@ -2215,7 +2151,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         
         document.getElementById('edit_pt_id').value = pt.code;
         document.getElementById('pt_code').value = pt.code;
-        document.getElementById('pt_code').readOnly = true; // Code shouldn't change easily
+        document.getElementById('pt_code').readOnly = true;
         document.getElementById('pt_label').value = pt.label;
         document.getElementById('pt_adms_code').value = pt.adms_status_code;
         document.getElementById('pt_icon').value = pt.icon || 'circle';
@@ -2224,7 +2160,8 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         document.getElementById('pt_requires_geo').checked = pt.requires_geofence;
         
         document.getElementById('ptFormTitle').innerText = 'Edit Punch Type';
-        document.getElementById('cancelPtEditBtn').style.display = 'inline-block';
+        document.getElementById('cancelPtEditBtn').classList.remove('hidden');
+        document.getElementById('cancelPtEditBtn').style.display = 'inline-flex';
         document.getElementById('savePtBtn').innerHTML = '<i class="ph ph-floppy-disk"></i> Save Changes';
     }
 
@@ -2233,6 +2170,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         document.getElementById('ptForm').reset();
         document.getElementById('pt_code').readOnly = false;
         document.getElementById('ptFormTitle').innerText = 'Create New Punch Type';
+        document.getElementById('cancelPtEditBtn').classList.add('hidden');
         document.getElementById('cancelPtEditBtn').style.display = 'none';
         document.getElementById('savePtBtn').innerHTML = '<i class="ph ph-plus"></i> Add Punch Type';
     }
@@ -2288,21 +2226,21 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         const tbody = document.getElementById('usersTableBody');
         tbody.innerHTML = currentUsers.map(u => {
             const roleLabels = {
-                'superadmin': '<span class="status-badge" style="background:#e0f2fe; color:#0369a1; font-weight:600; padding:0.25rem 0.5rem; border-radius:0.25rem; font-size:0.75rem;">Super Admin</span>',
-                'admin': '<span class="status-badge" style="background:#ecfdf5; color:#047857; font-weight:600; padding:0.25rem 0.5rem; border-radius:0.25rem; font-size:0.75rem;">Admin</span>',
-                'manager': '<span class="status-badge" style="background:#fef3c7; color:#b45309; font-weight:600; padding:0.25rem 0.5rem; border-radius:0.25rem; font-size:0.75rem;">Manager</span>',
-                'operator': '<span class="status-badge" style="background:#f3f4f6; color:#4b5563; font-weight:600; padding:0.25rem 0.5rem; border-radius:0.25rem; font-size:0.75rem;">Operator</span>'
+                'superadmin': '<span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700">Super Admin</span>',
+                'admin': '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Admin</span>',
+                'manager': '<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Manager</span>',
+                'operator': '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Operator</span>'
             };
             const roleBadge = roleLabels[u.role] || roleLabels['admin'];
             
             return `
-            <tr>
-                <td><strong>${u.username}</strong></td>
-                <td>${roleBadge}</td>
-                <td style="font-size:0.8rem;color:var(--text-muted);">${new Date(u.created_at).toLocaleDateString()}</td>
-                <td style="text-align:right;">
-                    <button class="btn btn-sm btn-outline" style="background:#e0e7ff; color:#4338ca; border-color:#c7d2fe;" onclick="editUser(${u.id})">Edit</button>
-                    ${u.username !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Delete</button>` : '<span style="font-size:0.75rem; color:var(--text-muted); margin-left: 0.5rem;">Root User</span>'}
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-5 py-4"><strong class="text-slate-800">${u.username}</strong></td>
+                <td class="px-5 py-4">${roleBadge}</td>
+                <td class="px-5 py-4 text-sm text-slate-400">${new Date(u.created_at).toLocaleDateString()}</td>
+                <td class="px-5 py-4 text-right">
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="editUser(${u.id})">Edit</button>
+                    ${u.username !== 'admin' ? `<button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1" onclick="deleteUser(${u.id})">Delete</button>` : '<span class="text-xs text-slate-400 ml-2">Root User</span>'}
                 </td>
             </tr>`;
         }).join('');
@@ -2332,7 +2270,6 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         document.getElementById('new_user_pwd').placeholder = 'Keep blank to stay same';
         document.getElementById('new_user_role').value = user.role || 'admin';
         
-        // Root admin cannot change role from superadmin
         if (user.username === 'admin') {
             document.getElementById('new_user_role').parentElement.style.display = 'none';
         } else {
@@ -2405,7 +2342,7 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         document.getElementById('devicesListSection').style.display = 'none';
         document.getElementById('deviceFormSection').style.display = 'none';
         document.getElementById('assignFormSection').style.display = 'block';
-        document.getElementById('employeeList').innerHTML = '<div style="padding:1rem; text-align:center;">Loading Employees...</div>';
+        document.getElementById('employeeList').innerHTML = '<div class="p-4 text-center text-sm text-slate-400">Loading Employees...</div>';
         
         try {
             const res = await fetch('/ui/employees/list');
@@ -2419,13 +2356,13 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
     function renderEmployeeList(list) {
         const container = document.getElementById('employeeList');
         if (list.length === 0) {
-            container.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--text-muted);">No employees found.</div>';
+            container.innerHTML = '<div class="p-4 text-center text-sm text-slate-400">No employees found.</div>';
             return;
         }
         container.innerHTML = list.map(e => `
             <div class="employee-item" onclick="selectEmployee('${e.id}', this)">
-                <strong>${e.name}</strong><br>
-                <span style="font-size:0.7rem; color:var(--text-muted);">PIN: ${e.id} | ${e.dept}</span>
+                <strong class="text-slate-800">${e.name}</strong><br>
+                <span class="text-xs text-slate-400">PIN: ${e.id} | ${e.dept}</span>
             </div>
         `).join('');
     }
@@ -2479,239 +2416,222 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
         }
     }
 
-let onboardEmployees = [];
-let filteredEmployees = [];
+    // ── Onboarding QR ──────────────────────────────────────────────────────────
+    let onboardEmployees = [];
+    let filteredEmployees = [];
 
-async function openOnboardingModal() {
-    document.getElementById('onboardQrContainer').style.display = 'none';
-    
-    // Clear search and selected values
-    document.getElementById('onboard_emp_id').value = '';
-    document.getElementById('onboard_emp_search').value = '';
-    document.getElementById('onboard_emp_dropdown').innerHTML = '<div style="padding: 0.625rem; color: var(--text-muted); font-size: 0.875rem;">Loading employees...</div>';
-    
-    document.getElementById('onboard_branch_id').innerHTML = '<option value="">Loading branch sites...</option>';
-    document.getElementById('onboard_key_id').innerHTML = '<option value="">Loading API keys...</option>';
-    
-    document.getElementById('onboardModal').style.display = 'flex';
-
-    try {
-        // Parallel fetch for top speed
-        const [empRes, branchRes, keyRes] = await Promise.all([
-            fetch('/ui/employees/list'),
-            fetch('/ui/branches'),
-            fetch('/ui/api-keys')
-        ]);
-
-        const [employees, branches, keys] = await Promise.all([
-            empRes.json(),
-            branchRes.json(),
-            keyRes.json()
-        ]);
-
-        // Populate Searchable Employees Array
-        onboardEmployees = employees || [];
-        filteredEmployees = onboardEmployees;
-        renderOnboardEmpDropdown();
-
-        // Populate Branches
-        if (!branches || branches.length === 0) {
-            document.getElementById('onboard_branch_id').innerHTML = '<option value="">No branches found. Create one first.</option>';
-        } else {
-            document.getElementById('onboard_branch_id').innerHTML = branches.map(b => `
-                <option value="${b.id}">${b.name}</option>
-            `).join('');
-        }
-
-        // Populate API Keys (automatically selected and hidden)
-        let activeKeys = keys.filter(k => k.is_active && k.expiry_status !== 'expired');
-        if (activeKeys.length === 0) {
-            // Auto-create a default API Key behind the scenes
-            const genRes = await fetch('/ui/api-keys?label=Default%20Mobile%20Key', {method: 'POST'});
-            if (genRes.ok) {
-                const updatedRes = await fetch('/ui/api-keys');
-                const updatedKeys = await updatedRes.json();
-                activeKeys = updatedKeys.filter(k => k.is_active && k.expiry_status !== 'expired');
-            }
-        }
-
-        if (activeKeys.length > 0) {
-            document.getElementById('onboard_key_id').innerHTML = activeKeys.map((k, i) => `
-                <option value="${k.id}" ${i === 0 ? 'selected' : ''}>${k.label} (${k.key_preview})</option>
-            `).join('');
-        } else {
-            document.getElementById('onboard_key_id').innerHTML = '<option value="">Failed to auto-provision key</option>';
-        }
-    } catch(e) {
-        notify('Failed to load onboarding options', 'error');
-        console.error(e);
-    }
-}
-
-function renderOnboardEmpDropdown() {
-    const dropdown = document.getElementById('onboard_emp_dropdown');
-    if (!filteredEmployees || filteredEmployees.length === 0) {
-        dropdown.innerHTML = '<div style="padding: 0.625rem; color: var(--text-muted); font-size: 0.875rem;">No matches found</div>';
-        return;
-    }
-    
-    dropdown.innerHTML = filteredEmployees.map(e => {
-        const isNameNumber = !e.name || !isNaN(e.name) || /^\d+$/.test(e.name.trim());
-        const display = isNameNumber ? e.id : `${e.id} - ${e.name}`;
+    async function openOnboardingModal() {
+        document.getElementById('onboardQrContainer').style.display = 'none';
         
-        return `
-            <div class="dropdown-item" style="padding: 0.625rem 0.75rem; cursor: pointer; font-size: 0.875rem; color: var(--text-main); border-bottom: 1px solid var(--border);"
-                 onclick="selectOnboardEmployee('${e.id}', '${display.replace(/'/g, "\\'")}')"
-                 onmouseover="this.style.background='var(--border)'"
-                 onmouseout="this.style.background='none'">
-                ${display}
-            </div>
-        `;
-    }).join('');
-}
+        document.getElementById('onboard_emp_id').value = '';
+        document.getElementById('onboard_emp_search').value = '';
+        document.getElementById('onboard_emp_dropdown').innerHTML = '<div class="p-2.5 text-sm text-slate-400">Loading employees...</div>';
+        
+        document.getElementById('onboard_branch_id').innerHTML = '<option value="">Loading branch sites...</option>';
+        document.getElementById('onboard_key_id').innerHTML = '<option value="">Loading API keys...</option>';
+        
+        document.getElementById('onboardModal').classList.remove('hidden');
+        document.getElementById('onboardModal').style.display = 'flex';
 
-function filterOnboardEmployees() {
-    const query = document.getElementById('onboard_emp_search').value.toLowerCase().trim();
-    if (!query) {
-        filteredEmployees = onboardEmployees;
-    } else {
-        filteredEmployees = onboardEmployees.filter(e => {
-            const idMatch = e.id.toLowerCase().includes(query);
-            const nameMatch = e.name ? e.name.toLowerCase().includes(query) : false;
-            return idMatch || nameMatch;
-        });
+        try {
+            const [empRes, branchRes, keyRes] = await Promise.all([
+                fetch('/ui/employees/list'),
+                fetch('/ui/branches'),
+                fetch('/ui/api-keys')
+            ]);
+
+            const [employees, branches, keys] = await Promise.all([
+                empRes.json(),
+                branchRes.json(),
+                keyRes.json()
+            ]);
+
+            onboardEmployees = employees || [];
+            filteredEmployees = onboardEmployees;
+            renderOnboardEmpDropdown();
+
+            if (!branches || branches.length === 0) {
+                document.getElementById('onboard_branch_id').innerHTML = '<option value="">No branches found. Create one first.</option>';
+            } else {
+                document.getElementById('onboard_branch_id').innerHTML = branches.map(b => `
+                    <option value="${b.id}">${b.name}</option>
+                `).join('');
+            }
+
+            let activeKeys = keys.filter(k => k.is_active && k.expiry_status !== 'expired');
+            if (activeKeys.length === 0) {
+                const genRes = await fetch('/ui/api-keys?label=Default%20Mobile%20Key', {method: 'POST'});
+                if (genRes.ok) {
+                    const updatedRes = await fetch('/ui/api-keys');
+                    const updatedKeys = await updatedRes.json();
+                    activeKeys = updatedKeys.filter(k => k.is_active && k.expiry_status !== 'expired');
+                }
+            }
+
+            if (activeKeys.length > 0) {
+                document.getElementById('onboard_key_id').innerHTML = activeKeys.map((k, i) => `
+                    <option value="${k.id}" ${i === 0 ? 'selected' : ''}>${k.label} (${k.key_preview})</option>
+                `).join('');
+            } else {
+                document.getElementById('onboard_key_id').innerHTML = '<option value="">Failed to auto-provision key</option>';
+            }
+        } catch(e) {
+            notify('Failed to load onboarding options', 'error');
+            console.error(e);
+        }
     }
-    renderOnboardEmpDropdown();
-    showOnboardEmpDropdown();
-}
 
-function selectOnboardEmployee(id, display) {
-    document.getElementById('onboard_emp_id').value = id;
-    document.getElementById('onboard_emp_search').value = display;
-    hideOnboardEmpDropdown();
-}
+    function renderOnboardEmpDropdown() {
+        const dropdown = document.getElementById('onboard_emp_dropdown');
+        if (!filteredEmployees || filteredEmployees.length === 0) {
+            dropdown.innerHTML = '<div class="p-2.5 text-sm text-slate-400">No matches found</div>';
+            return;
+        }
+        
+        dropdown.innerHTML = filteredEmployees.map(e => {
+            const isNameNumber = !e.name || !isNaN(e.name) || /^\d+$/.test(e.name.trim());
+            const display = isNameNumber ? e.id : `${e.id} - ${e.name}`;
+            
+            return `
+                <div class="dropdown-item" onclick="selectOnboardEmployee('${e.id}', '${display.replace(/'/g, "\\'")}')">
+                    ${display}
+                </div>
+            `;
+        }).join('');
+    }
 
-function showOnboardEmpDropdown() {
-    document.getElementById('onboard_emp_dropdown').style.display = 'block';
-}
-
-function hideOnboardEmpDropdown() {
-    document.getElementById('onboard_emp_dropdown').style.display = 'none';
-}
-
-function toggleOnboardEmpDropdown() {
-    const dropdown = document.getElementById('onboard_emp_dropdown');
-    if (dropdown.style.display === 'block') {
-        hideOnboardEmpDropdown();
-    } else {
+    function filterOnboardEmployees() {
+        const query = document.getElementById('onboard_emp_search').value.toLowerCase().trim();
+        if (!query) {
+            filteredEmployees = onboardEmployees;
+        } else {
+            filteredEmployees = onboardEmployees.filter(e => {
+                const idMatch = e.id.toLowerCase().includes(query);
+                const nameMatch = e.name ? e.name.toLowerCase().includes(query) : false;
+                return idMatch || nameMatch;
+            });
+        }
+        renderOnboardEmpDropdown();
         showOnboardEmpDropdown();
     }
-}
 
-// Global click outside listener to dismiss searchable dropdown
-document.addEventListener('click', function(e) {
-    const dropdown = document.getElementById('onboard_emp_dropdown');
-    const searchInput = document.getElementById('onboard_emp_search');
-    const toggleBtn = document.getElementById('onboard_emp_toggle');
-    if (dropdown && e.target !== searchInput && e.target !== toggleBtn && !dropdown.contains(e.target)) {
+    function selectOnboardEmployee(id, display) {
+        document.getElementById('onboard_emp_id').value = id;
+        document.getElementById('onboard_emp_search').value = display;
         hideOnboardEmpDropdown();
     }
-});
 
-function closeOnboardingModal() {
-    document.getElementById('onboardModal').style.display = 'none';
-}
+    function showOnboardEmpDropdown() {
+        document.getElementById('onboard_emp_dropdown').style.display = 'block';
+    }
 
-async function generateOnboardQR() {
-    const empId = document.getElementById('onboard_emp_id').value;
-    const branchId = document.getElementById('onboard_branch_id').value;
-    const keyId = document.getElementById('onboard_key_id').value;
-    
-    if (!empId || !branchId || !keyId) {
-        notify('Please select all required options', 'error');
-        return;
+    function hideOnboardEmpDropdown() {
+        document.getElementById('onboard_emp_dropdown').style.display = 'none';
     }
-    
-    try {
-        const response = await fetch('/api/v1/admin/generate-onboard-qr', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                employee_id: empId,
-                branch_id: parseInt(branchId),
-                api_key_id: parseInt(keyId)
-            })
-        });
-        if (!response.ok) throw new Error('Failed to generate QR');
-        
-        const data = await response.json();
-        
-        // Generate QR code image url using a public API for simplicity
-        const qrData = encodeURIComponent(JSON.stringify(data));
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}`;
-        
-        document.getElementById('onboardQrImg').src = qrUrl;
-        document.getElementById('onboardQrContainer').style.display = 'block';
-    } catch(err) {
-        notify(err.message);
+
+    function toggleOnboardEmpDropdown() {
+        const dropdown = document.getElementById('onboard_emp_dropdown');
+        if (dropdown.style.display === 'block') {
+            hideOnboardEmpDropdown();
+        } else {
+            showOnboardEmpDropdown();
+        }
     }
-}
+
+    document.addEventListener('click', function(e) {
+        const dropdown = document.getElementById('onboard_emp_dropdown');
+        const searchInput = document.getElementById('onboard_emp_search');
+        const toggleBtn = document.getElementById('onboard_emp_toggle');
+        if (dropdown && e.target !== searchInput && e.target !== toggleBtn && !dropdown.contains(e.target)) {
+            hideOnboardEmpDropdown();
+        }
+    });
+
+    function closeOnboardingModal() {
+        document.getElementById('onboardModal').classList.add('hidden');
+        document.getElementById('onboardModal').style.display = 'none';
+    }
+
+    async function generateOnboardQR() {
+        const empId = document.getElementById('onboard_emp_id').value;
+        const branchId = document.getElementById('onboard_branch_id').value;
+        const keyId = document.getElementById('onboard_key_id').value;
+        
+        if (!empId || !branchId || !keyId) {
+            notify('Please select all required options', 'error');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/v1/admin/generate-onboard-qr', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    employee_id: empId,
+                    branch_id: parseInt(branchId),
+                    api_key_id: parseInt(keyId)
+                })
+            });
+            if (!response.ok) throw new Error('Failed to generate QR');
+            
+            const data = await response.json();
+            
+            const qrData = encodeURIComponent(JSON.stringify(data));
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}`;
+            
+            document.getElementById('onboardQrImg').src = qrUrl;
+            document.getElementById('onboardQrContainer').style.display = 'block';
+        } catch(err) {
+            notify(err.message);
+        }
+    }
 </script>
 
 
-<!-- ═══════════════════ MODALS ═══════════════════ -->
+<!-- ═══════════════════ ONBOARDING QR MODAL ═══════════════════ -->
 
-<div id="onboardModal" class="modal-overlay" style="display: none;">
-    <div class="modal" style="width: 420px; max-width: 90%; overflow: visible; margin: auto; padding: 1.75rem;">
-        <h3 style="margin-top: 0; font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">📱 Generate Onboarding QR</h3>
-        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom: 1.25rem;">Select the employee and target branch site to create a secure, one-click onboarding setup.</p>
+<div id="onboardModal" class="modal-overlay fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" style="display: none;">
+    <div class="modal-animated w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 p-7 overflow-visible" style="overflow: visible;">
+        <h3 class="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">📱 Generate Onboarding QR</h3>
+        <p class="text-sm text-slate-500 mb-5">Select the employee and target branch site to create a secure, one-click onboarding setup.</p>
         
-        <div class="form-group" style="position: relative;">
-            <label class="form-label">Select Employee</label>
+        <div class="mb-4 relative">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Select Employee</label>
             <input type="hidden" id="onboard_emp_id" value="">
-            <div style="position: relative; display: flex; align-items: center;">
-                <input type="text" id="onboard_emp_search" class="form-control" placeholder="🔍 Type ID or Name to search..." 
-                       style="padding-right: 2.25rem;"
+            <div class="relative flex items-center">
+                <input type="text" id="onboard_emp_search" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 pr-9 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="🔍 Type ID or Name to search..." 
                        oninput="filterOnboardEmployees()" onclick="showOnboardEmpDropdown()" onfocus="showOnboardEmpDropdown()">
-                <span id="onboard_emp_toggle" style="position: absolute; right: 0.75rem; cursor: pointer; color: var(--text-muted); font-size: 0.75rem; user-select: none;" onclick="toggleOnboardEmpDropdown()">▼</span>
+                <span id="onboard_emp_toggle" class="absolute right-3 cursor-pointer text-slate-400 text-xs select-none" onclick="toggleOnboardEmpDropdown()">▼</span>
             </div>
-            <div id="onboard_emp_dropdown" style="display: none; position: absolute; z-index: 1010; left: 0; right: 0; top: 100%; max-height: 220px; overflow-y: auto; background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.375rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); margin-top: 0.25rem;">
-                <div style="padding: 0.625rem; color: var(--text-muted); font-size: 0.875rem;">Loading employees...</div>
+            <div id="onboard_emp_dropdown" class="hidden absolute z-[1010] left-0 right-0 top-full max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg mt-1">
+                <div class="p-2.5 text-sm text-slate-400">Loading employees...</div>
             </div>
         </div>
-        <div class="form-group" style="margin-top: 1rem;">
-            <label class="form-label">Assign to Branch Site</label>
-            <select id="onboard_branch_id" class="form-control">
+        
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Assign to Branch Site</label>
+            <select id="onboard_branch_id" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
                 <option value="">Loading branches...</option>
             </select>
         </div>
-        <div class="form-group" style="display: none;">
-            <label class="form-label">Select API Access Key</label>
-            <select id="onboard_key_id" class="form-control">
+        
+        <div class="mb-4 hidden">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Select API Access Key</label>
+            <select id="onboard_key_id" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
                 <option value="">Loading API keys...</option>
             </select>
         </div>
         
-        <div style="display: flex; gap: 0.75rem; margin-top: 1.75rem;">
-            <button type="button" class="btn btn-outline" onclick="closeOnboardingModal()" style="flex: 1;">Cancel</button>
-            <button type="button" class="btn btn-success" onclick="generateOnboardQR()" style="flex: 1;">Generate QR</button>
+        <div class="flex gap-3 mt-6">
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeOnboardingModal()">Cancel</button>
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 transition-all shadow-sm" onclick="generateOnboardQR()">Generate QR</button>
         </div>
         
-        <div id="onboardQrContainer" style="display:none; margin-top: 1.5rem; text-align: center;">
-            <img id="onboardQrImg" src="" style="width:220px; height:220px; border:1px solid var(--border); border-radius:0.5rem; box-shadow: var(--shadow-md);">
-            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.75rem; line-height: 1.4;">Scan this QR code from the Mobile App to complete setup instantly.</p>
+        <div id="onboardQrContainer" class="hidden mt-6 text-center">
+            <img id="onboardQrImg" src="" class="w-56 h-56 border border-slate-200 rounded-xl shadow-md mx-auto">
+            <p class="text-xs text-slate-500 mt-3 leading-relaxed">Scan this QR code from the Mobile App to complete setup instantly.</p>
         </div>
     </div>
 </div>
 
-
-
-
-<style>
-    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    .employee-item { padding: 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s; font-size: 0.875rem; }
-    .employee-item:hover { background: #f8fafc; }
-    .employee-item.selected { background: #e0f2fe; border-left: 4px solid var(--primary); }
-    .employee-item:last-child { border-bottom: none; }
-</style>
 {% endblock %}
