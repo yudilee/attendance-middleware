@@ -212,18 +212,19 @@
                         </td>
                         <td style="text-align: right; white-space: nowrap;">
                             {% if device.registration_status == 'pending_approval' %}
-                                <button class="btn-danger-sm" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
+                                <button class="btn btn-sm btn-success" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
                                         onclick="approveDevice({{ device.id }})">✅ Approve</button>
                             {% elif device.registration_status in ('approved', 'active') %}
-                                <button class="btn-danger-sm" style="background:#fee2e2;color:#991b1b;"
+                                <button class="btn btn-sm btn-danger" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;"
                                         onclick="suspendDevice({{ device.id }})">🚫 Suspend</button>
                             {% elif device.registration_status == 'suspended' %}
-                                <button class="btn-danger-sm" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
+                                <button class="btn btn-sm btn-success" style="background:#d1fae5;color:#065f46;border-color:#6ee7b7;"
                                         onclick="approveDevice({{ device.id }})">↩ Re-approve</button>
                             {% endif %}
-                            <button class="btn-danger-sm" onclick="openDeviceModal({{ device.id }}, '{{ device.device_label or '' }}')"
+                            <button class="btn btn-sm btn-outline" onclick="openDeviceModal({{ device.id }}, '{{ device.device_label or '' }}')"
                                     style="background:#e0e7ff;color:#4338ca;border-color:#c7d2fe;">✏️ Edit</button>
-                            <button class="btn-danger-sm" onclick="unbindDevice({{ device.id }})">Unbind</button>
+                            <button class="btn btn-sm btn-outline" onclick="unbindDevice({{ device.id }})"
+                                    style="background:#fef2f2;color:#b91c1c;border-color:#fca5a5;">Unbind</button>
                         </td>
                     </tr>
                     {% else %}
@@ -914,8 +915,8 @@ document.addEventListener('DOMContentLoaded', loadSupervisorAssignments);
             } else {
                 listDiv.innerHTML = assignedBranches.map(b => `
                     <span style="display:inline-flex; align-items:center; gap:6px; background:#e0e7ff; color:#4338ca; padding:4px 10px; border-radius:12px; font-size:0.75rem; font-weight:500;">
-                        ${b.name}
-                        <span onclick="removeDeviceBranchFromModal(${bindingId}, ${b.id})" style="cursor:pointer; font-size:0.9rem; font-weight:bold; line-height:1; color:#a5b4fc;" title="Remove branch">×</span>
+                        ${b.branch_name}
+                        <span onclick="removeDeviceBranchFromModal(${bindingId}, ${b.branch_id})" style="cursor:pointer; font-size:0.9rem; font-weight:bold; line-height:1; color:#a5b4fc;" title="Remove branch">×</span>
                     </span>
                 `).join('');
             }
@@ -2302,27 +2303,27 @@ async function generateOnboardQR() {
         <input type="hidden" id="edit_device_id" value="">
         
         <div class="form-group">
-            <label>Device Label</label>
-            <input type="text" id="edit_device_label" placeholder="E.g. Front Door Tablet" required>
+            <label class="form-label">Device Label</label>
+            <input type="text" id="edit_device_label" class="form-control" placeholder="E.g. Front Door Tablet" required>
         </div>
 
         <div style="margin-top: 1.25rem;">
-            <label style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Assigned Branches</label>
+            <label class="form-label">Assigned Branches</label>
             <div id="deviceBranchesList" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem;">
                 <!-- Dynamically populated branch pills with an 'x' delete button -->
             </div>
             
             <div id="addDeviceBranchGroup" style="display: flex; gap: 0.5rem; align-items: center;">
-                <select id="deviceBranchSelect" style="flex: 1; margin: 0;">
+                <select id="deviceBranchSelect" class="form-control" style="flex: 1; margin: 0;">
                     <!-- Available branches dropdown -->
                 </select>
-                <button type="button" onclick="submitAddDeviceBranch()" style="white-space: nowrap; background: #6366f1; color: white;">➕ Add Branch</button>
+                <button type="button" class="btn btn-primary" onclick="submitAddDeviceBranch()" style="white-space: nowrap; background: #6366f1; color: white; border-color: #6366f1;">➕ Add Branch</button>
             </div>
         </div>
 
         <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-            <button type="button" class="secondary" style="flex: 1;" onclick="closeDeviceModal()">Close</button>
-            <button type="button" style="flex: 1;" onclick="saveDeviceLabel()">Save Label</button>
+            <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeDeviceModal()">Close</button>
+            <button type="button" class="btn btn-primary" style="flex: 1;" onclick="saveDeviceLabel()">Save Label</button>
         </div>
     </div>
 </div>
