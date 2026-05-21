@@ -25,11 +25,21 @@ async def health_check():
     except Exception:
         pass
 
+    redis_ok = False
+    try:
+        from app.cache import redis_client
+        if redis_client:
+            await redis_client.ping()
+            redis_ok = True
+    except Exception:
+        pass
+
     adms_ok = _handshake_state.get("handshake_done", False)
 
     return {
-        "status": "healthy" if db_ok else "degraded",
+        "status": "healthy" if db_ok and redis_ok else "degraded",
         "database": "connected" if db_ok else "disconnected",
+        "redis": "connected" if redis_ok else "disconnected",
         "adms": "connected" if adms_ok else "disconnected",
         "timestamp": datetime.utcnow().isoformat(),
         "version": "1.0.0",

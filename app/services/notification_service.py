@@ -107,3 +107,33 @@ def send_clock_in_reminder(fcm_token: str) -> bool:
         body="Don't forget to clock in! Your attendance is waiting.",
         data={"type": "clock_in_reminder"},
     )
+
+
+# ─── Correction Result ─────────────────────────────────────────────────────────
+
+def send_correction_result(fcm_token: str, is_approved: bool, log_id: Optional[int] = None) -> bool:
+    """
+    Send a push notification about a correction review result.
+    
+    Args:
+        fcm_token: The device's FCM registration token.
+        is_approved: True if approved, False if rejected.
+        log_id: The ID of the original punch log, if any.
+        
+    Returns:
+        True if the notification was sent successfully.
+    """
+    status = "approved" if is_approved else "rejected"
+    title = f"Attendance Correction {status.title()}"
+    body = f"Your attendance correction request has been {status}."
+    
+    data = {"type": "correction_result", "status": status}
+    if log_id:
+        data["log_id"] = str(log_id)
+        
+    return send_push_notification(
+        fcm_token=fcm_token,
+        title=title,
+        body=body,
+        data=data,
+    )

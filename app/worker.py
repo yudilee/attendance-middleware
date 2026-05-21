@@ -160,10 +160,41 @@ async def send_clock_in_reminders(ctx):
     finally:
         db.close()
 
+async def cleanup_stale_selfies(ctx):
+    """Scheduled task: delete selfies older than 30 days to free disk space."""
+    from app.database.models import PunchLog
+    db = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=30)
+        old_punches = db.query(PunchLog).filter(
+            PunchLog.timestamp < cutoff,
+            PunchLog.selfie_filename.isnot(None)
+        ).all()
+        
+        deleted_count = 0
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        upload_dir = os.path.join(base_dir, "..", "uploads", "selfies")
+        
+        for punch in old_punches:
+            if punch.selfie_filename:
+                filepath = os.path.join(upload_dir, punch.selfie_filename)
+                if os.path.exists(filepath):
+                    try:
+                        os.remove(filepath)
+                        deleted_count += 1
+                    except OSError:
+                        pass
+            punch.selfie_filename = None
+            
+        db.commit()
+        return {"deleted_selfies": deleted_count}
+    finally:
+        db.close()
+
 
 # Worker settings
 class WorkerSettings:
-    functions = [sync_punches_to_adms, retry_failed_punches, adms_heartbeat, cleanup_stale_jobs, send_clock_in_reminders]
+    functions = [sync_punches_to_adms, retry_failed_punches, adms_heartbeat, cleanup_stale_jobs, send_clock_in_reminders, cleanup_stale_selfies]
     redis_settings = arq.connections.RedisSettings(
         host=os.getenv("REDIS_HOST", "redis"),
         port=int(os.getenv("REDIS_PORT", "6379")),
@@ -186,4 +217,6 @@ class WorkerSettings:
         arq.cron(cleanup_stale_jobs, hour=0, minute=0),
         # Clock-in reminders every weekday at 08:00 (mon=0, tues=1, wed=2, thurs=3, fri=4)
         arq.cron(send_clock_in_reminders, hour=8, minute=0, weekday={0, 1, 2, 3, 4}),
+        # Cleanup stale selfies daily at 2 AM
+        arq.cron(cleanup_stale_selfies, hour=2, minute=0),
     ]

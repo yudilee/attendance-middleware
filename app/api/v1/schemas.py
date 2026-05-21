@@ -25,6 +25,9 @@ class PunchResponse(BaseModel):
     message: str
     server_time: datetime
     log_id: int
+    distance_meters: Optional[float] = None
+    branch_name: Optional[str] = None
+    in_fence: Optional[bool] = None
 
 
 class BatchPunchRequest(BaseModel):

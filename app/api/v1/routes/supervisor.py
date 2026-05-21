@@ -12,8 +12,9 @@ from app.database.models import (
 )
 from app.services.auth import verify_api_key
 from app.api.v1.schemas import (
-    CorrectionRequest, CorrectionReview,
+    TeamAttendanceResponse, CorrectionRequest, CorrectionReview,
 )
+from app.services.notification_service import send_correction_result
 
 logger = structlog.get_logger()
 
@@ -229,4 +230,20 @@ async def review_correction(
                 punch.timestamp = correction.proposed_timestamp
 
     db.commit()
+
+    try:
+        # Notify employee
+        employee_bindings = db.query(DeviceBinding).filter(
+            DeviceBinding.employee_id == correction.employee_id,
+            DeviceBinding.fcm_token.isnot(None)
+        ).all()
+        for emp_binding in employee_bindings:
+            send_correction_result(
+                fcm_token=emp_binding.fcm_token,
+                is_approved=(review.status == 'approved'),
+                log_id=correction.original_punch_id
+            )
+    except Exception as e:
+        logger.error(f"Failed to send correction notification: {e}")
+
     return {"status": review.status, "correction_id": correction_id}

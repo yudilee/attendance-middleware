@@ -31,16 +31,12 @@ arq_pool = None
 
 router = APIRouter(tags=["Punch"])
 
-# Rate limiter (shared from main app)
-limiter = None
-
+from app.limiter import limiter
 
 def configure(arq_pool_ref, limiter_ref):
-    """Set the ARQ pool and limiter references from the main app."""
-    global arq_pool, limiter
+    """Set the ARQ pool reference from the main app."""
+    global arq_pool
     arq_pool = arq_pool_ref
-    limiter = limiter_ref
-
 
 def get_db():
     db = SessionLocal()
@@ -88,6 +84,9 @@ async def create_punch(
         "message": f"Punch recorded: {punch_req.punch_type}",
         "server_time": log.timestamp,
         "log_id": log.id,
+        "distance_meters": data.get("distance"),
+        "branch_name": data.get("best_branch"),
+        "in_fence": data.get("in_fence"),
     }
 
 
@@ -169,7 +168,9 @@ async def get_punch_types(
 
 
 @router.get("/api/v1/punch-history")
+@limiter.limit("20/minute")
 async def get_punch_history(
+    request: Request,
     api_key=Depends(verify_api_key),
     employee_id: Optional[str] = None,
     cursor: Optional[str] = None,

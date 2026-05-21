@@ -15,9 +15,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -128,21 +129,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Secure Geo-Fenced Attendance Aggregator", lifespan=lifespan)
 
+# ── CORS Setup ─────────────────────────────────────────────────────────
+cors_list = [origin.strip() for origin in settings.cors_origins.split(",")] if settings.cors_origins else []
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 # ── Rate Limiter Setup ─────────────────────────────────────────────────
-def api_key_identifier(request: Request):
-    api_key = request.headers.get("X-API-Key")
-    if api_key:
-        return api_key
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    client = request.client
-    if client:
-        return client.host
-    return "unknown"
+from app.limiter import limiter
 
-
-limiter = Limiter(key_func=api_key_identifier)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -167,6 +167,7 @@ from app.api.v1.routes import device as device_routes
 from app.api.v1.routes import supervisor as supervisor_routes
 from app.api.v1.routes import health as health_routes
 from app.api.v1.routes import admin_ui as admin_ui_routes
+from app.api.v1.routes import summary as summary_routes
 
 # Configure shared ARQ pool and limiter references
 punch_routes.configure(arq_pool, limiter)
@@ -179,3 +180,4 @@ app.include_router(device_routes.router)
 app.include_router(supervisor_routes.router)
 app.include_router(health_routes.router)
 app.include_router(admin_ui_routes.router)
+app.include_router(summary_routes.router)

@@ -23,7 +23,7 @@ from app.database.models import (
     Employee, AppConfig, ADMSCredential, BindingBranch,
     EmployeeSupervisor, AttendanceCorrection,
 )
-from app.services.auth import verify_api_key, generate_api_key
+from app.services.auth import verify_api_key, generate_api_key, hash_api_key
 from app.services.auth_ui import (
     get_password_hash, verify_password, create_access_token,
     get_current_admin,
@@ -805,8 +805,9 @@ async def create_api_key(
     expires_at = None
     if expires_in_days is not None and expires_in_days > 0:
         expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+    plain_key = generate_api_key()
     new_key = ApiKey(
-        key_value=generate_api_key(),
+        key_value=hash_api_key(plain_key),
         label=label,
         expires_at=expires_at,
     )
@@ -814,7 +815,7 @@ async def create_api_key(
     db.commit()
     db.refresh(new_key)
     return {
-        "key": new_key.key_value,
+        "key": plain_key,
         "label": new_key.label,
         "id": new_key.id,
         "expires_at": new_key.expires_at.isoformat() if new_key.expires_at else None,
@@ -878,7 +879,8 @@ async def rotate_api_key(
         pass
     else:
         old_key.expires_at = grace_end
-    new_key = ApiKey(key_value=generate_api_key(), label=old_key.label)
+    plain_key = generate_api_key()
+    new_key = ApiKey(key_value=hash_api_key(plain_key), label=old_key.label)
     db.add(new_key)
     db.commit()
     db.refresh(new_key)
@@ -887,7 +889,7 @@ async def rotate_api_key(
         "old_key_id": old_key.id,
         "old_key_label": old_key.label,
         "old_key_expires_at": old_key.expires_at.isoformat() if old_key.expires_at else None,
-        "new_key": new_key.key_value,
+        "new_key": plain_key,
         "new_key_id": new_key.id,
         "new_key_label": new_key.label,
     }

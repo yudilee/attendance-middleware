@@ -5,6 +5,7 @@ In production, consider using hashed keys.
 """
 import structlog
 import secrets
+import hashlib
 from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, Security, Request
 from fastapi.security import APIKeyHeader
@@ -25,6 +26,11 @@ def get_db():
         db.close()
 
 
+def hash_api_key(api_key: str) -> str:
+    """Hash the API key using SHA-256 for secure storage and comparison."""
+    return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+
+
 def verify_api_key(api_key: str = Security(API_KEY_HEADER), db: Session = Depends(get_db), request: Request = None):
     """
     FastAPI dependency that validates the X-API-Key header against the database.
@@ -34,8 +40,11 @@ def verify_api_key(api_key: str = Security(API_KEY_HEADER), db: Session = Depend
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing API Key. Include 'X-API-Key' header.")
 
+    # Hash the incoming key for comparison
+    hashed_key = hash_api_key(api_key)
+
     key_record = db.query(ApiKey).filter(
-        ApiKey.key_value == api_key,
+        ApiKey.key_value.in_([api_key, hashed_key]), # Allow both plain and hashed temporarily for migration
         ApiKey.is_active == True
     ).first()
 
