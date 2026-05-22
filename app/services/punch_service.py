@@ -129,7 +129,7 @@ def validate_and_prepare_punch(
     # Check geofence (skip if punch type doesn't require it)
     if valid_type.requires_geofence:
         in_fence, distance, best_branch = is_within_any_fence(
-            punch.latitude, punch.longitude, assigned_branches
+            punch.latitude, punch.longitude, assigned_branches, db=db
         )
         if not in_fence:
             raise PunchValidationError(

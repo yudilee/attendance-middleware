@@ -161,3 +161,89 @@ def test_batch_punch_submission(client, auth_headers):
     assert data["synced"] >= 0
     assert data["failed"] >= 0
     assert len(data["results"]) == 3
+
+
+def test_submit_punch_geofencing_with_checkpoints(client, db_session, auth_headers):
+    """Test geofencing validation against branch center and checkpoints."""
+    from app.database.models import Branch, BranchCheckpoint, PunchType
+
+    # Update the "in" punch type to require geofence
+    pt = db_session.query(PunchType).filter(PunchType.code == "in").first()
+    pt.requires_geofence = True
+
+    # Main branch is at latitude=-6.2, longitude=106.8, radius=100m.
+    # 1. A punch at exact center (-6.2, 106.8) should succeed.
+    now = datetime.utcnow()
+    res1 = client.post(
+        "/api/v1/punch",
+        json={
+            "employee_id": "TEST001",
+            "timestamp": now.isoformat() + "Z",
+            "punch_type": "in",
+            "latitude": -6.2,
+            "longitude": 106.8,
+            "device_uuid": "test-uuid-123",
+            "client_punch_id": "geo-center-test",
+            "biometric_verified": True,
+            "is_mock_location": False,
+            "gps_time_validated": True,
+            "tz_offset_minutes": 0,
+        },
+        headers=auth_headers
+    )
+    assert res1.status_code == 200
+
+    # 2. A punch outside the branch center radius (e.g., ~1.1km away at -6.19, 106.8) should fail.
+    res2 = client.post(
+        "/api/v1/punch",
+        json={
+            "employee_id": "TEST001",
+            "timestamp": now.isoformat() + "Z",
+            "punch_type": "in",
+            "latitude": -6.19,
+            "longitude": 106.8,
+            "device_uuid": "test-uuid-123",
+            "client_punch_id": "geo-outside-test",
+            "biometric_verified": True,
+            "is_mock_location": False,
+            "gps_time_validated": True,
+            "tz_offset_minutes": 0,
+        },
+        headers=auth_headers
+    )
+    assert res2.status_code == 403
+    assert "outside assigned branches" in res2.json()["detail"].lower()
+
+    # 3. Create a checkpoint at -6.19, 106.8 (radius 100m) for the branch.
+    branch = db_session.query(Branch).filter(Branch.name == "Test Branch").first()
+    checkpoint = BranchCheckpoint(
+        branch_id=branch.id,
+        name="Test Checkpoint A",
+        latitude=-6.19,
+        longitude=106.8,
+        radius_meters=100.0,
+        is_active=True
+    )
+    db_session.add(checkpoint)
+    db_session.commit()
+
+    # 4. Now, the same punch at -6.19, 106.8 should succeed because it lies within the active checkpoint!
+    res3 = client.post(
+        "/api/v1/punch",
+        json={
+            "employee_id": "TEST001",
+            "timestamp": now.isoformat() + "Z",
+            "punch_type": "in",
+            "latitude": -6.19,
+            "longitude": 106.8,
+            "device_uuid": "test-uuid-123",
+            "client_punch_id": "geo-checkpoint-test",
+            "biometric_verified": True,
+            "is_mock_location": False,
+            "gps_time_validated": True,
+            "tz_offset_minutes": 0,
+        },
+        headers=auth_headers
+    )
+    assert res3.status_code == 200
+

@@ -1258,6 +1258,13 @@ async def create_checkpoint(
     db.commit()
     db.refresh(cp)
     logger.info("checkpoint_created", branch_id=branch_id, name=req.name, admin=admin.username)
+    affected_bindings = db.query(DeviceBinding).outerjoin(
+        BindingBranch, DeviceBinding.id == BindingBranch.binding_id
+    ).filter(
+        (DeviceBinding.branch_id == branch_id) | (BindingBranch.branch_id == branch_id)
+    ).all()
+    for ab in affected_bindings:
+        await invalidate_cache(f"device_config:{ab.api_key_id}:{ab.device_uuid}")
     return {"status": "created", "id": cp.id}
 
 
@@ -1290,6 +1297,13 @@ async def update_checkpoint(
 
     db.commit()
     logger.info("checkpoint_updated", checkpoint_id=checkpoint_id, admin=admin.username)
+    affected_bindings = db.query(DeviceBinding).outerjoin(
+        BindingBranch, DeviceBinding.id == BindingBranch.binding_id
+    ).filter(
+        (DeviceBinding.branch_id == branch_id) | (BindingBranch.branch_id == branch_id)
+    ).all()
+    for ab in affected_bindings:
+        await invalidate_cache(f"device_config:{ab.api_key_id}:{ab.device_uuid}")
     return {"status": "updated"}
 
 
@@ -1311,6 +1325,13 @@ async def delete_checkpoint(
     db.delete(cp)
     db.commit()
     logger.info("checkpoint_deleted", checkpoint_id=checkpoint_id, admin=admin.username)
+    affected_bindings = db.query(DeviceBinding).outerjoin(
+        BindingBranch, DeviceBinding.id == BindingBranch.binding_id
+    ).filter(
+        (DeviceBinding.branch_id == branch_id) | (BindingBranch.branch_id == branch_id)
+    ).all()
+    for ab in affected_bindings:
+        await invalidate_cache(f"device_config:{ab.api_key_id}:{ab.device_uuid}")
     return {"status": "deleted"}
 
 
@@ -1331,6 +1352,13 @@ async def toggle_checkpoint(
 
     cp.is_active = not cp.is_active
     db.commit()
+    affected_bindings = db.query(DeviceBinding).outerjoin(
+        BindingBranch, DeviceBinding.id == BindingBranch.binding_id
+    ).filter(
+        (DeviceBinding.branch_id == branch_id) | (BindingBranch.branch_id == branch_id)
+    ).all()
+    for ab in affected_bindings:
+        await invalidate_cache(f"device_config:{ab.api_key_id}:{ab.device_uuid}")
     return {"status": "success", "is_active": cp.is_active}
 
 
