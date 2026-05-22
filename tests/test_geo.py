@@ -12,6 +12,7 @@ def _make_branch(lat, lon, radius, name="Test Branch", is_active=True):
     branch.radius_meters = radius
     branch.name = name
     branch.is_active = is_active
+    branch.checkpoints = []
     return branch
 
 

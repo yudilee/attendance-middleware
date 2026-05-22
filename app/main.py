@@ -111,6 +111,9 @@ async def lifespan(app: FastAPI):
         )
         arq_pool = await arq.create_pool(redis_settings)
         logger.info("arq_pool_initialized")
+        # Re-configure routes with the initialized arq_pool
+        punch_routes.configure(arq_pool, limiter)
+        admin_ui_routes.configure(arq_pool)
     except Exception as e:
         logger.warning("arq_pool_initialization_failed", error=str(e))
         arq_pool = None

@@ -68,6 +68,7 @@ class BranchInfo(BaseModel):
     qr_code_data: Optional[str] = None
     nfc_enabled: bool = False
     nfc_tag_data: Optional[str] = None
+    checkpoints: list["CheckpointInfo"] = []
 
 
 class PunchTypeResponse(BaseModel):

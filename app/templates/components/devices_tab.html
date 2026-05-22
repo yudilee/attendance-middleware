@@ -1,0 +1,214 @@
+<div id="devices" class="tab-content hidden">
+    <!-- Devices List Section -->
+    <div id="devicesListSection">
+        <!-- Registration Methods Info Cards -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+            <div class="flex gap-6 items-stretch flex-wrap">
+                <!-- Method 1: QR Onboarding -->
+                <div class="flex-1 min-w-[250px] p-4 bg-emerald-50 rounded-xl border border-emerald-300">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white text-lg">
+                            <i class="ph ph-qr-code"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm text-emerald-800">⚡ QR Code Onboarding</div>
+                            <div class="text-xs text-emerald-700">Instant — no approval needed</div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-emerald-800 mb-3">
+                        Generate a QR code for an employee. When scanned from the mobile app, the device is automatically registered, assigned to a branch, and activated — all in one step.
+                    </p>
+                    <button onclick="openOnboardingModal()" class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-all shadow-sm">
+                        <i class="ph ph-qr-code"></i> Generate Onboarding QR
+                    </button>
+                </div>
+
+                <!-- Method 2: Manual Registration -->
+                <div class="flex-1 min-w-[250px] p-4 bg-amber-50 rounded-xl border border-amber-300">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white text-lg">
+                            <i class="ph ph-devices"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm text-amber-800">📝 Manual Registration</div>
+                            <div class="text-xs text-amber-700">Requires admin approval</div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-amber-800 mb-3">
+                        Employees enter Server URL + API Key in the app manually. Devices appear here as <strong>"Pending Approval"</strong>. You must approve each device and assign at least one branch.
+                    </p>
+                    <div class="text-xs font-semibold text-amber-800">
+                        <i class="ph ph-checks"></i> Steps: Approve → Assign Branch → Active
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Table Card -->
+        <div class="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <div>
+                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Device Registration & Approval</div>
+                    <p class="text-xs text-slate-400 mt-1">
+                        Employees can register up to <strong class="text-slate-700">{{ max_devices }} devices</strong>. Multiple branches per device are supported.
+                    </p>
+                </div>
+                <span class="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{{ devices|length }} registered</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200">
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Employee / Label</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">UUID</th>
+                            <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">Devices</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Active</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Assigned Branches</th>
+                            <th class="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for device in devices %}
+                        <tr class="hover:bg-slate-50 transition-colors {% if device.registration_status == 'pending_approval' %}bg-amber-50/50{% elif device.registration_status == 'suspended' %}bg-red-50/50 opacity-80{% endif %}">
+                            <td class="px-5 py-4">
+                                {% if device.employee_id %}
+                                    <strong class="text-slate-800">{{ device.employee_name }}</strong><br>
+                                    <span class="text-xs text-slate-400">
+                                        ID: {{ device.employee_id }} | {{ device.device_label or '(no label)' }}
+                                    </span><br>
+                                    <span class="text-xs font-semibold text-indigo-500">
+                                        🔑 Key: {{ device.api_key_label }}
+                                    </span>
+                                {% else %}
+                                    <div class="bg-amber-50 p-2 border border-dashed border-amber-400 rounded-lg">
+                                        <span class="text-xs text-amber-700 block mb-1">⚠️ No Employee Assigned</span>
+                                        <button type="button" class="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white border-0 cursor-pointer hover:bg-amber-600" onclick="openAssignDialog({{ device.id }}, '{{ device.device_label or 'New Device' }}')">➕ Assign Employee</button>
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td class="px-5 py-4 font-mono text-xs text-indigo-600">
+                                {{ device.device_uuid[:16] }}...
+                            </td>
+                            <td class="px-5 py-4 text-center">
+                                {% if device.device_count_for_employee %}
+                                    <span class="font-semibold {% if device.device_count_for_employee >= max_devices %}text-red-500{% else %}text-slate-700{% endif %}">
+                                        {{ device.device_count_for_employee }}/{{ max_devices }}
+                                    </span>
+                                {% else %}&mdash;{% endif %}
+                            </td>
+                            <td class="px-5 py-4">
+                                {% if device.is_active %}
+                                    <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Active</span>
+                                {% else %}
+                                    <span class="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-600">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-5 py-4">
+                                {% if device.registration_status == 'pending_approval' %}
+                                    <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">⏳ Pending</span>
+                                {% elif device.registration_status == 'approved' or device.registration_status == 'active' %}
+                                    <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✅ Approved</span>
+                                {% elif device.registration_status == 'suspended' %}
+                                    <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">🚫 Suspended</span>
+                                {% else %}
+                                    <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{{ device.registration_status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-5 py-4">
+                                <div class="flex flex-wrap gap-1 items-center">
+                                    {% for ba in device.branch_list %}
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                                            {{ ba.name }}
+                                        </span>
+                                    {% endfor %}
+                                    {% if not device.branch_list %}
+                                        <span class="text-xs text-slate-400">Any (No restriction)</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-5 py-4 text-right whitespace-nowrap">
+                                {% if device.registration_status == 'pending_approval' %}
+                                    <button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                            onclick="approveDevice({{ device.id }})">✅ Approve</button>
+                                {% elif device.registration_status in ('approved', 'active') %}
+                                    <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
+                                            onclick="suspendDevice({{ device.id }})">🚫 Suspend</button>
+                                {% elif device.registration_status == 'suspended' %}
+                                    <button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                            onclick="approveDevice({{ device.id }})">↩ Re-approve</button>
+                                {% endif %}
+                                <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="openDeviceModal({{ device.id }}, '{{ device.device_label or '' }}')">✏️ Edit</button>
+                                <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors" onclick="unbindDevice({{ device.id }})">Unbind</button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-8 text-sm text-slate-400">
+                                No devices registered yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Edit Form Section -->
+    <div id="deviceFormSection" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm hidden max-w-2xl mx-auto mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">📱 Edit Device Settings</div>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeDeviceModal()">← Back to List</button>
+        </div>
+        <input type="hidden" id="edit_device_id" value="">
+        
+        <div class="mb-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Device Label</label>
+            <input type="text" id="edit_device_label" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="E.g. Front Door Tablet" required>
+        </div>
+
+        <div class="mt-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Assigned Branches</label>
+            <div id="deviceBranchesList" class="flex flex-wrap gap-1.5 mb-4">
+                <!-- Dynamically populated branch pills -->
+            </div>
+            
+            <div id="addDeviceBranchGroup" class="flex gap-2 items-center">
+                <select id="deviceBranchSelect" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-1">
+                    <!-- Available branches dropdown -->
+                </select>
+                <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm whitespace-nowrap" onclick="submitAddDeviceBranch()">➕ Add Branch</button>
+            </div>
+        </div>
+
+        <div class="flex gap-4 mt-8">
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeDeviceModal()">Cancel</button>
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="saveDeviceLabel()">Save Label</button>
+        </div>
+    </div>
+
+    <!-- Assign Employee Form Section -->
+    <div id="assignFormSection" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm hidden max-w-lg mx-auto mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-sm font-semibold text-slate-800" id="assignModalTitle">Assign Employee</div>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeAssignModal()">← Back to List</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-4">Select an employee to bind this device to. Only bound employees can punch.</p>
+        
+        <input type="hidden" id="assignBindingId">
+        <input type="hidden" id="selectedEmployeeId">
+        <div class="mb-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Search Employee</label>
+            <input type="text" id="employeeSearch" placeholder="Type name or PIN..." oninput="filterEmployees()" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+        </div>
+        <div id="employeeList" class="max-h-48 overflow-y-auto border border-slate-200 rounded-lg bg-white mb-6">
+            <!-- Employees injected here -->
+        </div>
+        
+        <div class="flex gap-4">
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeAssignModal()">Cancel</button>
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" id="btnConfirmAssign" disabled onclick="confirmAssign()">Confirm Binding</button>
+        </div>
+    </div>
+</div>

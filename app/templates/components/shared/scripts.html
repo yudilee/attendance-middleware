@@ -1,0 +1,1773 @@
+<script>
+    // Helper to reset all views
+    function resetAllViews() {
+        // Reset Devices Tab
+        const devForm = document.getElementById('deviceFormSection');
+        const devAssign = document.getElementById('assignFormSection');
+        const devList = document.getElementById('devicesListSection');
+        if (devForm) devForm.style.display = 'none';
+        if (devAssign) devAssign.style.display = 'none';
+        if (devList) devList.style.display = 'block';
+        const onboardM = document.getElementById('onboardModal');
+        if (onboardM) onboardM.style.display = 'none';
+        
+        // Reset Branches Tab
+        const brForm = document.getElementById('branchFormSection');
+        const brList = document.getElementById('branchListSection');
+        if (brForm) brForm.style.display = 'none';
+        if (brList) brList.style.display = 'block';
+        
+        // Reset API Keys Tab
+        const keyAdd = document.getElementById('apiKeyFormSection');
+        const keyEdit = document.getElementById('apiKeyEditFormSection');
+        const keyList = document.getElementById('apiKeyListSection');
+        if (keyAdd) keyAdd.style.display = 'none';
+        if (keyEdit) keyEdit.style.display = 'none';
+        if (keyList) keyList.style.display = 'block';
+        
+        // Reset Users Tab
+        const usrForm = document.getElementById('userFormSection');
+        const usrList = document.getElementById('userListSection');
+        if (usrForm) usrForm.style.display = 'none';
+        if (usrList) usrList.style.display = 'grid';
+        const ownPwd = document.getElementById('admin_password');
+        const ownPwdConf = document.getElementById('admin_password_confirm');
+        if (ownPwd) ownPwd.value = '';
+        if (ownPwdConf) ownPwdConf.value = '';
+
+        // Reset Punch Types Form
+        if (typeof cancelPtEdit === 'function') {
+            cancelPtEdit();
+        }
+        
+        // Close generic Confirm Modal if open
+        const confirmM = document.getElementById('confirmModal');
+        if (confirmM) confirmM.style.display = 'none';
+    }
+
+    // Helper to switch tabs (re-definition for proper scope)
+    function showTab(tabId) {
+        // Reset all editable/form views
+        resetAllViews();
+
+        document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        // Hide standalone sections
+        const supervisorDiv = document.querySelector('.supervisor-management');
+        if (supervisorDiv) supervisorDiv.style.display = 'none';
+        
+        const content = document.getElementById(tabId);
+        if (content) {
+            content.style.display = 'block';
+            const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+            if (navItem) {
+                navItem.classList.add('active');
+                document.getElementById('page-title').innerText = navItem.innerText.trim();
+            }
+            
+            // Trigger load data
+            if (tabId === 'security') loadApiKeys();
+            if (tabId === 'geofence') { loadBranches(); initBranchMap(); }
+            if (tabId === 'profile') loadUsers();
+            if (tabId === 'punch-types') loadPunchTypes();
+            if (tabId === 'settings') loadAdmsSyncSettings();
+        }
+    }
+
+    // Navigation switching (re-bind to avoid duplication with layout)
+    document.querySelectorAll('.nav-item[data-tab]').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
+                e.preventDefault();
+                const targetTab = tab.dataset.tab;
+                showTab(targetTab);
+                window.location.hash = targetTab;
+            }
+        });
+    });
+
+    function localizeTimestamps() {
+        document.querySelectorAll('.local-time').forEach(el => {
+            const utcStr = el.getAttribute('data-utc');
+            if (utcStr) {
+                const localDate = new Date(utcStr);
+                if (!isNaN(localDate.getTime())) {
+                    const year = localDate.getFullYear();
+                    const month = String(localDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(localDate.getDate()).padStart(2, '0');
+                    const hours = String(localDate.getHours()).padStart(2, '0');
+                    const minutes = String(localDate.getMinutes()).padStart(2, '0');
+                    const seconds = String(localDate.getSeconds()).padStart(2, '0');
+                    el.textContent = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                }
+            }
+        });
+    }
+
+    function initLivePunchFeed() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/v1/punch/stream`;
+        
+        const wsStatusBadge = document.getElementById('wsConnectionStatus');
+        const liveTickerPlaceholder = document.getElementById('liveTickerPlaceholder');
+        const liveTickerList = document.getElementById('liveTickerList');
+        const liveLogsBody = document.getElementById('liveAttendanceLogsBody');
+        const noLogsRow = document.getElementById('noLogsRow');
+        
+        let socket;
+        
+        function connect() {
+            socket = new WebSocket(wsUrl);
+            
+            socket.onopen = () => {
+                if (wsStatusBadge) {
+                    wsStatusBadge.textContent = 'Live Feed Online';
+                    wsStatusBadge.className = 'text-[10px] bg-emerald-100 text-emerald-800 font-mono px-2 py-0.5 rounded-full font-bold';
+                }
+            };
+            
+            socket.onclose = () => {
+                if (wsStatusBadge) {
+                    wsStatusBadge.textContent = 'Disconnected (Reconnecting...)';
+                    wsStatusBadge.className = 'text-[10px] bg-amber-100 text-amber-800 font-mono px-2 py-0.5 rounded-full font-bold animate-pulse';
+                }
+                setTimeout(connect, 3000);
+            };
+            
+            socket.onerror = (err) => {
+                console.error('WebSocket Error:', err);
+                socket.close();
+            };
+            
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (liveTickerPlaceholder) liveTickerPlaceholder.classList.add('hidden');
+                    if (liveTickerList) liveTickerList.classList.remove('hidden');
+                    
+                    const timeLocal = new Date().toLocaleTimeString();
+                    const tickerItem = document.createElement('div');
+                    tickerItem.className = 'flex items-center justify-between bg-white border border-indigo-50 rounded-lg p-2.5 shadow-sm transform translate-y-2 opacity-0 transition-all duration-500 ease-out border-l-4 ' + (data.punch_type === 'In' ? 'border-l-emerald-500' : 'border-l-red-500');
+                    tickerItem.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-full ${data.punch_type === 'In' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'} text-[10px] font-bold">
+                                ${data.punch_type === 'In' ? 'IN' : 'OUT'}
+                            </span>
+                            <div>
+                                <div class="text-xs font-bold text-slate-800">${data.employee_name}</div>
+                                <div class="text-[10px] text-slate-400">ID: ${data.employee_id} &bull; GPS: ${parseFloat(data.latitude).toFixed(5)}, ${parseFloat(data.longitude).toFixed(5)}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] font-mono font-bold text-indigo-600">${timeLocal}</div>
+                            <div class="text-[9px] text-slate-400 font-semibold">${data.adms_status === 'uploaded' ? '✅ ADMS' : '⏳ Pending'}</div>
+                        </div>
+                    `;
+                    
+                    if (liveTickerList) {
+                        liveTickerList.insertBefore(tickerItem, liveTickerList.firstChild);
+                        setTimeout(() => {
+                            tickerItem.classList.remove('translate-y-2', 'opacity-0');
+                        }, 50);
+                        
+                        if (liveTickerList.children.length > 5) {
+                            liveTickerList.removeChild(liveTickerList.lastChild);
+                        }
+                    }
+                    
+                    if (liveLogsBody) {
+                        if (noLogsRow) noLogsRow.remove();
+                        
+                        const tr = document.createElement('tr');
+                        tr.className = 'hover:bg-slate-50 transition-colors bg-indigo-50/20';
+                        
+                        const dateStr = data.timestamp ? new Date(data.timestamp).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
+                        
+                        const selfieHtml = data.selfie_filename 
+                            ? `<a href="/ui/selfie/${data.selfie_filename}" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"><i class="ph ph-camera"></i> View</a>` 
+                            : `<span class="text-slate-400">&mdash;</span>`;
+                        
+                        const typeBadgeHtml = data.punch_type === 'In'
+                            ? `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">🟢 In</span>`
+                            : `<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">🔴 Out</span>`;
+                            
+                        const statusBadgeHtml = data.adms_status === 'uploaded'
+                            ? `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✅ Uploaded</span>`
+                            : data.adms_status === 'failed'
+                            ? `<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">❌ Failed</span>`
+                            : `<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">⏳ Pending</span>`;
+                        
+                        tr.innerHTML = `
+                            <td class="px-5 py-4">
+                                <strong class="text-slate-800">${data.employee_name}</strong><br>
+                                <span class="text-xs text-slate-400">ID: ${data.employee_id}</span>
+                            </td>
+                            <td class="px-5 py-4 text-sm text-slate-700 local-time" data-utc="${data.timestamp}">${dateStr}</td>
+                            <td class="px-5 py-4">${typeBadgeHtml}</td>
+                            <td class="px-5 py-4 text-xs text-slate-400 font-mono">${parseFloat(data.latitude).toFixed(5)}, ${parseFloat(data.longitude).toFixed(5)}</td>
+                            <td class="px-5 py-4">${statusBadgeHtml}</td>
+                            <td class="px-5 py-4">${selfieHtml}</td>
+                        `;
+                        
+                        liveLogsBody.insertBefore(tr, liveLogsBody.firstChild);
+                        
+                        if (liveLogsBody.children.length > 20) {
+                            liveLogsBody.removeChild(liveLogsBody.lastChild);
+                        }
+                        
+                        localizeTimestamps();
+                    }
+                    
+                    const statsCountEl = document.querySelector('.text-3xl.font-bold.text-slate-800');
+                    if (statsCountEl) {
+                        const curCount = parseInt(statsCountEl.textContent);
+                        if (!isNaN(curCount)) {
+                            statsCountEl.textContent = curCount + 1;
+                        }
+                    }
+                    
+                } catch (e) {
+                    console.error('Error parsing live feed message:', e);
+                }
+            };
+        }
+        
+        connect();
+    }
+
+    // Handle initial load and back/forward navigation
+    window.addEventListener('load', () => {
+        localizeTimestamps();
+        initLivePunchFeed();
+        if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
+            const hash = window.location.hash.replace('#', '') || 'dashboard';
+            showTab(hash);
+        }
+    });
+
+    window.addEventListener('hashchange', () => {
+        if (window.location.pathname === '/ui' || window.location.pathname === '/ui/') {
+            const hash = window.location.hash.replace('#', '') || 'dashboard';
+            showTab(hash);
+        }
+    });
+
+    // ── ADMS Settings ──────────────────────────────────────────────────────────
+    async function saveSettings() {
+        const url = document.getElementById('server_url').value.trim();
+        const sn = document.getElementById('serial_number').value.trim();
+        const device_name = document.getElementById('device_name').value.trim();
+        const timezone_offset = parseInt(document.getElementById('timezone_offset').value) || 7;
+        const res = await fetch('/ui/settings', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({server_url: url, serial_number: sn, device_name: device_name, timezone_offset: timezone_offset})
+        });
+        if (res.ok) { notify('ADMS Configuration saved!'); setTimeout(() => location.reload(), 800); }
+        else notify('Failed to save settings', 'error');
+    }
+
+    async function testConnection() {
+        const url = document.getElementById('server_url').value.trim();
+        const sn = document.getElementById('serial_number').value.trim();
+        const device_name = document.getElementById('device_name').value.trim();
+        const timezone_offset = parseInt(document.getElementById('timezone_offset').value) || 7;
+        const board = document.getElementById('testResult');
+        board.style.display = 'block';
+        board.className = 'mt-6 p-4 rounded-xl font-mono text-sm border border-slate-200 bg-slate-50 whitespace-pre-wrap';
+        board.innerText = '> Sending handshake to ADMS server...\n> SN: ' + sn + ' (' + device_name + ')';
+        try {
+            const res = await fetch('/ui/test-connection', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    server_url: url, 
+                    serial_number: sn, 
+                    device_name: device_name,
+                    timezone_offset: timezone_offset
+                })
+            });
+            const data = await res.json();
+            board.className = data.success 
+                ? 'mt-6 p-4 rounded-xl font-mono text-sm border border-emerald-300 bg-emerald-50 text-emerald-800 whitespace-pre-wrap'
+                : 'mt-6 p-4 rounded-xl font-mono text-sm border border-red-300 bg-red-50 text-red-700 whitespace-pre-wrap';
+            board.innerText = '> Status: ' + (data.success ? 'SUCCESS ✅' : 'FAILED ❌') + '\n> ' + data.message;
+        } catch(e) {
+            board.className = 'mt-6 p-4 rounded-xl font-mono text-sm border border-red-300 bg-red-50 text-red-700 whitespace-pre-wrap';
+            board.innerText = '> Error: Could not reach the middleware server.';
+        }
+    }
+
+    async function loadAdmsSyncSettings() {
+        const res = await fetch('/ui/adms-credentials');
+        if (res.ok) {
+            const data = await res.json();
+            document.getElementById('sync_url').value = data.url || '';
+            document.getElementById('sync_username').value = data.username || '';
+            document.getElementById('sync_password').value = data.password || '';
+        }
+        updateSyncInfo();
+    }
+
+    async function updateSyncInfo() {
+        try {
+            const res = await fetch('/ui/adms-sync-info');
+            const data = await res.json();
+            document.getElementById('statLastSync').innerText = data.last_sync;
+            document.getElementById('statLastCount').innerText = data.last_count;
+            document.getElementById('statTotalEmployees').innerText = data.total_employees;
+            
+            const statusEl = document.getElementById('statStatus');
+            statusEl.innerText = data.last_status.toUpperCase();
+            if (data.last_status === 'success') {
+                statusEl.className = 'inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700';
+            } else if (data.last_status.startsWith('failed')) {
+                statusEl.className = 'inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700';
+            } else {
+                statusEl.className = 'inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600';
+            }
+        } catch(e) {}
+    }
+
+    async function saveAdmsSyncSettings() {
+        const url = document.getElementById('sync_url').value.trim();
+        const username = document.getElementById('sync_username').value.trim();
+        const password = document.getElementById('sync_password').value.trim();
+        const res = await fetch('/ui/adms-credentials', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({url: url, username: username, password: password})
+        });
+        if (res.ok) notify('Sync credentials saved!');
+        else notify('Failed to save sync credentials', 'error');
+    }
+
+    async function triggerAdmsSync() {
+        const btn = document.getElementById('btnSyncNow');
+        btn.innerText = '🔄 Syncing...';
+        btn.disabled = true;
+        try {
+            const res = await fetch('/ui/adms-sync', { method: 'POST' });
+            if (res.ok) {
+                const data = await res.json();
+                notify(data.message);
+                updateSyncInfo();
+                if (document.getElementById('profile').style.display === 'block') loadUsers();
+            } else {
+                const e = await res.json();
+                notify(e.detail || 'Sync failed', 'error');
+                updateSyncInfo();
+            }
+        } catch(e) {
+            notify('Server error during sync', 'error');
+        } finally {
+            btn.innerText = '🔄 Sync Now';
+            btn.disabled = false;
+        }
+    }
+
+    // ── Device Actions ─────────────────────────────────────────────────────────
+    async function unbindDevice(id) {
+        if (!confirm('Permanently remove this device registration?')) return;
+        const res = await fetch(`/ui/devices/${id}/unbind`, {method: 'DELETE'});
+        if (res.ok) { notify('Device removed'); location.reload(); }
+        else notify('Action failed', 'error');
+    }
+
+    async function approveDevice(id) {
+        const res = await fetch(`/ui/devices/${id}/approve`, {method: 'POST'});
+        if (res.ok) { notify(`Device approved ✅`); location.reload(); }
+        else { const e = await res.json(); notify(e.detail || 'Failed', 'error'); }
+    }
+
+    async function suspendDevice(id) {
+        if (!confirm(`Suspend this device? It will not be able to punch.`)) return;
+        const res = await fetch(`/ui/devices/${id}/suspend`, {method: 'POST'});
+        if (res.ok) { notify(`Device suspended`); location.reload(); }
+        else { const e = await res.json(); notify(e.detail || 'Failed', 'error'); }
+    }
+
+    let _allBranches = [];
+
+    async function openDeviceModal(bindingId, currentLabel) {
+        document.getElementById('edit_device_id').value = bindingId;
+        document.getElementById('edit_device_label').value = currentLabel || '';
+        document.getElementById('deviceBranchesList').innerHTML = '<span class="text-sm text-slate-400">Loading assigned branches...</span>';
+        
+        if (_allBranches.length === 0) {
+            try {
+                const res = await fetch('/ui/branches');
+                _allBranches = await res.json();
+            } catch(e) {
+                console.error("Failed to load branches", e);
+            }
+        }
+
+        document.getElementById('devicesListSection').style.display = 'none';
+        document.getElementById('assignFormSection').style.display = 'none';
+        document.getElementById('deviceFormSection').style.display = 'block';
+        await refreshDeviceBranches(bindingId);
+    }
+
+    async function refreshDeviceBranches(bindingId) {
+        try {
+            const res = await fetch(`/ui/devices/${bindingId}/branches`);
+            const assignedBranches = await res.json();
+            
+            const listDiv = document.getElementById('deviceBranchesList');
+            if (assignedBranches.length === 0) {
+                listDiv.innerHTML = '<span class="text-sm text-slate-400">No branches assigned yet. This device can punch anywhere!</span>';
+            } else {
+                listDiv.innerHTML = assignedBranches.map(b => `
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                        ${b.branch_name}
+                        <span onclick="removeDeviceBranchFromModal(${bindingId}, ${b.branch_id})" class="cursor-pointer text-sm font-bold leading-none text-indigo-300 hover:text-indigo-500" title="Remove branch">×</span>
+                    </span>
+                `).join('');
+            }
+
+            const assignedIds = new Set(assignedBranches.map(b => b.branch_id));
+            const availableBranches = _allBranches.filter(b => !assignedIds.has(b.id));
+            
+            const select = document.getElementById('deviceBranchSelect');
+            if (availableBranches.length === 0) {
+                document.getElementById('addDeviceBranchGroup').style.display = 'none';
+            } else {
+                document.getElementById('addDeviceBranchGroup').style.display = 'flex';
+                select.innerHTML = availableBranches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+            }
+        } catch(e) {
+            notify('Error loading device branches', 'error');
+        }
+    }
+
+    async function removeDeviceBranchFromModal(bindingId, branchId) {
+        const res = await fetch(`/ui/devices/${bindingId}/branches/${branchId}`, {method: 'DELETE'});
+        if (res.ok) {
+            notify('Branch removed from device');
+            await refreshDeviceBranches(bindingId);
+        } else {
+            notify('Failed to remove branch', 'error');
+        }
+    }
+
+    async function submitAddDeviceBranch() {
+        const bindingId = document.getElementById('edit_device_id').value;
+        const select = document.getElementById('deviceBranchSelect');
+        const branchId = select.value;
+        if (!branchId) return;
+
+        const res = await fetch(`/ui/devices/${bindingId}/branches/${branchId}`, {method: 'POST'});
+        if (res.ok) {
+            notify('Branch added to device');
+            await refreshDeviceBranches(bindingId);
+        } else {
+            notify('Failed to add branch', 'error');
+        }
+    }
+
+    async function saveDeviceLabel() {
+        const bindingId = document.getElementById('edit_device_id').value;
+        const label = document.getElementById('edit_device_label').value.trim();
+        
+        const res = await fetch(`/ui/devices/${bindingId}/label`, {
+            method: 'PUT', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({label: label, notes: ''})
+        });
+        if (res.ok) {
+            notify('Device label updated successfully');
+            closeDeviceModal();
+            location.reload();
+        } else {
+            notify('Failed to update label', 'error');
+        }
+    }
+
+    function closeDeviceModal() {
+        document.getElementById('deviceFormSection').style.display = 'none';
+        document.getElementById('assignFormSection').style.display = 'none';
+        document.getElementById('devicesListSection').style.display = 'block';
+    }
+
+    // ── Branches (Geofence) ─────────────────────────────────────────────────────
+    let currentBranches = [];
+    let branchMap = null;
+    let branchMarker = null;
+    let branchCircle = null;
+    let branchMapInitialized = false;
+    let checkpointLayers = [];
+    let tempCheckpointMarker = null;
+
+    function initBranchMap() {
+        const container = document.getElementById('branchMap');
+        if (!container || container._leaflet_id) return;
+
+        const defaultLat = -6.175392;
+        const defaultLon = 106.827153;
+
+        branchMap = L.map('branchMap', { zoomControl: true, doubleClickZoom: false }).setView([defaultLat, defaultLon], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap',
+            maxZoom: 19,
+        }).addTo(branchMap);
+
+        branchMarker = L.marker([defaultLat, defaultLon], { draggable: true }).addTo(branchMap);
+        branchCircle = L.circle([defaultLat, defaultLon], {
+            radius: 50, color: '#6366f1', fillColor: '#6366f1', fillOpacity: 0.1, weight: 2
+        }).addTo(branchMap);
+
+        branchMarker.on('dragend', function() {
+            const pos = branchMarker.getLatLng();
+            document.getElementById('branch_lat').value = pos.lat.toFixed(6);
+            document.getElementById('branch_lon').value = pos.lng.toFixed(6);
+            updateCircle();
+        });
+
+        branchMap.on('click', function(e) {
+            branchMarker.setLatLng(e.latlng);
+            document.getElementById('branch_lat').value = e.latlng.lat.toFixed(6);
+            document.getElementById('branch_lon').value = e.latlng.lng.toFixed(6);
+            updateCircle();
+        });
+
+        branchMap.on('dblclick', function(e) {
+            document.getElementById('cp_lat').value = e.latlng.lat.toFixed(6);
+            document.getElementById('cp_lon').value = e.latlng.lng.toFixed(6);
+            
+            if (tempCheckpointMarker) {
+                tempCheckpointMarker.setLatLng(e.latlng);
+            } else {
+                tempCheckpointMarker = L.marker(e.latlng, {
+                    draggable: true,
+                    title: "New Checkpoint Location",
+                    icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    })
+                }).addTo(branchMap);
+                
+                tempCheckpointMarker.on('dragend', function() {
+                    const pos = tempCheckpointMarker.getLatLng();
+                    document.getElementById('cp_lat').value = pos.lat.toFixed(6);
+                    document.getElementById('cp_lon').value = pos.lng.toFixed(6);
+                });
+            }
+            
+            notify("Set checkpoint coordinates on map double click! Please type a name and click 'Add Point'.");
+        });
+
+        setTimeout(() => { branchMap.invalidateSize(); }, 100);
+        branchMapInitialized = true;
+    }
+
+    function updateCircle() {
+        const lat = parseFloat(document.getElementById('branch_lat').value) || -6.175392;
+        const lon = parseFloat(document.getElementById('branch_lon').value) || 106.827153;
+        const radius = parseFloat(document.getElementById('branch_rad').value) || 50;
+        if (branchMarker) branchMarker.setLatLng([lat, lon]);
+        if (branchCircle) {
+            branchCircle.setLatLng([lat, lon]);
+            branchCircle.setRadius(radius);
+        }
+        if (branchMap) branchMap.setView([lat, lon], branchMap.getZoom());
+    }
+
+    function onCoordChange() {
+        const lat = parseFloat(document.getElementById('branch_lat').value);
+        const lon = parseFloat(document.getElementById('branch_lon').value);
+        if (!isNaN(lat) && !isNaN(lon) && branchMarker) {
+            branchMarker.setLatLng([lat, lon]);
+            if (branchCircle) branchCircle.setLatLng([lat, lon]);
+            if (branchMap) branchMap.setView([lat, lon], branchMap.getZoom());
+        }
+    }
+
+    function filterBranches() {
+        const query = document.getElementById('branchSearch').value.toLowerCase().trim();
+        const filter = document.getElementById('branchFilter').value;
+        const tbody = document.getElementById('branchesTableBody');
+        
+        const branches = Array.isArray(currentBranches) ? currentBranches : [];
+
+        const filtered = branches.filter(b => {
+            const matchesSearch = !query || (b.name && b.name.toLowerCase().includes(query));
+            const matchesFilter = filter === 'all'
+                || (filter === 'active' && b.is_active)
+                || (filter === 'inactive' && !b.is_active);
+            return matchesSearch && matchesFilter;
+        });
+
+        document.getElementById('branchCount').innerText = `${filtered.length} / ${branches.length} branches`;
+
+        if (!filtered.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-slate-400">No matching branches.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(b => `
+            <tr class="${b.is_active ? 'hover:bg-slate-50' : 'opacity-60 hover:bg-slate-50'} transition-colors">
+                <td class="px-5 py-4"><strong class="text-slate-800">${b.name}</strong></td>
+                <td class="px-5 py-4 font-mono text-xs text-slate-500">${b.latitude.toFixed(5)}, ${b.longitude.toFixed(5)}</td>
+                <td class="px-5 py-4 text-sm text-slate-700">${b.radius_meters}m</td>
+                <td class="px-5 py-4 text-center">${b.qr_code_enabled ? '<span class="text-emerald-600 font-semibold">✓</span>' : '<span class="text-slate-300">—</span>'}</td>
+                <td class="px-5 py-4 text-center">${b.nfc_enabled ? '<span class="text-indigo-600 font-semibold">✓</span>' : '<span class="text-slate-300">—</span>'}</td>
+                <td class="px-5 py-4 text-center">
+                    <span class="inline-flex items-center gap-1 rounded-full ${b.device_count > 0 ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-400'} px-2.5 py-0.5 text-xs font-semibold">
+                        <i class="ph ph-devices"></i> ${b.device_count}
+                    </span>
+                </td>
+                <td class="px-5 py-4 text-center">
+                    <label class="cursor-pointer" onclick="event.stopPropagation(); toggleBranchStatus(${b.id}, ${b.is_active})">
+                        <span class="toggle-slider ${b.is_active ? 'active' : 'inactive'}"></span>
+                    </label>
+                </td>
+                <td class="px-5 py-4 text-right whitespace-nowrap">
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="editBranch(${b.id})">✏️ Edit</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors" onclick="confirmDeleteBranch(${b.id}, '${b.name.replace(/'/g, "\\'")}')">🗑️</button>
+                </td>
+            </tr>`).join('');
+    }
+
+    async function loadBranches() {
+        try {
+            const res = await fetch('/ui/branches');
+            if (!res.ok) {
+                const errText = await res.text();
+                console.error('loadBranches failed:', res.status, errText);
+                notify('Failed to load branches: server error', 'error');
+                return;
+            }
+            const data = await res.json();
+            if (!Array.isArray(data)) {
+                console.error('loadBranches: response is not an array', data);
+                notify('Failed to load branches: invalid data', 'error');
+                return;
+            }
+            currentBranches = data;
+            filterBranches();
+        } catch(e) {
+            console.error('loadBranches error:', e);
+            notify('Failed to load branches: ' + (e.message || 'network error'), 'error');
+        }
+    }
+
+    function toggleQrField() {
+        const enabled = document.getElementById('branch_qr_enabled').checked;
+        document.getElementById('qr_data_group').style.display = enabled ? 'block' : 'none';
+        if (!enabled) {
+            document.getElementById('branch_qr_data').value = '';
+            updateQrPreview();
+        } else {
+            updateQrPreview();
+        }
+    }
+
+    let qrCodeInstance = null;
+
+    function updateQrPreview() {
+        const data = document.getElementById('branch_qr_data').value.trim();
+        const container = document.getElementById('qrPreview');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (!data) {
+            container.innerHTML = '<span class="text-xs text-slate-400 text-center">Live QR</span>';
+            return;
+        }
+        
+        try {
+            qrCodeInstance = new QRCode(container, {
+                text: data,
+                width: 68,
+                height: 68,
+                colorDark: '#1e293b',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        } catch(e) {
+            container.innerHTML = '<span class="text-xs text-red-500">Error</span>';
+        }
+    }
+
+    function generateQrData() {
+        const name = document.getElementById('branch_name').value.trim();
+        const prefix = name ? name.toUpperCase().replace(/\s+/g, '-') : 'BRANCH';
+        const suffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+        document.getElementById('branch_qr_data').value = prefix + '-' + suffix;
+        updateQrPreview();
+    }
+
+    // ── NFC fields ─────────────────────────────────────────────────────────────
+    function toggleNfcField() {
+        const enabled = document.getElementById('branch_nfc_enabled').checked;
+        document.getElementById('nfc_data_group').style.display = enabled ? 'block' : 'none';
+        if (!enabled) {
+            document.getElementById('branch_nfc_data').value = '';
+            updateNfcPreview();
+        } else {
+            updateNfcPreview();
+        }
+    }
+
+    function updateNfcPreview() {
+        const data = document.getElementById('branch_nfc_data').value.trim();
+        const textEl = document.getElementById('nfcPreviewText');
+        if (!textEl) return;
+        textEl.innerText = data ? data.length > 18 ? data.substring(0, 16) + '…' : data : 'NFC Tag';
+        textEl.className = data ? 'text-xs text-indigo-700 text-center' : 'text-xs text-slate-400 text-center';
+    }
+
+    function generateNfcTag() {
+        const name = document.getElementById('branch_name').value.trim();
+        const prefix = name ? 'NFC-' + name.toUpperCase().replace(/\s+/g, '-') : 'NFC-BRANCH';
+        const suffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+        document.getElementById('branch_nfc_data').value = prefix + '-' + suffix;
+        updateNfcPreview();
+    }
+
+    function openBranchModal() {
+        sessionStorage.removeItem('editing_branch_id');
+        document.getElementById('branchListSection').style.display = 'none';
+        document.getElementById('branchFormSection').style.display = 'block';
+        document.getElementById('branchFormTitle').innerText = '📍 Create New Branch';
+        document.getElementById('saveBranchBtn').innerText = '📍 Save Branch';
+        
+        document.getElementById('edit_branch_id').value = '';
+        document.getElementById('branchForm').reset();
+        document.getElementById('qr_data_group').style.display = 'none';
+        document.getElementById('nfc_data_group').style.display = 'none';
+        
+        document.getElementById('checkpointNewBranchAlert').style.display = 'block';
+        document.getElementById('checkpointContainer').style.display = 'none';
+        
+        setTimeout(() => {
+            initBranchMap();
+            if (branchMap) branchMap.invalidateSize();
+        }, 50);
+    }
+
+    function closeBranchModal() {
+        document.getElementById('branchFormSection').style.display = 'none';
+        document.getElementById('branchListSection').style.display = 'block';
+    }
+
+    async function editBranch(id) {
+        sessionStorage.setItem('editing_branch_id', id);
+        if (!Array.isArray(currentBranches) || currentBranches.length === 0) {
+            await loadBranches();
+        }
+        if (!Array.isArray(currentBranches) || currentBranches.length === 0) {
+            notify('No branch data available. Please reload the page.', 'error');
+            return;
+        }
+        
+        const branch = currentBranches.find(b => b.id === id);
+        if (!branch) {
+            notify('Branch not found in current data. Refreshing...', 'error');
+            await loadBranches();
+            const reloaded = currentBranches.find(b => b.id === id);
+            if (!reloaded) {
+                notify('Branch may have been deleted. Please refresh the page.', 'error');
+                return;
+            }
+            return editBranch(id);
+        }
+        
+        document.getElementById('edit_branch_id').value = branch.id;
+        document.getElementById('checkpoint_branch_id').value = branch.id;
+        document.getElementById('branch_name').value = branch.name;
+        document.getElementById('branch_lat').value = branch.latitude;
+        document.getElementById('branch_lon').value = branch.longitude;
+        document.getElementById('branch_rad').value = branch.radius_meters;
+        document.getElementById('branch_qr_enabled').checked = branch.qr_code_enabled || false;
+        document.getElementById('branch_qr_data').value = branch.qr_code_data || '';
+        toggleQrField();
+        updateQrPreview();
+        document.getElementById('branch_nfc_enabled').checked = branch.nfc_enabled || false;
+        document.getElementById('branch_nfc_data').value = branch.nfc_tag_data || '';
+        toggleNfcField();
+        updateNfcPreview();
+        
+        document.getElementById('cp_lat').value = branch.latitude;
+        document.getElementById('cp_lon').value = branch.longitude;
+        document.getElementById('cp_name').value = '';
+        document.getElementById('cp_rad').value = 50;
+        
+        document.getElementById('checkpointNewBranchAlert').style.display = 'none';
+        document.getElementById('checkpointContainer').style.display = 'block';
+        loadCheckpoints(branch.id);
+        
+        document.getElementById('branchListSection').style.display = 'none';
+        document.getElementById('branchFormSection').style.display = 'block';
+        
+        setTimeout(() => {
+            initBranchMap();
+            if (branchMap) {
+                branchMap.invalidateSize();
+                branchMap.setView([branch.latitude, branch.longitude], 15);
+            }
+            if (branchMarker) {
+                branchMarker.setLatLng([branch.latitude, branch.longitude]);
+            }
+            if (branchCircle) {
+                branchCircle.setLatLng([branch.latitude, branch.longitude]);
+                branchCircle.setRadius(branch.radius_meters);
+            }
+        }, 50);
+        
+        document.getElementById('branchFormTitle').innerText = '✏️ Edit Branch & Checkpoints';
+        document.getElementById('saveBranchBtn').innerText = '💾 Update Branch';
+    }
+
+    function cancelEdit() {
+        sessionStorage.removeItem('editing_branch_id');
+        document.getElementById('edit_branch_id').value = '';
+        document.getElementById('checkpoint_branch_id').value = '';
+        document.getElementById('branchForm').reset();
+        document.getElementById('branchFormTitle').innerText = '📍 Create New Branch';
+        document.getElementById('saveBranchBtn').innerText = '📍 Save Branch';
+        document.getElementById('qr_data_group').style.display = 'none';
+        document.getElementById('nfc_data_group').style.display = 'none';
+        
+        // Clear checkpoint layers from map
+        checkpointLayers.forEach(layer => {
+            if (branchMap) branchMap.removeLayer(layer);
+        });
+        checkpointLayers = [];
+        if (tempCheckpointMarker) {
+            if (branchMap) branchMap.removeLayer(tempCheckpointMarker);
+            tempCheckpointMarker = null;
+        }
+
+        const defaultLat = -6.175392;
+        const defaultLon = 106.827153;
+        if (branchMarker) {
+            branchMarker.setLatLng([defaultLat, defaultLon]);
+            if (branchCircle) {
+                branchCircle.setLatLng([defaultLat, defaultLon]);
+                branchCircle.setRadius(50);
+            }
+            if (branchMap) branchMap.setView([defaultLat, defaultLon], 14);
+        }
+        document.getElementById('branch_lat').value = '';
+        document.getElementById('branch_lon').value = '';
+        document.getElementById('branch_rad').value = 50;
+        
+        closeBranchModal();
+    }
+
+    async function saveBranch() {
+        const qrEnabled = document.getElementById('branch_qr_enabled').checked;
+        const nfcEnabled = document.getElementById('branch_nfc_enabled').checked;
+        const payload = {
+            name: document.getElementById('branch_name').value.trim(),
+            latitude: parseFloat(document.getElementById('branch_lat').value),
+            longitude: parseFloat(document.getElementById('branch_lon').value),
+            radius_meters: parseFloat(document.getElementById('branch_rad').value),
+            qr_code_enabled: qrEnabled,
+            qr_code_data: qrEnabled ? document.getElementById('branch_qr_data').value.trim() : null,
+            nfc_enabled: nfcEnabled,
+            nfc_tag_data: nfcEnabled ? document.getElementById('branch_nfc_data').value.trim() : null,
+        };
+        if (!payload.name || isNaN(payload.latitude) || isNaN(payload.longitude) || isNaN(payload.radius_meters)) {
+            notify('Please fill all branch fields correctly', 'error'); return;
+        }
+        if (qrEnabled && !payload.qr_code_data) {
+            notify('Please enter or generate QR code data', 'error'); return;
+        }
+        if (nfcEnabled && !payload.nfc_tag_data) {
+            notify('Please enter or generate NFC tag data', 'error'); return;
+        }
+        
+        const editId = document.getElementById('edit_branch_id').value;
+        const url = editId ? `/ui/branches/${editId}` : '/ui/branches';
+        const method = editId ? 'PUT' : 'POST';
+
+        try {
+            const res = await fetch(url, {
+                method: method, headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            
+            if (res.ok) {
+                const resData = await res.json();
+                notify(editId ? 'Branch updated successfully!' : 'Branch added successfully!');
+                await loadBranches();
+                if (!editId && resData && resData.id) {
+                    editBranch(resData.id);
+                } else {
+                    cancelEdit();
+                }
+            } else {
+                let errDetail = 'Failed to save branch';
+                try {
+                    const err = await res.json();
+                    errDetail = err.detail || errDetail;
+                } catch(_) {}
+                notify(errDetail, 'error');
+            }
+        } catch(e) {
+            notify('Network error while saving branch: ' + (e.message || 'unknown'), 'error');
+        }
+    }
+
+    async function toggleBranchStatus(id, currentlyActive) {
+        const label = currentlyActive ? 'deactivate' : 'activate';
+        showConfirm(`Are you sure you want to <strong>${label}</strong> this branch?`, async () => {
+            try {
+                const res = await fetch(`/ui/branches/${id}/toggle`, {method: 'PATCH'});
+                if (res.ok) {
+                    notify(`Branch ${label}d`);
+                    await loadBranches();
+                } else {
+                    let errDetail = 'Failed to toggle status';
+                    try {
+                        const err = await res.json();
+                        errDetail = err.detail || errDetail;
+                    } catch(_) {}
+                    notify(errDetail, 'error');
+                }
+            } catch(e) {
+                notify('Network error while toggling status: ' + (e.message || 'unknown'), 'error');
+            }
+        });
+    }
+
+    function confirmDeleteBranch(id, name) {
+        showConfirm(
+            `Delete branch <strong>${name}</strong>?<br><small class="text-slate-400">This cannot be undone. Remove all device assignments first before deleting.</small>`,
+            async () => {
+                try {
+                    const res = await fetch(`/ui/branches/${id}`, {method: 'DELETE'});
+                    if (res.ok) {
+                        notify('Branch deleted');
+                        await loadBranches();
+                    } else {
+                        let errDetail = 'Failed to delete branch';
+                        try {
+                            const err = await res.json();
+                            errDetail = err.detail || errDetail;
+                        } catch(_) {}
+                        notify(errDetail, 'error');
+                    }
+                } catch(e) {
+                    notify('Network error while deleting branch: ' + (e.message || 'unknown'), 'error');
+                }
+            }
+        );
+    }
+
+    // ── Branch Checkpoints Management ─────────────────────────────────────────
+    function openCheckpointsModal(branchId, branchName) {
+        editBranch(branchId);
+    }
+
+    function closeCheckpointsModal() {
+        cancelEdit();
+    }
+
+    async function loadCheckpoints(branchId) {
+        const tbody = document.getElementById('checkpointsTableBody');
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-slate-400">⏳ Loading...</td></tr>';
+        
+        try {
+            // Clear existing checkpoint layers from the map
+            checkpointLayers.forEach(layer => {
+                if (branchMap) branchMap.removeLayer(layer);
+            });
+            checkpointLayers = [];
+
+            const res = await fetch(`/ui/branches/${branchId}/checkpoints`);
+            if (!res.ok) throw new Error('Failed to load');
+            const data = await res.json();
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-slate-400">No check-in checkpoints configured yet. This branch only uses the primary center coordinate.</td></tr>';
+                const badge = document.getElementById('checkpointCountBadge');
+                if (badge) badge.innerText = '0 Points';
+                return;
+            }
+            const badge = document.getElementById('checkpointCountBadge');
+            if (badge) badge.innerText = `${data.length} Point${data.length === 1 ? '' : 's'}`;
+            
+            // Draw checkpoint layers on Leaflet map
+            if (branchMap && Array.isArray(data)) {
+                data.forEach(cp => {
+                    const cpColor = cp.is_active ? '#10b981' : '#f59e0b';
+                    
+                    const circle = L.circle([cp.latitude, cp.longitude], {
+                        radius: cp.radius_meters || 50,
+                        color: cpColor,
+                        fillColor: cpColor,
+                        fillOpacity: 0.15,
+                        weight: 2
+                    }).addTo(branchMap);
+                    
+                    const marker = L.marker([cp.latitude, cp.longitude], {
+                        draggable: true,
+                        title: cp.name
+                    }).addTo(branchMap);
+                    
+                    marker.bindPopup(`<b>Checkpoint: ${cp.name}</b><br>Radius: ${cp.radius_meters}m<br>Status: ${cp.is_active ? 'Active' : 'Inactive'}<br><small class="text-slate-400">Drag to relocate and click 'Add Point' to update.</small>`);
+                    
+                    marker.on('dragend', function() {
+                        const pos = marker.getLatLng();
+                        document.getElementById('cp_lat').value = pos.lat.toFixed(6);
+                        document.getElementById('cp_lon').value = pos.lng.toFixed(6);
+                        document.getElementById('cp_name').value = cp.name;
+                        document.getElementById('cp_rad').value = cp.radius_meters || 50;
+                        circle.setLatLng(pos);
+                        notify(`Relocated checkpoint "${cp.name}". Click "Add Point" to save.`);
+                    });
+                    
+                    checkpointLayers.push(circle);
+                    checkpointLayers.push(marker);
+                });
+            }
+
+            tbody.innerHTML = data.map(cp => `
+                <tr class="${cp.is_active ? 'hover:bg-slate-50' : 'opacity-60 hover:bg-slate-50'} transition-colors">
+                    <td class="px-3 py-2.5 text-sm font-semibold text-slate-800">${cp.name}</td>
+                    <td class="px-3 py-2.5 font-mono text-xs text-slate-500">${cp.latitude.toFixed(5)}, ${cp.longitude.toFixed(5)}</td>
+                    <td class="px-3 py-2.5 text-sm text-center text-slate-700">${cp.radius_meters}m</td>
+                    <td class="px-3 py-2.5 text-center">
+                        <label class="cursor-pointer" onclick="toggleCheckpointStatus(${branchId}, ${cp.id}, ${cp.is_active})">
+                            <span class="toggle-slider ${cp.is_active ? 'active' : 'inactive'}" style="width:32px;height:16px;"></span>
+                        </label>
+                    </td>
+                    <td class="px-3 py-2.5 text-right">
+                        <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors" onclick="deleteCheckpoint(${branchId}, ${cp.id})">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-red-500">Failed to load checkpoints.</td></tr>';
+        }
+    }
+
+    async function submitAddCheckpoint() {
+        const branchId = document.getElementById('checkpoint_branch_id').value;
+        const payload = {
+            name: document.getElementById('cp_name').value.trim(),
+            latitude: parseFloat(document.getElementById('cp_lat').value),
+            longitude: parseFloat(document.getElementById('cp_lon').value),
+            radius_meters: parseFloat(document.getElementById('cp_rad').value)
+        };
+        
+        if (!payload.name || isNaN(payload.latitude) || isNaN(payload.longitude) || isNaN(payload.radius_meters)) {
+            notify('Please fill all fields correctly', 'error');
+            return;
+        }
+        
+        try {
+            const res = await fetch(`/ui/branches/${branchId}/checkpoints`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            
+            if (res.ok) {
+                notify('Checkpoint added successfully!');
+                document.getElementById('cp_name').value = '';
+                document.getElementById('cp_rad').value = 50;
+                if (tempCheckpointMarker) {
+                    if (branchMap) branchMap.removeLayer(tempCheckpointMarker);
+                    tempCheckpointMarker = null;
+                }
+                loadCheckpoints(branchId);
+            } else {
+                let errDetail = 'Failed to add checkpoint';
+                try {
+                    const err = await res.json();
+                    errDetail = err.detail || errDetail;
+                } catch(_) {}
+                notify(errDetail, 'error');
+            }
+        } catch(e) {
+            notify('Network error adding checkpoint: ' + (e.message || 'unknown'), 'error');
+        }
+    }
+
+    async function toggleCheckpointStatus(branchId, checkpointId, currentlyActive) {
+        try {
+            const res = await fetch(`/ui/branches/${branchId}/checkpoints/${checkpointId}/toggle`, {method: 'PATCH'});
+            if (res.ok) {
+                notify(currentlyActive ? 'Checkpoint deactivated' : 'Checkpoint activated');
+                loadCheckpoints(branchId);
+            } else {
+                notify('Failed to toggle checkpoint status', 'error');
+            }
+        } catch(e) {
+            notify('Network error: ' + (e.message || 'unknown'), 'error');
+        }
+    }
+
+    async function deleteCheckpoint(branchId, checkpointId) {
+        showConfirm('Are you sure you want to delete this checkpoint?', async () => {
+            try {
+                const res = await fetch(`/ui/branches/${branchId}/checkpoints/${checkpointId}`, {method: 'DELETE'});
+                if (res.ok) {
+                    notify('Checkpoint deleted');
+                    loadCheckpoints(branchId);
+                } else {
+                    notify('Failed to delete checkpoint', 'error');
+                }
+            } catch(e) {
+                notify('Network error: ' + (e.message || 'unknown'), 'error');
+            }
+        });
+    }
+
+    // ── API Keys ───────────────────────────────────────────────────────────────
+    let _generatedKey = '';
+
+    function expiryBadgeHtml(k) {
+        if (!k.expires_at) return '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Never</span>';
+        if (k.expiry_status === 'expired') {
+            return '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">⛔ Expired</span>';
+        }
+        if (k.expiry_status === 'expiring_soon') {
+            const days = k.expires_in_days;
+            const label = days === 0 ? 'Expires today' : days < 0 ? 'Expired' : `Expires in ${days}d`;
+            return `<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">⚠️ ${label}</span>`;
+        }
+        return `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✅ ${k.expires_in_days}d</span>`;
+    }
+
+    async function loadApiKeys() {
+        const res = await fetch('/ui/api-keys');
+        const keys = await res.json();
+        const tbody = document.getElementById('keysTableBody');
+        if (!keys.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-slate-400">No API keys yet. Generate one above.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = keys.map(k => {
+            const lastUsed = k.last_used_at
+                ? new Date(k.last_used_at).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
+                : 'Never';
+            const lastIp = k.last_used_ip || '—';
+            const actions = [];
+            if (k.is_active && k.expiry_status !== 'expired') {
+                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="rotateKey(${k.id})" title="Rotate key (grace period)">🔄 Rotate</button>`);
+                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1" onclick="revokeKey(${k.id})" title="Revoke">Revoke</button>`);
+            } else {
+                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg bg-red-500 border border-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors ml-1" onclick="deleteKey(${k.id})" title="Permanently delete">Delete</button>`);
+            }
+            actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors ml-1" onclick="renameKey(${k.id},'${k.label.replace(/'/g,"\\'")}')" title="Rename">✏️</button>`);
+            return `
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-5 py-4"><strong class="text-slate-800">${k.label}</strong></td>
+                <td class="px-5 py-4 font-mono text-sm text-indigo-600">${k.key_preview}</td>
+                <td class="px-5 py-4">
+                    ${k.is_active && k.expiry_status !== 'expired'
+                        ? '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Active</span>'
+                        : '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">Revoked</span>'}
+                </td>
+                <td class="px-5 py-4">${expiryBadgeHtml(k)}</td>
+                <td class="px-5 py-4 text-center text-sm text-slate-700">${k.device_count ?? 0}</td>
+                <td class="px-5 py-4 text-sm text-slate-400">${lastUsed}</td>
+                <td class="px-5 py-4 text-xs font-mono text-slate-400">${lastIp}</td>
+                <td class="px-5 py-4 text-right whitespace-nowrap">${actions.join('')}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function openApiKeyModal() {
+        document.getElementById('keyGenerateForm').style.display = 'block';
+        document.getElementById('newKeyDisplay').style.display = 'none';
+        
+        document.getElementById('apiKeyListSection').style.display = 'none';
+        document.getElementById('apiKeyEditFormSection').style.display = 'none';
+        document.getElementById('apiKeyFormSection').style.display = 'block';
+    }
+
+    function closeApiKeyModal() {
+        document.getElementById('apiKeyFormSection').style.display = 'none';
+        document.getElementById('apiKeyEditFormSection').style.display = 'none';
+        document.getElementById('apiKeyListSection').style.display = 'block';
+    }
+
+    async function generateKey() {
+        const label = document.getElementById('key_label').value.trim() || 'Mobile Client';
+        const res = await fetch(`/ui/api-keys?label=${encodeURIComponent(label)}`, {method: 'POST'});
+        const data = await res.json();
+        _generatedKey = data.key;
+        document.getElementById('newKeyValue').innerText = data.key;
+        document.getElementById('keyGenerateForm').style.display = 'none';
+        document.getElementById('newKeyDisplay').style.display = 'block';
+        await loadApiKeys();
+        notify('API key generated!');
+    }
+
+    function copyKey() {
+        navigator.clipboard.writeText(_generatedKey).then(() => notify('Key copied to clipboard!'));
+    }
+
+    function openApiKeyEditModal(id, currentLabel) {
+        document.getElementById('edit_key_id').value = id;
+        document.getElementById('edit_key_label').value = currentLabel || '';
+        
+        document.getElementById('apiKeyListSection').style.display = 'none';
+        document.getElementById('apiKeyFormSection').style.display = 'none';
+        document.getElementById('apiKeyEditFormSection').style.display = 'block';
+    }
+
+    function closeApiKeyEditModal() {
+        document.getElementById('apiKeyEditFormSection').style.display = 'none';
+        document.getElementById('apiKeyFormSection').style.display = 'none';
+        document.getElementById('apiKeyListSection').style.display = 'block';
+    }
+
+    async function saveApiKeyRename() {
+        const id = document.getElementById('edit_key_id').value;
+        const label = document.getElementById('edit_key_label').value.trim();
+        if (!label) return;
+        
+        const res = await fetch(`/ui/api-keys/${id}?label=${encodeURIComponent(label)}`, {method: 'PUT'});
+        const data = await res.json();
+        if (res.ok) {
+            closeApiKeyEditModal();
+            await loadApiKeys();
+            notify('Key renamed successfully');
+        } else {
+            notify(data.detail || 'Failed to rename', 'error');
+        }
+    }
+
+    async function renameKey(id, currentLabel) {
+        openApiKeyEditModal(id, currentLabel);
+    }
+
+    async function revokeKey(id) {
+        if (!confirm('Revoke this API key? All mobile apps using it will be blocked immediately.')) return;
+        await fetch(`/ui/api-keys/${id}`, {method: 'DELETE'});
+        await loadApiKeys();
+        notify('Key revoked. Devices using this key will stop working.');
+    }
+
+    async function deleteKey(id) {
+        if (!confirm('Permanently delete this revoked key? This action cannot be undone.\n\nNote: Keys with bound devices cannot be deleted — revoke them instead.')) return;
+        const res = await fetch(`/ui/api-keys/${id}?hard=true`, {method: 'DELETE'});
+        const data = await res.json();
+        if (res.ok) { await loadApiKeys(); notify('Key permanently deleted'); }
+        else notify(data.detail || 'Delete failed', 'error');
+    }
+
+    async function rotateKey(id) {
+        if (!confirm('Rotate this API key?\n\nA new key will be generated with the same label. The old key will remain valid for 7 more days (grace period) to allow mobile apps to transition smoothly.\n\nYou will need to update the mobile app with the new key.')) return;
+        const res = await fetch(`/ui/api-keys/${id}/rotate`, {method: 'POST'});
+        const data = await res.json();
+        if (res.ok) {
+            _generatedKey = data.new_key;
+            document.getElementById('newKeyValue').innerText = data.new_key;
+            document.getElementById('newKeyDisplay').style.display = 'block';
+            await loadApiKeys();
+            notify(`Key rotated! Old key expires ${new Date(data.old_key_expires_at).toLocaleDateString()}. New key shown above.`);
+        } else {
+            const err = await res.json();
+            notify(err.detail || 'Rotate failed', 'error');
+        }
+    }
+
+    // ── Admin Profile ──────────────────────────────────────────────────────────
+    async function updateProfile() {
+        const username = document.getElementById('admin_username').value;
+        const pwd1 = document.getElementById('admin_password').value;
+        const pwd2 = document.getElementById('admin_password_confirm').value;
+        
+        if (!pwd1 || pwd1.length < 5) {
+            notify('Password must be at least 5 characters', 'error');
+            return;
+        }
+        if (pwd1 !== pwd2) {
+            notify('Passwords do not match', 'error');
+            return;
+        }
+
+        const res = await fetch('/ui/profile', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username: username, new_password: pwd1})
+        });
+
+        if (res.ok) {
+            notify('Password updated successfully!');
+            document.getElementById('admin_password').value = '';
+            document.getElementById('admin_password_confirm').value = '';
+        } else {
+            notify('Failed to update password', 'error');
+        }
+    }
+
+    // ── Punch Type Management ──────────────────────────────────────────────────
+    let currentPunchTypes = [];
+
+    async function loadPunchTypes() {
+        const res = await fetch('/ui/punch-types');
+        currentPunchTypes = await res.json();
+        const tbody = document.getElementById('punchTypesTbody');
+        tbody.innerHTML = currentPunchTypes.map(pt => `
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-5 py-4"><strong class="text-slate-800">${pt.code}</strong></td>
+                <td class="px-5 py-4 text-sm text-slate-700">${pt.label}</td>
+                <td class="px-5 py-4"><span class="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">${pt.adms_status_code}</span></td>
+                <td class="px-5 py-4 text-sm text-slate-600"><i class="ph ph-${pt.icon}"></i> ${pt.icon}</td>
+                <td class="px-5 py-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded" style="background-color:${pt.color_hex};"></div>
+                        <span class="text-sm text-slate-600">${pt.color_hex}</span>
+                    </div>
+                </td>
+                <td class="px-5 py-4">${pt.requires_geofence ? '<span class="text-emerald-600">✅</span>' : '<span class="text-slate-300">❌</span>'}</td>
+                <td class="px-5 py-4 text-right whitespace-nowrap">
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="editPunchType('${pt.code}')">Edit</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1" onclick="deletePunchType('${pt.code}')">Delete</button>
+                </td>
+            </tr>`).join('');
+    }
+
+    function editPunchType(code) {
+        const pt = currentPunchTypes.find(p => p.code === code);
+        if (!pt) return;
+        
+        document.getElementById('edit_pt_id').value = pt.code;
+        document.getElementById('pt_code').value = pt.code;
+        document.getElementById('pt_code').readOnly = true;
+        document.getElementById('pt_label').value = pt.label;
+        document.getElementById('pt_adms_code').value = pt.adms_status_code;
+        document.getElementById('pt_icon').value = pt.icon || 'circle';
+        document.getElementById('pt_color').value = pt.color_hex || '#000000';
+        document.getElementById('pt_order').value = pt.display_order;
+        document.getElementById('pt_requires_geo').checked = pt.requires_geofence;
+        
+        document.getElementById('ptFormTitle').innerText = 'Edit Punch Type';
+        document.getElementById('cancelPtEditBtn').classList.remove('hidden');
+        document.getElementById('cancelPtEditBtn').style.display = 'inline-flex';
+        document.getElementById('savePtBtn').innerHTML = '<i class="ph ph-floppy-disk"></i> Save Changes';
+    }
+
+    function cancelPtEdit() {
+        document.getElementById('edit_pt_id').value = '';
+        document.getElementById('ptForm').reset();
+        document.getElementById('pt_code').readOnly = false;
+        document.getElementById('ptFormTitle').innerText = 'Create New Punch Type';
+        document.getElementById('cancelPtEditBtn').classList.add('hidden');
+        document.getElementById('cancelPtEditBtn').style.display = 'none';
+        document.getElementById('savePtBtn').innerHTML = '<i class="ph ph-plus"></i> Add Punch Type';
+    }
+
+    async function savePunchType() {
+        const editId = document.getElementById('edit_pt_id').value;
+        const payload = {
+            code: document.getElementById('pt_code').value.trim(),
+            label: document.getElementById('pt_label').value.trim(),
+            adms_status_code: document.getElementById('pt_adms_code').value.trim(),
+            icon: document.getElementById('pt_icon').value.trim(),
+            color_hex: document.getElementById('pt_color').value,
+            display_order: parseInt(document.getElementById('pt_order').value),
+            requires_geofence: document.getElementById('pt_requires_geo').checked,
+            is_active: true
+        };
+
+        if (!payload.code || !payload.label) {
+            notify('Code and Label are required', 'error'); return;
+        }
+
+        const url = editId ? `/ui/punch-types/${editId}` : '/ui/punch-types';
+        const method = editId ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method: method, headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            notify(editId ? 'Punch Type updated!' : 'Punch Type created!');
+            cancelPtEdit();
+            await loadPunchTypes();
+        } else {
+            const err = await res.json();
+            notify(err.detail || 'Failed to save punch type', 'error');
+        }
+    }
+
+    async function deletePunchType(code) {
+        if (!confirm(`Are you sure you want to delete Punch Type '${code}'?`)) return;
+        const res = await fetch(`/ui/punch-types/${code}`, {method: 'DELETE'});
+        if (res.ok) { notify('Punch Type deleted'); await loadPunchTypes(); }
+        else { const err = await res.json(); notify(err.detail || 'Failed to delete', 'error'); }
+    }
+
+    // ── Admin User Management ──────────────────────────────────────────────────
+    let currentUsers = [];
+
+    async function loadUsers() {
+        const res = await fetch('/ui/users');
+        currentUsers = await res.json();
+        const tbody = document.getElementById('usersTableBody');
+        tbody.innerHTML = currentUsers.map(u => {
+            const roleLabels = {
+                'superadmin': '<span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700">Super Admin</span>',
+                'admin': '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Admin</span>',
+                'manager': '<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Manager</span>',
+                'operator': '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Operator</span>'
+            };
+            const roleBadge = roleLabels[u.role] || roleLabels['admin'];
+            
+            return `
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-5 py-4"><strong class="text-slate-800">${u.username}</strong></td>
+                <td class="px-5 py-4">${roleBadge}</td>
+                <td class="px-5 py-4 text-sm text-slate-400">${new Date(u.created_at).toLocaleDateString()}</td>
+                <td class="px-5 py-4 text-right">
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="editUser(${u.id})">Edit</button>
+                    ${u.username !== 'admin' ? `<button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1" onclick="deleteUser(${u.id})">Delete</button>` : '<span class="text-xs text-slate-400 ml-2">Root User</span>'}
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function openUserModal() {
+        cancelUserEdit();
+        document.getElementById('userFormTitle').innerText = 'Create Admin User';
+        document.getElementById('saveUserBtn').innerText = 'Add';
+        
+        document.getElementById('userListSection').style.display = 'none';
+        document.getElementById('userFormSection').style.display = 'block';
+    }
+
+    function closeUserModal() {
+        document.getElementById('userFormSection').style.display = 'none';
+        document.getElementById('userListSection').style.display = 'grid';
+    }
+
+    function editUser(id) {
+        const user = currentUsers.find(u => u.id === id);
+        if (!user) return;
+        
+        document.getElementById('edit_user_id').value = user.id;
+        document.getElementById('new_user_name').value = user.username;
+        document.getElementById('new_user_pwd').value = '';
+        document.getElementById('new_user_pwd').placeholder = 'Keep blank to stay same';
+        document.getElementById('new_user_role').value = user.role || 'admin';
+        
+        if (user.username === 'admin') {
+            document.getElementById('new_user_role').parentElement.style.display = 'none';
+        } else {
+            document.getElementById('new_user_role').parentElement.style.display = 'block';
+        }
+        
+        document.getElementById('userFormTitle').innerText = 'Edit Admin User';
+        document.getElementById('saveUserBtn').innerText = 'Save';
+        
+        document.getElementById('userListSection').style.display = 'none';
+        document.getElementById('userFormSection').style.display = 'block';
+    }
+
+    function cancelUserEdit() {
+        document.getElementById('edit_user_id').value = '';
+        document.getElementById('newUserForm').reset();
+        document.getElementById('new_user_pwd').placeholder = '••••••••';
+        document.getElementById('new_user_role').parentElement.style.display = 'block';
+        document.getElementById('userFormTitle').innerText = 'Create Admin User';
+        document.getElementById('saveUserBtn').innerText = 'Add';
+        closeUserModal();
+    }
+
+    async function saveUser() {
+        const userId = document.getElementById('edit_user_id').value;
+        const payload = {
+            username: document.getElementById('new_user_name').value.trim(),
+            password: document.getElementById('new_user_pwd').value || null,
+            role: document.getElementById('new_user_role').value
+        };
+
+        if (!payload.username) {
+            notify('Username is required', 'error'); return;
+        }
+        if (!userId && (!payload.password || payload.password.length < 5)) {
+            notify('Password is required and must be >= 5 chars', 'error'); return;
+        }
+
+        const url = userId ? `/ui/users/${userId}` : '/ui/users';
+        const method = userId ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method: method, headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            notify(userId ? 'User updated!' : 'User created!');
+            cancelUserEdit();
+            await loadUsers();
+        } else {
+            const err = await res.json();
+            notify(err.detail || 'Failed to save user', 'error');
+        }
+    }
+
+    async function deleteUser(id) {
+        if (!confirm('Are you sure you want to delete this admin account?')) return;
+        const res = await fetch(`/ui/users/${id}`, {method: 'DELETE'});
+        if (res.ok) { notify('User deleted'); await loadUsers(); }
+        else { const err = await res.json(); notify(err.detail || 'Failed to delete', 'error'); }
+    }
+
+    // --- Employee Assignment Logic ---
+    let allEmployees = [];
+    async function openAssignDialog(bindingId, label) {
+        document.getElementById('assignBindingId').value = bindingId;
+        document.getElementById('assignModalTitle').innerText = `Assign: ${label}`;
+        
+        document.getElementById('devicesListSection').style.display = 'none';
+        document.getElementById('deviceFormSection').style.display = 'none';
+        document.getElementById('assignFormSection').style.display = 'block';
+        document.getElementById('employeeList').innerHTML = '<div class="p-4 text-center text-sm text-slate-400">Loading Employees...</div>';
+        
+        try {
+            const res = await fetch('/ui/employees/list');
+            allEmployees = await res.json();
+            renderEmployeeList(allEmployees);
+        } catch(e) {
+            notify('Failed to load employees', 'error');
+        }
+    }
+
+    function renderEmployeeList(list) {
+        const container = document.getElementById('employeeList');
+        if (list.length === 0) {
+            container.innerHTML = '<div class="p-4 text-center text-sm text-slate-400">No employees found.</div>';
+            return;
+        }
+        container.innerHTML = list.map(e => `
+            <div class="employee-item" onclick="selectEmployee('${e.id}', this)">
+                <strong class="text-slate-800">${e.name}</strong><br>
+                <span class="text-xs text-slate-400">PIN: ${e.id} | ${e.dept}</span>
+            </div>
+        `).join('');
+    }
+
+    function filterEmployees() {
+        const q = document.getElementById('employeeSearch').value.toLowerCase();
+        const filtered = allEmployees.filter(e => 
+            e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)
+        );
+        renderEmployeeList(filtered);
+    }
+
+    function selectEmployee(id, el) {
+        document.querySelectorAll('.employee-item').forEach(item => item.classList.remove('selected'));
+        el.classList.add('selected');
+        document.getElementById('selectedEmployeeId').value = id;
+        document.getElementById('btnConfirmAssign').disabled = false;
+    }
+
+    function closeAssignModal() {
+        document.getElementById('assignFormSection').style.display = 'none';
+        document.getElementById('deviceFormSection').style.display = 'none';
+        document.getElementById('devicesListSection').style.display = 'block';
+        document.getElementById('employeeSearch').value = '';
+        document.getElementById('selectedEmployeeId').value = '';
+        document.getElementById('btnConfirmAssign').disabled = true;
+    }
+
+    async function confirmAssign() {
+        const bindingId = document.getElementById('assignBindingId').value;
+        const employeeId = document.getElementById('selectedEmployeeId').value;
+        const btn = document.getElementById('btnConfirmAssign');
+        btn.innerText = 'Binding...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(`/ui/devices/${bindingId}/assign?employee_id=${employeeId}`, { method: 'POST' });
+            if (res.ok) {
+                notify('Employee assigned successfully!');
+                closeAssignModal();
+                location.reload();
+            } else {
+                const err = await res.json();
+                notify(err.detail || 'Assignment failed', 'error');
+            }
+        } catch(e) {
+            notify('Server error during assignment', 'error');
+        } finally {
+            btn.innerText = 'Confirm Binding';
+            btn.disabled = false;
+        }
+    }
+
+    // ── Onboarding QR ──────────────────────────────────────────────────────────
+    let onboardEmployees = [];
+    let filteredEmployees = [];
+
+    async function openOnboardingModal() {
+        document.getElementById('onboardQrContainer').style.display = 'none';
+        
+        document.getElementById('onboard_emp_id').value = '';
+        document.getElementById('onboard_emp_search').value = '';
+        document.getElementById('onboard_emp_dropdown').innerHTML = '<div class="p-2.5 text-sm text-slate-400">Loading employees...</div>';
+        
+        document.getElementById('onboard_branch_id').innerHTML = '<option value="">Loading branch sites...</option>';
+        document.getElementById('onboard_key_id').innerHTML = '<option value="">Loading API keys...</option>';
+        
+        document.getElementById('onboardModal').classList.remove('hidden');
+        document.getElementById('onboardModal').style.display = 'flex';
+
+        try {
+            const [empRes, branchRes, keyRes] = await Promise.all([
+                fetch('/ui/employees/list'),
+                fetch('/ui/branches'),
+                fetch('/ui/api-keys')
+            ]);
+
+            const [employees, branches, keys] = await Promise.all([
+                empRes.json(),
+                branchRes.json(),
+                keyRes.json()
+            ]);
+
+            onboardEmployees = employees || [];
+            filteredEmployees = onboardEmployees;
+            renderOnboardEmpDropdown();
+
+            if (!branches || branches.length === 0) {
+                document.getElementById('onboard_branch_id').innerHTML = '<option value="">No branches found. Create one first.</option>';
+            } else {
+                document.getElementById('onboard_branch_id').innerHTML = branches.map(b => `
+                    <option value="${b.id}">${b.name}</option>
+                `).join('');
+            }
+
+            let activeKeys = keys.filter(k => k.is_active && k.expiry_status !== 'expired');
+            if (activeKeys.length === 0) {
+                const genRes = await fetch('/ui/api-keys?label=Default%20Mobile%20Key', {method: 'POST'});
+                if (genRes.ok) {
+                    const updatedRes = await fetch('/ui/api-keys');
+                    const updatedKeys = await updatedRes.json();
+                    activeKeys = updatedKeys.filter(k => k.is_active && k.expiry_status !== 'expired');
+                }
+            }
+
+            if (activeKeys.length > 0) {
+                document.getElementById('onboard_key_id').innerHTML = activeKeys.map((k, i) => `
+                    <option value="${k.id}" ${i === 0 ? 'selected' : ''}>${k.label} (${k.key_preview})</option>
+                `).join('');
+            } else {
+                document.getElementById('onboard_key_id').innerHTML = '<option value="">Failed to auto-provision key</option>';
+            }
+        } catch(e) {
+            notify('Failed to load onboarding options', 'error');
+            console.error(e);
+        }
+    }
+
+    function renderOnboardEmpDropdown() {
+        const dropdown = document.getElementById('onboard_emp_dropdown');
+        if (!filteredEmployees || filteredEmployees.length === 0) {
+            dropdown.innerHTML = '<div class="p-2.5 text-sm text-slate-400">No matches found</div>';
+            return;
+        }
+        
+        dropdown.innerHTML = filteredEmployees.map(e => {
+            const isNameNumber = !e.name || !isNaN(e.name) || /^\d+$/.test(e.name.trim());
+            const display = isNameNumber ? e.id : `${e.id} - ${e.name}`;
+            
+            return `
+                <div class="dropdown-item" onclick="selectOnboardEmployee('${e.id}', '${display.replace(/'/g, "\\'")}')">
+                    ${display}
+                </div>
+            `;
+        }).join('');
+    }
+
+    function filterOnboardEmployees() {
+        const query = document.getElementById('onboard_emp_search').value.toLowerCase().trim();
+        if (!query) {
+            filteredEmployees = onboardEmployees;
+        } else {
+            filteredEmployees = onboardEmployees.filter(e => {
+                const idMatch = e.id.toLowerCase().includes(query);
+                const nameMatch = e.name ? e.name.toLowerCase().includes(query) : false;
+                return idMatch || nameMatch;
+            });
+        }
+        renderOnboardEmpDropdown();
+        showOnboardEmpDropdown();
+    }
+
+    function selectOnboardEmployee(id, display) {
+        document.getElementById('onboard_emp_id').value = id;
+        document.getElementById('onboard_emp_search').value = display;
+        hideOnboardEmpDropdown();
+    }
+
+    function showOnboardEmpDropdown() {
+        document.getElementById('onboard_emp_dropdown').style.display = 'block';
+    }
+
+    function hideOnboardEmpDropdown() {
+        document.getElementById('onboard_emp_dropdown').style.display = 'none';
+    }
+
+    function toggleOnboardEmpDropdown() {
+        const dropdown = document.getElementById('onboard_emp_dropdown');
+        if (dropdown.style.display === 'block') {
+            hideOnboardEmpDropdown();
+        } else {
+            showOnboardEmpDropdown();
+        }
+    }
+
+    document.addEventListener('click', function(e) {
+        const dropdown = document.getElementById('onboard_emp_dropdown');
+        const searchInput = document.getElementById('onboard_emp_search');
+        const toggleBtn = document.getElementById('onboard_emp_toggle');
+        if (dropdown && e.target !== searchInput && e.target !== toggleBtn && !dropdown.contains(e.target)) {
+            hideOnboardEmpDropdown();
+        }
+    });
+
+    function closeOnboardingModal() {
+        document.getElementById('onboardModal').classList.add('hidden');
+        document.getElementById('onboardModal').style.display = 'none';
+    }
+
+    async function generateOnboardQR() {
+        const empId = document.getElementById('onboard_emp_id').value;
+        const branchId = document.getElementById('onboard_branch_id').value;
+        const keyId = document.getElementById('onboard_key_id').value;
+        
+        if (!empId || !branchId || !keyId) {
+            notify('Please select all required options', 'error');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/v1/admin/generate-onboard-qr', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    employee_id: empId,
+                    branch_id: parseInt(branchId),
+                    api_key_id: parseInt(keyId)
+                })
+            });
+            if (!response.ok) throw new Error('Failed to generate QR');
+            
+            const data = await response.json();
+            
+            const qrData = encodeURIComponent(JSON.stringify(data));
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}`;
+            
+            document.getElementById('onboardQrImg').src = qrUrl;
+            document.getElementById('onboardQrContainer').style.display = 'block';
+        } catch(err) {
+            notify(err.message);
+        }
+    }
+</script>

@@ -42,12 +42,22 @@ def db_session():
 @pytest.fixture
 def client():
     """Provide a FastAPI test client with overridden DB dependency."""
-    # Override get_db from both main and auth modules
-    from app.main import get_db as main_get_db
+    # Override get_db from both modular routes and auth modules
+    from app.api.v1.routes.punch import get_db as punch_get_db
+    from app.api.v1.routes.device import get_db as device_get_db
+    from app.api.v1.routes.supervisor import get_db as supervisor_get_db
+    from app.api.v1.routes.admin_ui import get_db as admin_ui_get_db
+    from app.api.v1.routes.summary import get_db as summary_get_db
     from app.services.auth import get_db as auth_get_db
+    from app.services.auth_ui import get_db as auth_ui_get_db
 
-    app.dependency_overrides[main_get_db] = _override_get_db
+    app.dependency_overrides[punch_get_db] = _override_get_db
+    app.dependency_overrides[device_get_db] = _override_get_db
+    app.dependency_overrides[supervisor_get_db] = _override_get_db
+    app.dependency_overrides[admin_ui_get_db] = _override_get_db
+    app.dependency_overrides[summary_get_db] = _override_get_db
     app.dependency_overrides[auth_get_db] = _override_get_db
+    app.dependency_overrides[auth_ui_get_db] = _override_get_db
 
     with TestClient(app) as c:
         yield c

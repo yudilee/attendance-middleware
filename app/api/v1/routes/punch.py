@@ -1,11 +1,9 @@
-"""Punch-related API v1 routes: single punch, batch punch, punch types, history, CSV export."""
 import io
 import json
-import structlog
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
@@ -30,6 +28,62 @@ logger = structlog.get_logger()
 arq_pool = None
 
 router = APIRouter(tags=["Punch"])
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info("websocket_connected", count=len(self.active_connections))
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        logger.info("websocket_disconnected", count=len(self.active_connections))
+
+    async def broadcast(self, message: str):
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_text(message)
+            except Exception as e:
+                logger.warning("websocket_broadcast_failed", error=str(e))
+
+manager = ConnectionManager()
+
+async def broadcast_punch(db: Session, log: PunchLog):
+    try:
+        employee = db.query(Employee).filter(Employee.employee_id == log.employee_id).first()
+        employee_name = employee.full_name if employee else f"Employee {log.employee_id}"
+        
+        payload = {
+            "id": log.id,
+            "employee_id": log.employee_id,
+            "employee_name": employee_name,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+            "punch_type": log.punch_type,
+            "latitude": log.latitude,
+            "longitude": log.longitude,
+            "adms_status": log.adms_status,
+            "selfie_filename": getattr(log, "selfie_filename", None),
+        }
+        await manager.broadcast(json.dumps(payload))
+    except Exception as e:
+        logger.error("websocket_broadcast_error", error=str(e))
+
+@router.websocket("/api/v1/punch/stream")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Maintain connection, listen for any messages
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.warning("websocket_connection_error", error=str(e))
+        manager.disconnect(websocket)
 
 from app.limiter import limiter
 
@@ -59,13 +113,33 @@ async def create_punch(
         data = validate_and_prepare_punch(db, punch_req)
     except Exception as e:
         if hasattr(e, 'message'):
+            status_code = getattr(e, 'status_code', 400)
+            if status_code == 200:
+                # Handle idempotency duplicate gracefully by returning valid PunchResponse
+                existing = None
+                if punch_req.client_punch_id:
+                    existing = db.query(PunchLog).filter(
+                        PunchLog.client_punch_id == punch_req.client_punch_id
+                    ).first()
+                log_id = existing.id if existing else 0
+                timestamp = existing.timestamp if existing else datetime.utcnow()
+                return {
+                    "status": "success",
+                    "message": e.message,
+                    "server_time": timestamp,
+                    "log_id": log_id,
+                    "distance_meters": getattr(existing, 'distance_meters', None) if existing else None,
+                    "branch_name": getattr(existing, 'branch_name', None) if existing else None,
+                    "in_fence": True,
+                }
             raise HTTPException(
-                status_code=getattr(e, 'status_code', 400),
+                status_code=status_code,
                 detail=e.message,
             )
         raise
 
     log = create_punch_log(db, data)
+    await broadcast_punch(db, log)
 
     # Enqueue ADMS sync via ARQ worker
     if arq_pool:
@@ -110,6 +184,7 @@ async def create_batch_punch(
         try:
             data = validate_and_prepare_punch(db, punch)
             log = create_punch_log(db, data)
+            await broadcast_punch(db, log)
 
             if arq_pool:
                 try:

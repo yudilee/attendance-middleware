@@ -13,13 +13,14 @@ from jose import jwt, JWTError
 from app.database.models import (
     SessionLocal, DeviceBinding, Branch, BindingBranch,
     Employee, ADMSRegisteredEmployee, ApiKey, PunchLog,
-    AppConfig,
+    AppConfig, BranchCheckpoint,
 )
 from app.services.auth import verify_api_key
 from app.services.auth_ui import SECRET_KEY, ALGORITHM, get_current_admin
 from app.api.v1.schemas import (
     DeviceConfigResponse, BranchInfo,
     AppStatusResponse, OnboardGenerateRequest, OnboardDeviceRequest,
+    CheckpointInfo,
 )
 from app.cache import get_cache, set_cache
 from slowapi import Limiter
@@ -181,6 +182,24 @@ async def get_device_config(
             Branch.is_active == True,
         ).first()
         if branch:
+            checkpoints_db = db.query(BranchCheckpoint).filter(
+                BranchCheckpoint.branch_id == branch.id,
+                BranchCheckpoint.is_active == True
+            ).all()
+            checkpoints = [
+                CheckpointInfo(
+                    id=cp.id,
+                    branch_id=cp.branch_id,
+                    name=cp.name,
+                    latitude=cp.latitude,
+                    longitude=cp.longitude,
+                    radius_meters=cp.radius_meters,
+                    is_active=cp.is_active,
+                    created_at=cp.created_at.isoformat() if cp.created_at else None,
+                    updated_at=cp.updated_at.isoformat() if cp.updated_at else None
+                )
+                for cp in checkpoints_db
+            ]
             branches.append(BranchInfo(
                 id=branch.id,
                 name=branch.name,
@@ -191,6 +210,7 @@ async def get_device_config(
                 qr_code_data=branch.qr_code_data if branch.qr_code_enabled else None,
                 nfc_enabled=branch.nfc_enabled,
                 nfc_tag_data=branch.nfc_tag_data if branch.nfc_enabled else None,
+                checkpoints=checkpoints,
             ))
 
     if not branches:
@@ -365,6 +385,24 @@ async def onboard_device(
     branches = []
     branch = db.query(Branch).filter(Branch.id == branch_id, Branch.is_active == True).first()
     if branch:
+        checkpoints_db = db.query(BranchCheckpoint).filter(
+            BranchCheckpoint.branch_id == branch.id,
+            BranchCheckpoint.is_active == True
+        ).all()
+        checkpoints = [
+            CheckpointInfo(
+                id=cp.id,
+                branch_id=cp.branch_id,
+                name=cp.name,
+                latitude=cp.latitude,
+                longitude=cp.longitude,
+                radius_meters=cp.radius_meters,
+                is_active=cp.is_active,
+                created_at=cp.created_at.isoformat() if cp.created_at else None,
+                updated_at=cp.updated_at.isoformat() if cp.updated_at else None
+            )
+            for cp in checkpoints_db
+        ]
         branches.append(BranchInfo(
             id=branch.id,
             name=branch.name,
@@ -375,6 +413,7 @@ async def onboard_device(
             qr_code_data=branch.qr_code_data if branch.qr_code_enabled else None,
             nfc_enabled=branch.nfc_enabled,
             nfc_tag_data=branch.nfc_tag_data if branch.nfc_enabled else None,
+            checkpoints=checkpoints,
         ))
 
     device_count = db.query(DeviceBinding).filter(

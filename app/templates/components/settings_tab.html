@@ -1,0 +1,82 @@
+<div id="settings" class="tab-content hidden">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">ADMS Push Settings</div>
+        <p class="text-sm text-slate-500 mb-6">
+            Configure the target ADMS server. The middleware emulates a ZKTeco fingerprint machine using the iclock push protocol.
+        </p>
+        <form id="admsForm">
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">ADMS Server URL</label>
+                <input type="text" id="server_url" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="{{ server_url }}" placeholder="https://adms.example.com">
+                <small class="text-xs text-slate-400 mt-1 block">Include http:// or https:// — no trailing slash.</small>
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Virtual Machine Serial Number (SN)</label>
+                <input type="text" id="serial_number" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="{{ sn }}" placeholder="VIRTUAL_MOBILE_01">
+                <small class="text-xs text-slate-400 mt-1 block">This SN must be registered in your ADMS dashboard.</small>
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Default Timezone Offset (GMT+)</label>
+                <input type="number" id="timezone_offset" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="{{ timezone_offset }}" placeholder="7">
+                <small class="text-xs text-slate-400 mt-1 block">Fallback offset used if device data is missing. Jakarta=7, Bali=8, Jayapura=9.</small>
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Device Name (Alias)</label>
+                <input type="text" id="device_name" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="{{ device_name }}" placeholder="Mobile Gateway">
+                <small class="text-xs text-slate-400 mt-1 block">The friendly name that appears in the ZKTeco console.</small>
+            </div>
+            <div class="flex gap-4">
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="saveSettings()">💾 Save Settings</button>
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="testConnection()">🔌 Test Handshake</button>
+            </div>
+        </form>
+        <div id="testResult" class="hidden mt-6 p-4 rounded-xl font-mono text-sm border whitespace-pre-wrap"></div>
+    </div>
+    
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">ADMS Employee Sync</div>
+        <p class="text-sm text-slate-500 mb-6">
+            Configure credentials to automatically download employee names and data from the ADMS web interface.
+        </p>
+        <form id="admsSyncForm">
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">ADMS Web URL</label>
+                <input type="text" id="sync_url" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="http://10.101.24.125:8081">
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
+                <input type="text" id="sync_username" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="admin">
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                <input type="password" id="sync_password" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="admin">
+            </div>
+            <div class="flex gap-4">
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="saveAdmsSyncSettings()">💾 Save Credentials</button>
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="triggerAdmsSync()" id="btnSyncNow">🔄 Sync Now</button>
+            </div>
+        </form>
+
+        <!-- Sync History / Status -->
+        <div id="syncStatus" class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <span class="text-xs text-slate-400 block">Last Sync</span>
+                    <strong id="statLastSync" class="text-sm text-slate-800">Loading...</strong>
+                </div>
+                <div>
+                    <span class="text-xs text-slate-400 block">Employees Found</span>
+                    <strong id="statLastCount" class="text-sm text-slate-800">-</strong>
+                </div>
+                <div>
+                    <span class="text-xs text-slate-400 block">Database Total</span>
+                    <strong id="statTotalEmployees" class="text-sm text-slate-800">-</strong>
+                </div>
+                <div>
+                    <span class="text-xs text-slate-400 block">Latest Status</span>
+                    <span id="statStatus" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

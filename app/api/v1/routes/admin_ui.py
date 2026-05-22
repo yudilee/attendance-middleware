@@ -35,7 +35,7 @@ from app.api.v1.schemas import (
     PunchTypePayload, BranchRequest, AppConfigRequest,
     ProfileUpdateRequest, CreateUserRequest, DeviceLabelRequest,
     CorrectionRequest, CorrectionReview, SupervisorAssignment,
-    OnboardGenerateRequest,
+    OnboardGenerateRequest, CheckpointCreate, CheckpointUpdate,
 )
 from app.cache import invalidate_cache
 
@@ -1237,7 +1237,7 @@ async def list_checkpoints(
 @router.post("/ui/branches/{branch_id}/checkpoints")
 async def create_checkpoint(
     branch_id: int,
-    req: "CheckpointCreate",
+    req: CheckpointCreate,
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ):
@@ -1265,7 +1265,7 @@ async def create_checkpoint(
 async def update_checkpoint(
     branch_id: int,
     checkpoint_id: int,
-    req: "CheckpointUpdate",
+    req: CheckpointUpdate,
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ):
