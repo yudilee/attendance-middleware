@@ -14,6 +14,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
@@ -39,6 +40,15 @@
         }
     </script>
     
+    <!-- Dark Mode Initializer -->
+    <script>
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+    
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
     
@@ -53,7 +63,7 @@
     <link rel="stylesheet" href="/static/css/styles.css?v=4">
     {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased min-h-screen">
 
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 max-w-sm"></div>
@@ -129,14 +139,20 @@
         <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
         <div class="flex-1 flex flex-col overflow-hidden min-w-0">
             <!-- Top Header -->
-            <header class="top-header h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-20 flex-shrink-0">
+            <header class="top-header h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shadow-sm z-20 flex-shrink-0">
                 <!-- Mobile sidebar toggle -->
-                <button id="mobileSidebarToggle" class="md:hidden text-slate-500 hover:text-slate-700 p-2 -ml-2 rounded-lg hover:bg-slate-100 transition-all">
+                <button id="mobileSidebarToggle" class="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
                     <i class="ph ph-list text-xl"></i>
                 </button>
-                <div id="page-title" class="text-lg font-semibold text-slate-800">Dashboard Overview</div>
+                <div id="page-title" class="text-lg font-semibold text-slate-800 dark:text-white">Dashboard Overview</div>
                 <div class="flex items-center gap-4">
-                    <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg text-sm font-medium text-slate-600">
+                    <!-- Dark Mode Toggle Button -->
+                    <button id="themeToggle" class="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200" title="Toggle Theme">
+                        <i id="themeToggleDarkIcon" class="ph ph-moon text-xl hidden"></i>
+                        <i id="themeToggleLightIcon" class="ph ph-sun text-xl hidden"></i>
+                    </button>
+
+                    <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-200">
                         <i class="ph-fill ph-user-circle text-xl text-slate-400"></i>
                         <span>Admin</span>
                     </div>
@@ -332,6 +348,35 @@
                 }
             });
         });
+
+        // ── Dark Mode Toggle Handler ──────────────────────────────────
+        const themeToggleBtn = document.getElementById('themeToggle');
+        const darkIcon = document.getElementById('themeToggleDarkIcon');
+        const lightIcon = document.getElementById('themeToggleLightIcon');
+
+        function updateIcons() {
+            if (document.documentElement.classList.contains('dark')) {
+                darkIcon.classList.add('hidden');
+                lightIcon.classList.remove('hidden');
+            } else {
+                lightIcon.classList.add('hidden');
+                darkIcon.classList.remove('hidden');
+            }
+        }
+
+        if (themeToggleBtn && darkIcon && lightIcon) {
+            updateIcons();
+            themeToggleBtn.addEventListener('click', function() {
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.theme = 'light';
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.theme = 'dark';
+                }
+                updateIcons();
+            });
+        }
 
         function localizeTimestamps() {
             document.querySelectorAll('.local-time').forEach(el => {

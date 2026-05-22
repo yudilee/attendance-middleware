@@ -1859,4 +1859,25 @@
             notify(err.message);
         }
     }
+
+    function exportReport(format) {
+        const start = document.getElementById('reportStartDate').value;
+        const end = document.getElementById('reportEndDate').value;
+        const branch = document.getElementById('reportBranchSelect').value;
+        
+        let url = `/ui/reports/export?format=${format}`;
+        if (start) url += `&start_date=${start}`;
+        if (end) url += `&end_date=${end}`;
+        if (branch) url += `&branch_id=${branch}`;
+        
+        if (format === 'print') {
+            window.open(url, '_blank');
+        } else {
+            const link = document.createElement('a');
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
 </script>

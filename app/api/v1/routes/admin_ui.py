@@ -1376,3 +1376,116 @@ async def help_page(
             "app_settings": {"max_devices_per_employee": 5},
         },
     )
+
+
+@router.get("/ui/reports/export")
+async def export_reports(
+    request: Request,
+    format: str = "csv",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    from fastapi.responses import StreamingResponse
+    from app.services.geo import is_within_any_fence
+
+    # Helper to parse dates robustly
+    def parse_date(date_str: str) -> Optional[datetime]:
+        if not date_str:
+            return None
+        try:
+            if len(date_str) <= 10:
+                return datetime.strptime(date_str, "%Y-%m-%d")
+            return datetime.fromisoformat(date_str.replace("Z", ""))
+        except Exception:
+            return None
+
+    # 1. Base Query
+    query = db.query(PunchLog, Employee.full_name).\
+        outerjoin(Employee, PunchLog.employee_id == Employee.employee_id)
+
+    # 2. Date Filtering
+    start_dt = parse_date(start_date)
+    if start_dt:
+        query = query.filter(PunchLog.timestamp >= start_dt)
+
+    end_dt = parse_date(end_date)
+    if end_dt:
+        if len(end_date) <= 10:
+            end_dt = end_dt + timedelta(days=1) - timedelta(seconds=1)
+        query = query.filter(PunchLog.timestamp <= end_dt)
+
+    # Sort by timestamp
+    query = query.order_by(PunchLog.timestamp.desc())
+
+    # Fetch all records
+    logs_raw = query.all()
+
+    # Fetch all branches once to do geofence analysis
+    branches = db.query(Branch).all()
+
+    # Target branch for filtering
+    target_branch = None
+    if branch_id:
+        target_branch = db.query(Branch).filter(Branch.id == branch_id).first()
+
+    processed_logs = []
+    in_count = 0
+    out_count = 0
+
+    for log, name in logs_raw:
+        # Resolve branch by coordinates
+        in_fence, dist, r_branch_name = is_within_any_fence(log.latitude, log.longitude, branches, db=db)
+        if not in_fence:
+            r_branch_name = "Off-site"
+
+        # If branch filter is enabled, verify it belongs to that branch
+        if branch_id and target_branch:
+            # Check if this punch is inside target branch's geofence/checkpoints
+            in_target_fence, _, _ = is_within_any_fence(log.latitude, log.longitude, [target_branch], db=db)
+            if not in_target_fence:
+                continue
+
+        # Include log
+        log.employee_name = name or "Unknown"
+        log.resolved_branch_name = r_branch_name
+        processed_logs.append(log)
+
+        if log.punch_type.lower() == "in":
+            in_count += 1
+        else:
+            out_count += 1
+
+    # Format output
+    if format == "print":
+        branch_name_label = target_branch.name if target_branch else "All Branches"
+        return templates.TemplateResponse(
+            request=request,
+            name="report_print.html",
+            context={
+                "logs": processed_logs,
+                "generated_at": datetime.now(),
+                "start_date": start_date,
+                "end_date": end_date,
+                "branch_name": branch_name_label,
+                "total_count": len(processed_logs),
+                "in_count": in_count,
+                "out_count": out_count,
+            }
+        )
+
+    # Default CSV Streaming response
+    async def generate_csv():
+        yield "Employee ID,Employee Name,Timestamp (Local),Punch Type,Latitude,Longitude,Branch Location,ADMS Status\n"
+        for log in processed_logs:
+            local_time_str = log.timestamp.isoformat() if log.timestamp else ""
+            yield f'"{log.employee_id}","{log.employee_name}","{local_time_str}","{log.punch_type}",{log.latitude},{log.longitude},"{log.resolved_branch_name}","{log.adms_status}"\n'
+
+    filename_scope = f"_branch_{branch_id}" if branch_id else ""
+    return StreamingResponse(
+        generate_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=attendance_report{filename_scope}.csv"},
+    )
