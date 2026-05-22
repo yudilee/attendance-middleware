@@ -289,6 +289,7 @@ async def update_fcm_token(
 @router.post("/api/v1/admin/generate-onboard-qr")
 async def generate_onboard_qr(
     req: OnboardGenerateRequest,
+    request: Request,
     db: Session = Depends(get_db),
     admin=Depends(get_current_admin),
 ):
@@ -302,7 +303,13 @@ async def generate_onboard_qr(
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
     config = db.query(AppConfig).filter(AppConfig.key == "server_url").first()
-    server_url = config.value if config else "http://localhost:8000"
+    if config and config.value and "localhost" not in config.value and "127.0.0.1" not in config.value:
+        server_url = config.value
+    else:
+        # Dynamically determine the URL from the request host, respecting reverse proxy headers (e.g. Traefik)
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host", request.url.netloc)
+        server_url = f"{scheme}://{host}"
 
     return {"url": server_url, "token": token}
 
