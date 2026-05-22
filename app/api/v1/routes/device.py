@@ -102,6 +102,7 @@ async def get_device_config(
                             f"Please contact admin to remove an old device.",
                     device_count=existing_count,
                     max_devices=max_devices,
+                    employee_id=employee_id,
                 )
 
         binding = DeviceBinding(
@@ -155,6 +156,7 @@ async def get_device_config(
             device_count=device_count,
             max_devices=max_devices,
             employee_name=employee_name,
+            employee_id=binding.employee_id,
         )
     if status == "suspended":
         raise HTTPException(status_code=403, detail="Device suspended. Please contact your HR Administrator.")
@@ -173,6 +175,7 @@ async def get_device_config(
             device_count=device_count,
             max_devices=max_devices,
             employee_name=employee_name,
+            employee_id=binding.employee_id,
         )
 
     branches = []
@@ -220,6 +223,7 @@ async def get_device_config(
             device_count=device_count,
             max_devices=max_devices,
             employee_name=employee_name,
+            employee_id=binding.employee_id,
         )
 
     response = DeviceConfigResponse(
@@ -228,6 +232,7 @@ async def get_device_config(
         device_count=device_count,
         max_devices=max_devices,
         employee_name=employee_name,
+        employee_id=binding.employee_id,
     )
     await set_cache(cache_key, response.model_dump_json(), ttl=300)
     return response
@@ -435,6 +440,7 @@ async def onboard_device(
         device_count=device_count,
         max_devices=max_devices,
         employee_name=employee_name,
+        employee_id=employee_id,
     ).model_dump()
 
     resp["api_key"] = api_key.key_value if api_key else ""

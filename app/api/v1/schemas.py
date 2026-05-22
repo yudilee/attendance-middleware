@@ -54,6 +54,7 @@ class DeviceConfigResponse(BaseModel):
     device_count: int = 1                   # How many devices registered for this employee
     max_devices: int = 5                    # System-wide max
     employee_name: Optional[str] = None     # Employee full name
+    employee_id: Optional[str] = None       # Employee ID
 
     model_config = ConfigDict(from_attributes=True)
 
