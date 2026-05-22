@@ -195,6 +195,16 @@
     border-bottom: none;
 }
 
+/* Dark mode overrides for dynamic searchable dropdown */
+.dark .dropdown-item {
+    color: #f1f5f9;
+    border-bottom: 1px solid #334155;
+}
+
+.dark .dropdown-item:hover {
+    background: #1e293b;
+}
+
 /* ── Scrollbar ───────────────────────────────────────────────────────── */
 
 ::-webkit-scrollbar {

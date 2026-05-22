@@ -34,13 +34,13 @@
             <div class="space-y-4">
                 <div class="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-lg dark:bg-slate-800/50">
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">ADMS Connection</span>
-                    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {% if adms_connected %}bg-emerald-50 text-emerald-700{% else %}bg-red-50 text-red-700{% endif %}">
+                    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {% if adms_connected %}bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400{% else %}bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400{% endif %}">
                         {{ "Connected" if adms_connected else "Disconnected" }}
                     </span>
                 </div>
                 <div class="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-lg dark:bg-slate-800/50">
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Worker Queue</span>
-                    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {% if worker_running %}bg-emerald-50 text-emerald-700{% else %}bg-red-50 text-red-700{% endif %}">
+                    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {% if worker_running %}bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400{% else %}bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400{% endif %}">
                         {{ "Running" if worker_running else "Stopped" }}
                     </span>
                 </div>

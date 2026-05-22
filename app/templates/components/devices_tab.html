@@ -70,7 +70,7 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50">
                         {% for device in devices %}
-                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors {% if device.registration_status == 'pending_approval' %}bg-amber-50/50{% elif 'suspended' %}bg-red-50/50 opacity-80{% endif %} dark:hover:bg-slate-800/40">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors {% if device.registration_status == 'pending_approval' %}bg-amber-50/50 dark:bg-amber-950/20{% elif device.registration_status == 'suspended' %}bg-red-50/50 dark:bg-red-950/20 opacity-80{% endif %}">
                             <td class="px-5 py-4">
                                 {% if device.employee_id %}
                                     <strong class="text-slate-800 dark:text-slate-100">{{ device.employee_name }}</strong><br>
