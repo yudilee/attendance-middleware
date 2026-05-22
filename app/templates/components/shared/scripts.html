@@ -495,6 +495,110 @@
     let branchMapInitialized = false;
     let checkpointLayers = [];
     let tempCheckpointMarker = null;
+    let tempCheckpointCircle = null;
+    let mapMode = 'primary';
+
+    function setMapMode(mode) {
+        mapMode = mode;
+        const btnPrimary = document.getElementById('mapModePrimary');
+        const btnCheckpoint = document.getElementById('mapModeCheckpoint');
+        if (!btnPrimary || !btnCheckpoint) return;
+        
+        if (mode === 'primary') {
+            btnPrimary.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-white text-indigo-600 shadow-sm border border-slate-200/50";
+            btnCheckpoint.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-600 hover:bg-slate-50";
+        } else {
+            btnPrimary.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-600 hover:bg-slate-50";
+            btnCheckpoint.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-white text-amber-600 shadow-sm border border-slate-200/50";
+        }
+    }
+
+    function setCheckpointCoordinates(latlng) {
+        document.getElementById('cp_lat').value = latlng.lat.toFixed(6);
+        document.getElementById('cp_lon').value = latlng.lng.toFixed(6);
+        
+        const radius = parseFloat(document.getElementById('cp_rad').value) || 50;
+
+        if (tempCheckpointMarker) {
+            tempCheckpointMarker.setLatLng(latlng);
+        } else {
+            tempCheckpointMarker = L.marker(latlng, {
+                draggable: true,
+                title: "New Checkpoint Location",
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                })
+            }).addTo(branchMap);
+            
+            tempCheckpointMarker.on('dragend', function() {
+                const pos = tempCheckpointMarker.getLatLng();
+                document.getElementById('cp_lat').value = pos.lat.toFixed(6);
+                document.getElementById('cp_lon').value = pos.lng.toFixed(6);
+                if (tempCheckpointCircle) {
+                    tempCheckpointCircle.setLatLng(pos);
+                }
+            });
+        }
+
+        if (tempCheckpointCircle) {
+            tempCheckpointCircle.setLatLng(latlng);
+            tempCheckpointCircle.setRadius(radius);
+        } else {
+            tempCheckpointCircle = L.circle(latlng, {
+                radius: radius,
+                color: '#f59e0b',
+                fillColor: '#f59e0b',
+                fillOpacity: 0.15,
+                weight: 2
+            }).addTo(branchMap);
+        }
+
+        notify("Set checkpoint coordinates on map! Adjust coordinates or radius in the form, then click 'Add Point'.");
+    }
+
+    function onCheckpointCoordChange() {
+        const lat = parseFloat(document.getElementById('cp_lat').value);
+        const lon = parseFloat(document.getElementById('cp_lon').value);
+        const rad = parseFloat(document.getElementById('cp_rad').value) || 50;
+        
+        if (!isNaN(lat) && !isNaN(lon) && branchMap) {
+            const latlng = [lat, lon];
+            if (tempCheckpointMarker) {
+                tempCheckpointMarker.setLatLng(latlng);
+            } else {
+                tempCheckpointMarker = L.marker(latlng, {
+                    draggable: true,
+                    title: "New Checkpoint Location",
+                    icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    })
+                }).addTo(branchMap);
+            }
+            
+            if (tempCheckpointCircle) {
+                tempCheckpointCircle.setLatLng(latlng);
+                tempCheckpointCircle.setRadius(rad);
+            } else {
+                tempCheckpointCircle = L.circle(latlng, {
+                    radius: rad,
+                    color: '#f59e0b',
+                    fillColor: '#f59e0b',
+                    fillOpacity: 0.15,
+                    weight: 2
+                }).addTo(branchMap);
+            }
+        }
+    }
 
     function initBranchMap() {
         const container = document.getElementById('branchMap');
@@ -522,40 +626,14 @@
         });
 
         branchMap.on('click', function(e) {
-            branchMarker.setLatLng(e.latlng);
-            document.getElementById('branch_lat').value = e.latlng.lat.toFixed(6);
-            document.getElementById('branch_lon').value = e.latlng.lng.toFixed(6);
-            updateCircle();
-        });
-
-        branchMap.on('dblclick', function(e) {
-            document.getElementById('cp_lat').value = e.latlng.lat.toFixed(6);
-            document.getElementById('cp_lon').value = e.latlng.lng.toFixed(6);
-            
-            if (tempCheckpointMarker) {
-                tempCheckpointMarker.setLatLng(e.latlng);
+            if (mapMode === 'primary') {
+                branchMarker.setLatLng(e.latlng);
+                document.getElementById('branch_lat').value = e.latlng.lat.toFixed(6);
+                document.getElementById('branch_lon').value = e.latlng.lng.toFixed(6);
+                updateCircle();
             } else {
-                tempCheckpointMarker = L.marker(e.latlng, {
-                    draggable: true,
-                    title: "New Checkpoint Location",
-                    icon: L.icon({
-                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
-                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-                        iconSize: [25, 41],
-                        iconAnchor: [12, 41],
-                        popupAnchor: [1, -34],
-                        shadowSize: [41, 41]
-                    })
-                }).addTo(branchMap);
-                
-                tempCheckpointMarker.on('dragend', function() {
-                    const pos = tempCheckpointMarker.getLatLng();
-                    document.getElementById('cp_lat').value = pos.lat.toFixed(6);
-                    document.getElementById('cp_lon').value = pos.lng.toFixed(6);
-                });
+                setCheckpointCoordinates(e.latlng);
             }
-            
-            notify("Set checkpoint coordinates on map double click! Please type a name and click 'Add Point'.");
         });
 
         setTimeout(() => { branchMap.invalidateSize(); }, 100);
@@ -841,6 +919,11 @@
             if (branchMap) branchMap.removeLayer(tempCheckpointMarker);
             tempCheckpointMarker = null;
         }
+        if (tempCheckpointCircle) {
+            if (branchMap) branchMap.removeLayer(tempCheckpointCircle);
+            tempCheckpointCircle = null;
+        }
+        setMapMode('primary');
 
         const defaultLat = -6.175392;
         const defaultLon = 106.827153;
@@ -1072,10 +1155,16 @@
             if (res.ok) {
                 notify('Checkpoint added successfully!');
                 document.getElementById('cp_name').value = '';
+                document.getElementById('cp_lat').value = '';
+                document.getElementById('cp_lon').value = '';
                 document.getElementById('cp_rad').value = 50;
                 if (tempCheckpointMarker) {
                     if (branchMap) branchMap.removeLayer(tempCheckpointMarker);
                     tempCheckpointMarker = null;
+                }
+                if (tempCheckpointCircle) {
+                    if (branchMap) branchMap.removeLayer(tempCheckpointCircle);
+                    tempCheckpointCircle = null;
                 }
                 loadCheckpoints(branchId);
             } else {
