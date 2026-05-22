@@ -1,13 +1,13 @@
 <!-- Confirmation Modal -->
 <div id="confirmModal" class="modal-overlay fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-    <div class="modal-animated w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-            <div class="text-base font-bold text-slate-800">Confirm Action</div>
-            <button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all text-xl border-0 bg-transparent cursor-pointer" onclick="closeModal('confirmModal')">&times;</button>
+    <div class="modal-animated w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <div class="text-base font-bold text-slate-800 dark:text-slate-100">Confirm Action</div>
+            <button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all text-xl border-0 bg-transparent cursor-pointer dark:text-slate-500" onclick="closeModal('confirmModal')">&times;</button>
         </div>
-        <div class="px-6 py-5 text-sm text-slate-700 leading-relaxed" id="confirmMsg"></div>
-        <div class="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
-            <button class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" id="confirmNoBtn">Cancel</button>
+        <div class="px-6 py-5 text-sm text-slate-700 leading-relaxed dark:text-slate-300" id="confirmMsg"></div>
+        <div class="flex justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-800">
+            <button class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/40" id="confirmNoBtn">Cancel</button>
             <button class="inline-flex items-center justify-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-all shadow-sm" id="confirmYesBtn">Confirm</button>
         </div>
     </div>
@@ -15,45 +15,45 @@
 
 <!-- ═══════════════════ ONBOARDING QR MODAL ═══════════════════ -->
 <div id="onboardModal" class="modal-overlay fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" style="display: none;">
-    <div class="modal-animated w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 p-7 overflow-visible" style="overflow: visible;">
-        <h3 class="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">📱 Generate Onboarding QR</h3>
-        <p class="text-sm text-slate-500 mb-5">Select the employee and target branch site to create a secure, one-click onboarding setup.</p>
+    <div class="modal-animated w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 p-7 overflow-visible dark:bg-slate-900 dark:border-slate-800" style="overflow: visible;">
+        <h3 class="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2 dark:text-slate-100">📱 Generate Onboarding QR</h3>
+        <p class="text-sm text-slate-500 mb-5 dark:text-slate-400">Select the employee and target branch site to create a secure, one-click onboarding setup.</p>
         
         <div class="mb-4 relative">
-            <label class="block text-sm font-medium text-slate-700 mb-1.5">Select Employee</label>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Select Employee</label>
             <input type="hidden" id="onboard_emp_id" value="">
             <div class="relative flex items-center">
-                <input type="text" id="onboard_emp_search" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 pr-9 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="🔍 Type ID or Name to search..." 
+                <input type="text" id="onboard_emp_search" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 pr-9 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="🔍 Type ID or Name to search..." 
                        oninput="filterOnboardEmployees()" onclick="showOnboardEmpDropdown()" onfocus="showOnboardEmpDropdown()">
-                <span id="onboard_emp_toggle" class="absolute right-3 cursor-pointer text-slate-400 text-xs select-none" onclick="toggleOnboardEmpDropdown()">▼</span>
+                <span id="onboard_emp_toggle" class="absolute right-3 cursor-pointer text-slate-400 text-xs select-none dark:text-slate-500" onclick="toggleOnboardEmpDropdown()">▼</span>
             </div>
-            <div id="onboard_emp_dropdown" class="hidden absolute z-[1010] left-0 right-0 top-full max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg mt-1">
-                <div class="p-2.5 text-sm text-slate-400">Loading employees...</div>
+            <div id="onboard_emp_dropdown" class="hidden absolute z-[1010] left-0 right-0 top-full max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg mt-1 dark:bg-slate-900 dark:border-slate-800">
+                <div class="p-2.5 text-sm text-slate-400 dark:text-slate-500">Loading employees...</div>
             </div>
         </div>
         
         <div class="mb-4">
-            <label class="block text-sm font-medium text-slate-700 mb-1.5">Assign to Branch Site</label>
-            <select id="onboard_branch_id" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Assign to Branch Site</label>
+            <select id="onboard_branch_id" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                 <option value="">Loading branches...</option>
             </select>
         </div>
         
         <div class="mb-4 hidden">
-            <label class="block text-sm font-medium text-slate-700 mb-1.5">Select API Access Key</label>
-            <select id="onboard_key_id" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Select API Access Key</label>
+            <select id="onboard_key_id" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                 <option value="">Loading API keys...</option>
             </select>
         </div>
         
         <div class="flex gap-3 mt-6">
-            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors" onclick="closeOnboardingModal()">Cancel</button>
+            <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/40" onclick="closeOnboardingModal()">Cancel</button>
             <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 transition-all shadow-sm" onclick="generateOnboardQR()">Generate QR</button>
         </div>
         
         <div id="onboardQrContainer" class="hidden mt-6 text-center">
-            <img id="onboardQrImg" src="" class="w-56 h-56 border border-slate-200 rounded-xl shadow-md mx-auto">
-            <p class="text-xs text-slate-500 mt-3 leading-relaxed">Scan this QR code from the Mobile App to complete setup instantly.</p>
+            <img id="onboardQrImg" src="" class="w-56 h-56 border border-slate-200 rounded-xl shadow-md mx-auto dark:border-slate-800">
+            <p class="text-xs text-slate-500 mt-3 leading-relaxed dark:text-slate-400">Scan this QR code from the Mobile App to complete setup instantly.</p>
         </div>
     </div>
 </div>

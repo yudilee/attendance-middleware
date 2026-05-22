@@ -31,7 +31,7 @@
     
     <div class="w-full max-w-md">
         <!-- Login Card -->
-        <div class="bg-white rounded-2xl shadow-2xl shadow-slate-900/20 p-8 sm:p-10">
+        <div class="bg-white rounded-2xl shadow-2xl shadow-slate-900/20 p-8 sm:p-10 dark:bg-slate-900">
             
             <!-- Logo -->
             <div class="flex justify-center mb-6">
@@ -42,13 +42,13 @@
             
             <!-- Title -->
             <div class="text-center mb-8">
-                <h1 class="text-xl font-bold text-slate-800 mb-1">Welcome Back</h1>
-                <p class="text-sm text-slate-500">Sign in to the attendance dashboard</p>
+                <h1 class="text-xl font-bold text-slate-800 mb-1 dark:text-slate-100">Welcome Back</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Sign in to the attendance dashboard</p>
             </div>
 
             <!-- Error Alert -->
             {% if error %}
-            <div class="flex items-center gap-2.5 bg-red-50 text-red-600 px-4 py-3 rounded-xl border border-red-200 mb-6 text-sm font-medium">
+            <div class="flex items-center gap-2.5 bg-red-50 text-red-600 px-4 py-3 rounded-xl border border-red-200 mb-6 text-sm font-medium dark:bg-red-950/30">
                 <i class="ph ph-warning-circle text-lg flex-shrink-0"></i>
                 <span>{{ error }}</span>
             </div>
@@ -57,29 +57,26 @@
             <!-- Login Form -->
             <form method="POST" action="/login" class="space-y-5">
                 <div>
-                    <label for="username" class="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
+                    <label for="username" class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Username</label>
                     <input type="text" id="username" name="username" required autofocus placeholder="Enter your username"
-                           class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all
-                                  focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                           class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                 </div>
                 
                 <div>
-                    <label for="password" class="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                    <label for="password" class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Password</label>
                     <input type="password" id="password" name="password" required placeholder="••••••••"
-                           class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all
-                                  focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                           class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                 </div>
 
                 <button type="submit"
-                        class="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-all
-                               hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-500/20 active:scale-[0.98]">
+                        class="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-500/20 active:scale-[0.98]">
                     <i class="ph ph-sign-in text-lg"></i>
                     Sign In
                 </button>
             </form>
 
             <!-- Footer -->
-            <div class="text-center mt-8 text-xs text-slate-400">
+            <div class="text-center mt-8 text-xs text-slate-400 dark:text-slate-500">
                 Virtual Attendance Middleware v1.0
             </div>
         </div>

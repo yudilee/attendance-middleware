@@ -1,68 +1,68 @@
 <div id="punch-types" class="tab-content hidden">
-    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
-        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Manage Punch Types</h2>
-        <p class="text-sm text-slate-500 mb-6">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1 dark:text-slate-400">Manage Punch Types</h2>
+        <p class="text-sm text-slate-500 mb-6 dark:text-slate-400">
             Configure the types of punches available to mobile app users. Mobile users must tap "Sync Offline Data" in the app to see updates.
         </p>
         
-        <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
             <table class="w-full text-sm">
                 <thead>
-                    <tr class="bg-slate-50 border-b border-slate-200">
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Code</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Label</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">ADMS Code</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Icon</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Color</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Geo?</th>
-                        <th class="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
+                    <tr class="bg-slate-50 border-b border-slate-200 dark:bg-slate-800/50 dark:border-slate-800">
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Code</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Label</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">ADMS Code</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Icon</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Color</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Geo?</th>
+                        <th class="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="punchTypesTbody" class="divide-y divide-slate-100">
+                <tbody id="punchTypesTbody" class="divide-y divide-slate-100 dark:divide-slate-800/50">
                     <!-- Populated by JS -->
                 </tbody>
             </table>
         </div>
     </div>
 
-    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-lg">
-        <h2 class="text-sm font-semibold text-slate-800 mb-4" id="ptFormTitle">Create New Punch Type</h2>
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-lg dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="text-sm font-semibold text-slate-800 mb-4 dark:text-slate-100" id="ptFormTitle">Create New Punch Type</h2>
         <form id="ptForm" onsubmit="event.preventDefault(); savePunchType();">
             <input type="hidden" id="edit_pt_id">
             <div class="grid grid-cols-2 gap-4">
                 <div class="mb-0">
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Code</label>
-                    <input type="text" id="pt_code" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., In, Out, Break_Start" required>
-                    <div class="text-xs text-slate-400 mt-1">Unique identifier</div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Code</label>
+                    <input type="text" id="pt_code" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="e.g., In, Out, Break_Start" required>
+                    <div class="text-xs text-slate-400 mt-1 dark:text-slate-500">Unique identifier</div>
                 </div>
                 <div class="mb-0">
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Display Label</label>
-                    <input type="text" id="pt_label" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., Clock In" required>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Display Label</label>
+                    <input type="text" id="pt_label" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="e.g., Clock In" required>
                 </div>
                 <div class="mb-0">
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5">ADMS Status Code</label>
-                    <input type="text" id="pt_adms_code" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., 0, 1, 4" required>
-                    <div class="text-xs text-slate-400 mt-1">ZKTeco code (0=In, 1=Out)</div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">ADMS Status Code</label>
+                    <input type="text" id="pt_adms_code" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="e.g., 0, 1, 4" required>
+                    <div class="text-xs text-slate-400 mt-1 dark:text-slate-500">ZKTeco code (0=In, 1=Out)</div>
                 </div>
                 <div class="mb-0">
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Icon Name</label>
-                    <input type="text" id="pt_icon" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g., login, logout" required>
-                    <div class="text-xs text-slate-400 mt-1">Material icon name</div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Icon Name</label>
+                    <input type="text" id="pt_icon" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="e.g., login, logout" required>
+                    <div class="text-xs text-slate-400 mt-1 dark:text-slate-500">Material icon name</div>
                 </div>
                 <div class="mb-0">
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Color (Hex)</label>
-                    <input type="color" id="pt_color" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm h-[42px] shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="#16a34a">
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Color (Hex)</label>
+                    <input type="color" id="pt_color" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm h-[42px] shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900" value="#16a34a">
                 </div>
                 <div class="mb-0">
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Display Order</label>
-                    <input type="number" id="pt_order" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value="0" required>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Display Order</label>
+                    <input type="number" id="pt_order" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="0" required>
                 </div>
             </div>
             
             <div class="mt-4">
                 <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" id="pt_requires_geo" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4">
-                    <span class="text-sm font-medium text-slate-700">Requires Geofence Validation</span>
+                    <input type="checkbox" id="pt_requires_geo" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400">
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Requires Geofence Validation</span>
                 </label>
             </div>
 
@@ -70,7 +70,7 @@
                 <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" id="savePtBtn">
                     <i class="ph ph-plus"></i> Add Punch Type
                 </button>
-                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors hidden" id="cancelPtEditBtn" onclick="cancelPtEdit()">
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors hidden dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/40" id="cancelPtEditBtn" onclick="cancelPtEdit()">
                     Cancel
                 </button>
             </div>

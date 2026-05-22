@@ -1,59 +1,59 @@
 <div id="dashboard" class="tab-content">
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all border-l-4 border-l-indigo-500 overflow-hidden">
-            <i class="ph-fill ph-fingerprint absolute top-4 right-4 text-3xl opacity-10 text-slate-800"></i>
-            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Virtual Machine</div>
-            <div class="flex items-center gap-2 text-base font-bold text-slate-800">
+        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all border-l-4 border-l-indigo-500 overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+            <i class="ph-fill ph-fingerprint absolute top-4 right-4 text-3xl opacity-10 text-slate-800 dark:text-slate-100"></i>
+            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 dark:text-slate-400">Virtual Machine</div>
+            <div class="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
                 <span class="pulse-dot"></span>
                 Heartbeat Active
             </div>
-            <div class="mt-3 text-xs text-slate-500">
-                SN: <strong class="font-mono text-slate-700">{{ sn }}</strong><br>
-                Alias: <strong class="text-indigo-600">{{ device_name }}</strong>
+            <div class="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                SN: <strong class="font-mono text-slate-700 dark:text-slate-300">{{ sn }}</strong><br>
+                Alias: <strong class="text-indigo-600 dark:text-indigo-400">{{ device_name }}</strong>
             </div>
         </div>
         
-        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all border-l-4 border-l-emerald-500 overflow-hidden">
-            <i class="ph ph-list-checks absolute top-4 right-4 text-3xl opacity-10 text-slate-800"></i>
-            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Total Punches</div>
-            <div class="text-3xl font-bold text-slate-800 mb-2">{{ punch_count }}</div>
+        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all border-l-4 border-l-emerald-500 overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+            <i class="ph ph-list-checks absolute top-4 right-4 text-3xl opacity-10 text-slate-800 dark:text-slate-100"></i>
+            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 dark:text-slate-400">Total Punches</div>
+            <div class="text-3xl font-bold text-slate-800 mb-2 dark:text-slate-100">{{ punch_count }}</div>
             <div class="flex flex-wrap gap-2">
-                <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">{{ uploaded_count }} uploaded</span>
+                <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">{{ uploaded_count }} uploaded</span>
                 {% if failed_count > 0 %}
-                <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">{{ failed_count }} failed</span>
+                <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400">{{ failed_count }} failed</span>
                 {% endif %}
                 {% if pending_count > 0 %}
-                <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{{ pending_count }} pending</span>
+                <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">{{ pending_count }} pending</span>
                 {% endif %}
             </div>
         </div>
         
-        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all overflow-hidden">
-            <i class="ph ph-devices absolute top-4 right-4 text-3xl opacity-10 text-slate-800"></i>
-            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Bound Handsets</div>
-            <div class="text-3xl font-bold text-slate-800 mb-2">{{ device_count }}</div>
-            <div class="text-xs text-slate-500">Unique device IDs registered</div>
+        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+            <i class="ph ph-devices absolute top-4 right-4 text-3xl opacity-10 text-slate-800 dark:text-slate-100"></i>
+            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 dark:text-slate-400">Bound Handsets</div>
+            <div class="text-3xl font-bold text-slate-800 mb-2 dark:text-slate-100">{{ device_count }}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">Unique device IDs registered</div>
         </div>
         
-        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all overflow-hidden">
-            <i class="ph ph-clock absolute top-4 right-4 text-3xl opacity-10 text-slate-800"></i>
-            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Today's Punches</div>
+        <div class="relative rounded-xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-all overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+            <i class="ph ph-clock absolute top-4 right-4 text-3xl opacity-10 text-slate-800 dark:text-slate-100"></i>
+            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 dark:text-slate-400">Today's Punches</div>
             <div class="flex gap-6 items-baseline">
                 <div>
                     <span class="text-2xl font-bold text-emerald-600">{{ today_in }}</span>
-                    <span class="text-xs text-slate-400"> In</span>
+                    <span class="text-xs text-slate-400 dark:text-slate-500"> In</span>
                 </div>
                 <div>
                     <span class="text-2xl font-bold text-red-500">{{ today_out }}</span>
-                    <span class="text-xs text-slate-400"> Out</span>
+                    <span class="text-xs text-slate-400 dark:text-slate-500"> Out</span>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Live Attendance Stream Ticker -->
-    <div id="liveTickerPanel" class="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/20 backdrop-blur-md p-4 shadow-sm relative overflow-hidden border-l-4 border-l-indigo-600 transition-all duration-300">
+    <div id="liveTickerPanel" class="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/20 backdrop-blur-md p-4 shadow-sm relative overflow-hidden border-l-4 border-l-indigo-600 transition-all duration-300 dark:border-indigo-900/40 dark:bg-indigo-950/10">
         <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 pointer-events-none"></div>
         <div class="flex items-center justify-between mb-3 border-b border-indigo-100/50 pb-2">
             <div class="flex items-center gap-2">
@@ -61,9 +61,9 @@
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span class="text-xs font-bold uppercase tracking-wider text-indigo-900">Live Punch Feed</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300">Live Punch Feed</span>
             </div>
-            <span class="text-[10px] bg-indigo-100/80 text-indigo-700 font-mono px-2 py-0.5 rounded-full font-bold animate-pulse" id="wsConnectionStatus">Connecting WebSocket...</span>
+            <span class="text-[10px] bg-indigo-100/80 text-indigo-700 font-mono px-2 py-0.5 rounded-full font-bold animate-pulse dark:bg-indigo-950/50 dark:text-indigo-400" id="wsConnectionStatus">Connecting WebSocket...</span>
         </div>
         <div class="relative min-h-[40px] overflow-hidden" id="liveTickerContainer">
             <div class="text-xs text-indigo-600/60 italic flex items-center gap-2" id="liveTickerPlaceholder">
@@ -120,12 +120,12 @@
     </div>
 
     <!-- Recent Attendance Logs -->
-    <div class="rounded-xl border border-slate-200 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-            <h3 class="text-sm font-semibold text-slate-800">Recent Attendance Logs</h3>
+    <div class="rounded-xl border border-slate-200 bg-white dark:bg-slate-900 shadow-sm overflow-hidden dark:border-slate-800">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Recent Attendance Logs</h3>
             <div class="flex items-center gap-2">
-                <span class="text-xs text-slate-400">Last 20 records</span>
-                <a href="/ui/logs/export" download class="text-xs font-medium text-indigo-600 hover:text-indigo-700 px-3 py-1.5 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors">
+                <span class="text-xs text-slate-400 dark:text-slate-500">Last 20 records</span>
+                <a href="/ui/logs/export" download class="text-xs font-medium text-indigo-600 hover:text-indigo-700 px-3 py-1.5 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors dark:text-indigo-400 dark:border-indigo-800 dark:hover:bg-indigo-950/30">
                     <i class="ph ph-download-simple mr-1"></i>Export CSV
                 </a>
             </div>
@@ -133,59 +133,59 @@
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
-                    <tr class="bg-slate-50 border-b border-slate-200">
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Employee</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Timestamp (Local)</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Type</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">GPS Coordinates</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">ADMS Status</th>
-                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Selfie</th>
+                    <tr class="bg-slate-50 border-b border-slate-200 dark:bg-slate-800/50 dark:border-slate-800">
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Employee</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Timestamp (Local)</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">GPS Coordinates</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">ADMS Status</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Selfie</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100" id="liveAttendanceLogsBody">
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50" id="liveAttendanceLogsBody">
                     {% for log in logs %}
-                    <tr class="hover:bg-slate-50 transition-colors">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors dark:hover:bg-slate-800/40">
                         <td class="px-5 py-4">
-                            <strong class="text-slate-800">{{ log.employee_name }}</strong><br>
-                            <span class="text-xs text-slate-400">ID: {{ log.employee_id }}</span>
+                            <strong class="text-slate-800 dark:text-slate-100">{{ log.employee_name }}</strong><br>
+                            <span class="text-xs text-slate-400 dark:text-slate-500">ID: {{ log.employee_id }}</span>
                         </td>
-                        <td class="px-5 py-4 text-sm text-slate-700 local-time" data-utc="{{ log.timestamp.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td class="px-5 py-4 text-sm text-slate-700 local-time dark:text-slate-300" data-utc="{{ log.timestamp.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                         <td class="px-5 py-4">
                             {% if log.punch_type == 'In' %}
-                            <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                            <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
                                 🟢 In
                             </span>
                             {% else %}
-                            <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+                            <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400">
                                 🔴 Out
                             </span>
                             {% endif %}
                         </td>
-                        <td class="px-5 py-4 text-xs text-slate-400 font-mono">
+                        <td class="px-5 py-4 text-xs text-slate-400 font-mono dark:text-slate-500">
                             {{ "%.5f"|format(log.latitude) }}, {{ "%.5f"|format(log.longitude) }}
                         </td>
                         <td class="px-5 py-4">
                             {% if log.adms_status == 'uploaded' %}
-                                <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✅ Uploaded</span>
+                                <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">✅ Uploaded</span>
                             {% elif log.adms_status == 'failed' %}
-                                <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">❌ Failed</span>
+                                <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400">❌ Failed</span>
                             {% else %}
-                                <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">⏳ Pending</span>
+                                <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">⏳ Pending</span>
                             {% endif %}
                         </td>
                         <td class="px-5 py-4">
                             {% if log.selfie_filename %}
-                            <a href="/ui/selfie/{{ log.selfie_filename }}" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors">
+                            <a href="/ui/selfie/{{ log.selfie_filename }}" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800/60 dark:bg-indigo-950/30 dark:text-indigo-400">
                                 <i class="ph ph-camera"></i> View
                             </a>
                             {% else %}
-                            <span class="text-slate-400">&mdash;</span>
+                            <span class="text-slate-400 dark:text-slate-500">&mdash;</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% else %}
                     <tr id="noLogsRow">
-                        <td colspan="6" class="text-center py-8 text-sm text-slate-400">
+                        <td colspan="6" class="text-center py-8 text-sm text-slate-400 dark:text-slate-500">
                             No attendance logs yet. Waiting for first punch...
                         </td>
                     </tr>

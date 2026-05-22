@@ -122,14 +122,14 @@
             socket.onopen = () => {
                 if (wsStatusBadge) {
                     wsStatusBadge.textContent = 'Live Feed Online';
-                    wsStatusBadge.className = 'text-[10px] bg-emerald-100 text-emerald-800 font-mono px-2 py-0.5 rounded-full font-bold';
+                    wsStatusBadge.className = 'text-[10px] bg-emerald-100 text-emerald-800 font-mono px-2 py-0.5 rounded-full font-bold dark:bg-emerald-950/30 dark:text-emerald-400';
                 }
             };
             
             socket.onclose = () => {
                 if (wsStatusBadge) {
                     wsStatusBadge.textContent = 'Disconnected (Reconnecting...)';
-                    wsStatusBadge.className = 'text-[10px] bg-amber-100 text-amber-800 font-mono px-2 py-0.5 rounded-full font-bold animate-pulse';
+                    wsStatusBadge.className = 'text-[10px] bg-amber-100 text-amber-800 font-mono px-2 py-0.5 rounded-full font-bold animate-pulse dark:bg-amber-950/30 dark:text-amber-400';
                 }
                 setTimeout(connect, 3000);
             };
@@ -148,20 +148,20 @@
                     
                     const timeLocal = new Date().toLocaleTimeString();
                     const tickerItem = document.createElement('div');
-                    tickerItem.className = 'flex items-center justify-between bg-white border border-indigo-50 rounded-lg p-2.5 shadow-sm transform translate-y-2 opacity-0 transition-all duration-500 ease-out border-l-4 ' + (data.punch_type === 'In' ? 'border-l-emerald-500' : 'border-l-red-500');
+                    tickerItem.className = 'flex items-center justify-between bg-white dark:bg-slate-900 border border-indigo-50 dark:border-slate-800 rounded-lg p-2.5 shadow-sm transform translate-y-2 opacity-0 transition-all duration-500 ease-out border-l-4 ' + (data.punch_type === 'In' ? 'border-l-emerald-500' : 'border-l-red-500');
                     tickerItem.innerHTML = `
                         <div class="flex items-center gap-3">
-                            <span class="flex h-6 w-6 items-center justify-center rounded-full ${data.punch_type === 'In' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'} text-[10px] font-bold">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-full ${data.punch_type === 'In' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400'} text-[10px] font-bold">
                                 ${data.punch_type === 'In' ? 'IN' : 'OUT'}
                             </span>
                             <div>
-                                <div class="text-xs font-bold text-slate-800">${data.employee_name}</div>
-                                <div class="text-[10px] text-slate-400">ID: ${data.employee_id} &bull; GPS: ${parseFloat(data.latitude).toFixed(5)}, ${parseFloat(data.longitude).toFixed(5)}</div>
+                                <div class="text-xs font-bold text-slate-800 dark:text-slate-100">${data.employee_name}</div>
+                                <div class="text-[10px] text-slate-400 dark:text-slate-500">ID: ${data.employee_id} &bull; GPS: ${parseFloat(data.latitude).toFixed(5)}, ${parseFloat(data.longitude).toFixed(5)}</div>
                             </div>
                         </div>
                         <div class="text-right">
-                            <div class="text-[10px] font-mono font-bold text-indigo-600">${timeLocal}</div>
-                            <div class="text-[9px] text-slate-400 font-semibold">${data.adms_status === 'uploaded' ? '✅ ADMS' : '⏳ Pending'}</div>
+                            <div class="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">${timeLocal}</div>
+                            <div class="text-[9px] text-slate-400 font-semibold dark:text-slate-500">${data.adms_status === 'uploaded' ? '✅ ADMS' : '⏳ Pending'}</div>
                         </div>
                     `;
                     
@@ -180,32 +180,32 @@
                         if (noLogsRow) noLogsRow.remove();
                         
                         const tr = document.createElement('tr');
-                        tr.className = 'hover:bg-slate-50 transition-colors bg-indigo-50/20';
+                        tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors bg-indigo-50/20 dark:bg-indigo-950/10';
                         
                         const dateStr = data.timestamp ? new Date(data.timestamp).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
                         
                         const selfieHtml = data.selfie_filename 
-                            ? `<a href="/ui/selfie/${data.selfie_filename}" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"><i class="ph ph-camera"></i> View</a>` 
-                            : `<span class="text-slate-400">&mdash;</span>`;
+                            ? `<a href="/ui/selfie/${data.selfie_filename}" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800/60 dark:bg-indigo-950/30 dark:text-indigo-400"><i class="ph ph-camera"></i> View</a>` 
+                            : `<span class="text-slate-400 dark:text-slate-500">&mdash;</span>`;
                         
                         const typeBadgeHtml = data.punch_type === 'In'
-                            ? `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">🟢 In</span>`
-                            : `<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">🔴 Out</span>`;
+                            ? `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">🟢 In</span>`
+                            : `<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400">🔴 Out</span>`;
                             
                         const statusBadgeHtml = data.adms_status === 'uploaded'
-                            ? `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✅ Uploaded</span>`
+                            ? `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">✅ Uploaded</span>`
                             : data.adms_status === 'failed'
-                            ? `<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">❌ Failed</span>`
-                            : `<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">⏳ Pending</span>`;
+                            ? `<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400">❌ Failed</span>`
+                            : `<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">⏳ Pending</span>`;
                         
                         tr.innerHTML = `
                             <td class="px-5 py-4">
-                                <strong class="text-slate-800">${data.employee_name}</strong><br>
-                                <span class="text-xs text-slate-400">ID: ${data.employee_id}</span>
+                                <strong class="text-slate-800 dark:text-slate-100">${data.employee_name}</strong><br>
+                                <span class="text-xs text-slate-400 dark:text-slate-500">ID: ${data.employee_id}</span>
                             </td>
-                            <td class="px-5 py-4 text-sm text-slate-700 local-time" data-utc="${data.timestamp}">${dateStr}</td>
+                            <td class="px-5 py-4 text-sm text-slate-700 local-time dark:text-slate-300" data-utc="${data.timestamp}">${dateStr}</td>
                             <td class="px-5 py-4">${typeBadgeHtml}</td>
-                            <td class="px-5 py-4 text-xs text-slate-400 font-mono">${parseFloat(data.latitude).toFixed(5)}, ${parseFloat(data.longitude).toFixed(5)}</td>
+                            <td class="px-5 py-4 text-xs text-slate-400 font-mono dark:text-slate-500">${parseFloat(data.latitude).toFixed(5)}, ${parseFloat(data.longitude).toFixed(5)}</td>
                             <td class="px-5 py-4">${statusBadgeHtml}</td>
                             <td class="px-5 py-4">${selfieHtml}</td>
                         `;
@@ -274,7 +274,7 @@
         const timezone_offset = parseInt(document.getElementById('timezone_offset').value) || 7;
         const board = document.getElementById('testResult');
         board.style.display = 'block';
-        board.className = 'mt-6 p-4 rounded-xl font-mono text-sm border border-slate-200 bg-slate-50 whitespace-pre-wrap';
+        board.className = 'mt-6 p-4 rounded-xl font-mono text-sm border border-slate-200 bg-slate-50 whitespace-pre-wrap dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100';
         board.innerText = '> Sending handshake to ADMS server...\n> SN: ' + sn + ' (' + device_name + ')';
         try {
             const res = await fetch('/ui/test-connection', {
@@ -288,11 +288,11 @@
             });
             const data = await res.json();
             board.className = data.success 
-                ? 'mt-6 p-4 rounded-xl font-mono text-sm border border-emerald-300 bg-emerald-50 text-emerald-800 whitespace-pre-wrap'
-                : 'mt-6 p-4 rounded-xl font-mono text-sm border border-red-300 bg-red-50 text-red-700 whitespace-pre-wrap';
+                ? 'mt-6 p-4 rounded-xl font-mono text-sm border border-emerald-300 bg-emerald-50 text-emerald-800 whitespace-pre-wrap dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400'
+                : 'mt-6 p-4 rounded-xl font-mono text-sm border border-red-300 bg-red-50 text-red-700 whitespace-pre-wrap dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-400';
             board.innerText = '> Status: ' + (data.success ? 'SUCCESS ✅' : 'FAILED ❌') + '\n> ' + data.message;
         } catch(e) {
-            board.className = 'mt-6 p-4 rounded-xl font-mono text-sm border border-red-300 bg-red-50 text-red-700 whitespace-pre-wrap';
+            board.className = 'mt-6 p-4 rounded-xl font-mono text-sm border border-red-300 bg-red-50 text-red-700 whitespace-pre-wrap dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-400';
             board.innerText = '> Error: Could not reach the middleware server.';
         }
     }
@@ -319,11 +319,11 @@
             const statusEl = document.getElementById('statStatus');
             statusEl.innerText = data.last_status.toUpperCase();
             if (data.last_status === 'success') {
-                statusEl.className = 'inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700';
+                statusEl.className = 'inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400';
             } else if (data.last_status.startsWith('failed')) {
-                statusEl.className = 'inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700';
+                statusEl.className = 'inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400';
             } else {
-                statusEl.className = 'inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600';
+                statusEl.className = 'inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400';
             }
         } catch(e) {}
     }
@@ -390,7 +390,7 @@
     async function openDeviceModal(bindingId, currentLabel) {
         document.getElementById('edit_device_id').value = bindingId;
         document.getElementById('edit_device_label').value = currentLabel || '';
-        document.getElementById('deviceBranchesList').innerHTML = '<span class="text-sm text-slate-400">Loading assigned branches...</span>';
+        document.getElementById('deviceBranchesList').innerHTML = '<span class="text-sm text-slate-400 dark:text-slate-500">Loading assigned branches...</span>';
         
         if (_allBranches.length === 0) {
             try {
@@ -414,10 +414,10 @@
             
             const listDiv = document.getElementById('deviceBranchesList');
             if (assignedBranches.length === 0) {
-                listDiv.innerHTML = '<span class="text-sm text-slate-400">No branches assigned yet. This device can punch anywhere!</span>';
+                listDiv.innerHTML = '<span class="text-sm text-slate-400 dark:text-slate-500">No branches assigned yet. This device can punch anywhere!</span>';
             } else {
                 listDiv.innerHTML = assignedBranches.map(b => `
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400">
                         ${b.branch_name}
                         <span onclick="removeDeviceBranchFromModal(${bindingId}, ${b.branch_id})" class="cursor-pointer text-sm font-bold leading-none text-indigo-300 hover:text-indigo-500" title="Remove branch">×</span>
                     </span>
@@ -505,11 +505,11 @@
         if (!btnPrimary || !btnCheckpoint) return;
         
         if (mode === 'primary') {
-            btnPrimary.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-white text-indigo-600 shadow-sm border border-slate-200/50";
-            btnCheckpoint.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-600 hover:bg-slate-50";
+            btnPrimary.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-white text-indigo-600 shadow-sm border border-slate-200/50 dark:bg-slate-900 dark:text-indigo-400 dark:border-slate-800";
+            btnCheckpoint.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40";
         } else {
-            btnPrimary.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-600 hover:bg-slate-50";
-            btnCheckpoint.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-white text-amber-600 shadow-sm border border-slate-200/50";
+            btnPrimary.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40";
+            btnCheckpoint.className = "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-white text-amber-600 shadow-sm border border-slate-200/50 dark:bg-slate-900 dark:text-amber-400 dark:border-slate-800";
         }
     }
 
@@ -680,17 +680,17 @@
         document.getElementById('branchCount').innerText = `${filtered.length} / ${branches.length} branches`;
 
         if (!filtered.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-slate-400">No matching branches.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-slate-400 dark:text-slate-500">No matching branches.</td></tr>';
             return;
         }
 
         tbody.innerHTML = filtered.map(b => `
-            <tr class="${b.is_active ? 'hover:bg-slate-50' : 'opacity-60 hover:bg-slate-50'} transition-colors">
-                <td class="px-5 py-4"><strong class="text-slate-800">${b.name}</strong></td>
-                <td class="px-5 py-4 font-mono text-xs text-slate-500">${b.latitude.toFixed(5)}, ${b.longitude.toFixed(5)}</td>
-                <td class="px-5 py-4 text-sm text-slate-700">${b.radius_meters}m</td>
+            <tr class="${b.is_active ? 'hover:bg-slate-50 dark:hover:bg-slate-800/40' : 'opacity-60 hover:bg-slate-50 dark:hover:bg-slate-800/40'} transition-colors">
+                <td class="px-5 py-4"><strong class="text-slate-800 dark:text-slate-100">${b.name}</strong></td>
+                <td class="px-5 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">${b.latitude.toFixed(5)}, ${b.longitude.toFixed(5)}</td>
+                <td class="px-5 py-4 text-sm text-slate-700 dark:text-slate-300">${b.radius_meters}m</td>
                 <td class="px-5 py-4 text-center">${b.qr_code_enabled ? '<span class="text-emerald-600 font-semibold">✓</span>' : '<span class="text-slate-300">—</span>'}</td>
-                <td class="px-5 py-4 text-center">${b.nfc_enabled ? '<span class="text-indigo-600 font-semibold">✓</span>' : '<span class="text-slate-300">—</span>'}</td>
+                <td class="px-5 py-4 text-center">${b.nfc_enabled ? '<span class="text-indigo-600 font-semibold dark:text-indigo-400">✓</span>' : '<span class="text-slate-300">—</span>'}</td>
                 <td class="px-5 py-4 text-center">
                     <span class="inline-flex items-center gap-1 rounded-full ${b.device_count > 0 ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-400'} px-2.5 py-0.5 text-xs font-semibold">
                         <i class="ph ph-devices"></i> ${b.device_count}
@@ -702,8 +702,8 @@
                     </label>
                 </td>
                 <td class="px-5 py-4 text-right whitespace-nowrap">
-                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="editBranch(${b.id})">✏️ Edit</button>
-                    <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors" onclick="confirmDeleteBranch(${b.id}, '${b.name.replace(/'/g, "\\'")}')">🗑️</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400" onclick="editBranch(${b.id})">✏️ Edit</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/30" onclick="confirmDeleteBranch(${b.id}, '${b.name.replace(/'/g, "\\'")}')">🗑️</button>
                 </td>
             </tr>`).join('');
     }
@@ -752,7 +752,7 @@
         container.innerHTML = '';
         
         if (!data) {
-            container.innerHTML = '<span class="text-xs text-slate-400 text-center">Live QR</span>';
+            container.innerHTML = '<span class="text-xs text-slate-400 text-center dark:text-slate-500">Live QR</span>';
             return;
         }
         
@@ -795,7 +795,7 @@
         const textEl = document.getElementById('nfcPreviewText');
         if (!textEl) return;
         textEl.innerText = data ? data.length > 18 ? data.substring(0, 16) + '…' : data : 'NFC Tag';
-        textEl.className = data ? 'text-xs text-indigo-700 text-center' : 'text-xs text-slate-400 text-center';
+        textEl.className = data ? 'text-xs text-indigo-700 text-center dark:text-indigo-400' : 'text-xs text-slate-400 text-center dark:text-slate-500';
     }
 
     function generateNfcTag() {
@@ -1021,7 +1021,7 @@
 
     function confirmDeleteBranch(id, name) {
         showConfirm(
-            `Delete branch <strong>${name}</strong>?<br><small class="text-slate-400">This cannot be undone. Remove all device assignments first before deleting.</small>`,
+            `Delete branch <strong>${name}</strong>?<br><small class="text-slate-400 dark:text-slate-500">This cannot be undone. Remove all device assignments first before deleting.</small>`,
             async () => {
                 try {
                     const res = await fetch(`/ui/branches/${id}`, {method: 'DELETE'});
@@ -1054,7 +1054,7 @@
 
     async function loadCheckpoints(branchId) {
         const tbody = document.getElementById('checkpointsTableBody');
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-slate-400">⏳ Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-slate-400 dark:text-slate-500">⏳ Loading...</td></tr>';
         
         try {
             // Clear existing checkpoint layers from the map
@@ -1068,7 +1068,7 @@
             const data = await res.json();
             
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-slate-400">No check-in checkpoints configured yet. This branch only uses the primary center coordinate.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-sm text-slate-400 dark:text-slate-500">No check-in checkpoints configured yet. This branch only uses the primary center coordinate.</td></tr>';
                 const badge = document.getElementById('checkpointCountBadge');
                 if (badge) badge.innerText = '0 Points';
                 return;
@@ -1094,7 +1094,7 @@
                         title: cp.name
                     }).addTo(branchMap);
                     
-                    marker.bindPopup(`<b>Checkpoint: ${cp.name}</b><br>Radius: ${cp.radius_meters}m<br>Status: ${cp.is_active ? 'Active' : 'Inactive'}<br><small class="text-slate-400">Drag to relocate and click 'Add Point' to update.</small>`);
+                    marker.bindPopup(`<b>Checkpoint: ${cp.name}</b><br>Radius: ${cp.radius_meters}m<br>Status: ${cp.is_active ? 'Active' : 'Inactive'}<br><small class="text-slate-400 dark:text-slate-500">Drag to relocate and click 'Add Point' to update.</small>`);
                     
                     marker.on('dragend', function() {
                         const pos = marker.getLatLng();
@@ -1112,17 +1112,17 @@
             }
 
             tbody.innerHTML = data.map(cp => `
-                <tr class="${cp.is_active ? 'hover:bg-slate-50' : 'opacity-60 hover:bg-slate-50'} transition-colors">
-                    <td class="px-3 py-2.5 text-sm font-semibold text-slate-800">${cp.name}</td>
-                    <td class="px-3 py-2.5 font-mono text-xs text-slate-500">${cp.latitude.toFixed(5)}, ${cp.longitude.toFixed(5)}</td>
-                    <td class="px-3 py-2.5 text-sm text-center text-slate-700">${cp.radius_meters}m</td>
+                <tr class="${cp.is_active ? 'hover:bg-slate-50 dark:hover:bg-slate-800/40' : 'opacity-60 hover:bg-slate-50 dark:hover:bg-slate-800/40'} transition-colors">
+                    <td class="px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100">${cp.name}</td>
+                    <td class="px-3 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">${cp.latitude.toFixed(5)}, ${cp.longitude.toFixed(5)}</td>
+                    <td class="px-3 py-2.5 text-sm text-center text-slate-700 dark:text-slate-300">${cp.radius_meters}m</td>
                     <td class="px-3 py-2.5 text-center">
                         <label class="cursor-pointer" onclick="toggleCheckpointStatus(${branchId}, ${cp.id}, ${cp.is_active})">
                             <span class="toggle-slider ${cp.is_active ? 'active' : 'inactive'}" style="width:32px;height:16px;"></span>
                         </label>
                     </td>
                     <td class="px-3 py-2.5 text-right">
-                        <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors" onclick="deleteCheckpoint(${branchId}, ${cp.id})">🗑️</button>
+                        <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/30" onclick="deleteCheckpoint(${branchId}, ${cp.id})">🗑️</button>
                     </td>
                 </tr>
             `).join('');
@@ -1214,16 +1214,16 @@
     let _generatedKey = '';
 
     function expiryBadgeHtml(k) {
-        if (!k.expires_at) return '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Never</span>';
+        if (!k.expires_at) return '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">Never</span>';
         if (k.expiry_status === 'expired') {
-            return '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">⛔ Expired</span>';
+            return '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400">⛔ Expired</span>';
         }
         if (k.expiry_status === 'expiring_soon') {
             const days = k.expires_in_days;
             const label = days === 0 ? 'Expires today' : days < 0 ? 'Expired' : `Expires in ${days}d`;
-            return `<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">⚠️ ${label}</span>`;
+            return `<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">⚠️ ${label}</span>`;
         }
-        return `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">✅ ${k.expires_in_days}d</span>`;
+        return `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">✅ ${k.expires_in_days}d</span>`;
     }
 
     async function loadApiKeys() {
@@ -1231,7 +1231,7 @@
         const keys = await res.json();
         const tbody = document.getElementById('keysTableBody');
         if (!keys.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-slate-400">No API keys yet. Generate one above.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-slate-400 dark:text-slate-500">No API keys yet. Generate one above.</td></tr>';
             return;
         }
         tbody.innerHTML = keys.map(k => {
@@ -1241,25 +1241,25 @@
             const lastIp = k.last_used_ip || '—';
             const actions = [];
             if (k.is_active && k.expiry_status !== 'expired') {
-                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="rotateKey(${k.id})" title="Rotate key (grace period)">🔄 Rotate</button>`);
-                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1" onclick="revokeKey(${k.id})" title="Revoke">Revoke</button>`);
+                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400" onclick="rotateKey(${k.id})" title="Rotate key (grace period)">🔄 Rotate</button>`);
+                actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/30" onclick="revokeKey(${k.id})" title="Revoke">Revoke</button>`);
             } else {
                 actions.push(`<button class="inline-flex items-center gap-1 rounded-lg bg-red-500 border border-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors ml-1" onclick="deleteKey(${k.id})" title="Permanently delete">Delete</button>`);
             }
-            actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors ml-1" onclick="renameKey(${k.id},'${k.label.replace(/'/g,"\\'")}')" title="Rename">✏️</button>`);
+            actions.push(`<button class="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ml-1 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/40" onclick="renameKey(${k.id},'${k.label.replace(/'/g,"\\'")}')" title="Rename">✏️</button>`);
             return `
-            <tr class="hover:bg-slate-50 transition-colors">
-                <td class="px-5 py-4"><strong class="text-slate-800">${k.label}</strong></td>
-                <td class="px-5 py-4 font-mono text-sm text-indigo-600">${k.key_preview}</td>
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors dark:hover:bg-slate-800/40">
+                <td class="px-5 py-4"><strong class="text-slate-800 dark:text-slate-100">${k.label}</strong></td>
+                <td class="px-5 py-4 font-mono text-sm text-indigo-600 dark:text-indigo-400">${k.key_preview}</td>
                 <td class="px-5 py-4">
                     ${k.is_active && k.expiry_status !== 'expired'
-                        ? '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Active</span>'
-                        : '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">Revoked</span>'}
+                        ? '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">Active</span>'
+                        : '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400">Revoked</span>'}
                 </td>
                 <td class="px-5 py-4">${expiryBadgeHtml(k)}</td>
-                <td class="px-5 py-4 text-center text-sm text-slate-700">${k.device_count ?? 0}</td>
-                <td class="px-5 py-4 text-sm text-slate-400">${lastUsed}</td>
-                <td class="px-5 py-4 text-xs font-mono text-slate-400">${lastIp}</td>
+                <td class="px-5 py-4 text-center text-sm text-slate-700 dark:text-slate-300">${k.device_count ?? 0}</td>
+                <td class="px-5 py-4 text-sm text-slate-400 dark:text-slate-500">${lastUsed}</td>
+                <td class="px-5 py-4 text-xs font-mono text-slate-400 dark:text-slate-500">${lastIp}</td>
                 <td class="px-5 py-4 text-right whitespace-nowrap">${actions.join('')}</td>
             </tr>`;
         }).join('');
@@ -1400,21 +1400,21 @@
         currentPunchTypes = await res.json();
         const tbody = document.getElementById('punchTypesTbody');
         tbody.innerHTML = currentPunchTypes.map(pt => `
-            <tr class="hover:bg-slate-50 transition-colors">
-                <td class="px-5 py-4"><strong class="text-slate-800">${pt.code}</strong></td>
-                <td class="px-5 py-4 text-sm text-slate-700">${pt.label}</td>
-                <td class="px-5 py-4"><span class="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">${pt.adms_status_code}</span></td>
-                <td class="px-5 py-4 text-sm text-slate-600"><i class="ph ph-${pt.icon}"></i> ${pt.icon}</td>
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors dark:hover:bg-slate-800/40">
+                <td class="px-5 py-4"><strong class="text-slate-800 dark:text-slate-100">${pt.code}</strong></td>
+                <td class="px-5 py-4 text-sm text-slate-700 dark:text-slate-300">${pt.label}</td>
+                <td class="px-5 py-4"><span class="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600 dark:bg-slate-800 dark:text-slate-400">${pt.adms_status_code}</span></td>
+                <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-400"><i class="ph ph-${pt.icon}"></i> ${pt.icon}</td>
                 <td class="px-5 py-4">
                     <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded" style="background-color:${pt.color_hex};"></div>
-                        <span class="text-sm text-slate-600">${pt.color_hex}</span>
+                        <span class="text-sm text-slate-600 dark:text-slate-400">${pt.color_hex}</span>
                     </div>
                 </td>
                 <td class="px-5 py-4">${pt.requires_geofence ? '<span class="text-emerald-600">✅</span>' : '<span class="text-slate-300">❌</span>'}</td>
                 <td class="px-5 py-4 text-right whitespace-nowrap">
-                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="editPunchType('${pt.code}')">Edit</button>
-                    <button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1" onclick="deletePunchType('${pt.code}')">Delete</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400" onclick="editPunchType('${pt.code}')">Edit</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1 dark:bg-red-950/30 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/30" onclick="deletePunchType('${pt.code}')">Delete</button>
                 </td>
             </tr>`).join('');
     }
@@ -1501,20 +1501,20 @@
         tbody.innerHTML = currentUsers.map(u => {
             const roleLabels = {
                 'superadmin': '<span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700">Super Admin</span>',
-                'admin': '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Admin</span>',
-                'manager': '<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Manager</span>',
-                'operator': '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Operator</span>'
+                'admin': '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">Admin</span>',
+                'manager': '<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">Manager</span>',
+                'operator': '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">Operator</span>'
             };
             const roleBadge = roleLabels[u.role] || roleLabels['admin'];
             
             return `
-            <tr class="hover:bg-slate-50 transition-colors">
-                <td class="px-5 py-4"><strong class="text-slate-800">${u.username}</strong></td>
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors dark:hover:bg-slate-800/40">
+                <td class="px-5 py-4"><strong class="text-slate-800 dark:text-slate-100">${u.username}</strong></td>
                 <td class="px-5 py-4">${roleBadge}</td>
-                <td class="px-5 py-4 text-sm text-slate-400">${new Date(u.created_at).toLocaleDateString()}</td>
+                <td class="px-5 py-4 text-sm text-slate-400 dark:text-slate-500">${new Date(u.created_at).toLocaleDateString()}</td>
                 <td class="px-5 py-4 text-right">
-                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors" onclick="editUser(${u.id})">Edit</button>
-                    ${u.username !== 'admin' ? `<button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1" onclick="deleteUser(${u.id})">Delete</button>` : '<span class="text-xs text-slate-400 ml-2">Root User</span>'}
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400" onclick="editUser(${u.id})">Edit</button>
+                    ${u.username !== 'admin' ? `<button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors ml-1 dark:bg-red-950/30 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/30" onclick="deleteUser(${u.id})">Delete</button>` : '<span class="text-xs text-slate-400 ml-2 dark:text-slate-500">Root User</span>'}
                 </td>
             </tr>`;
         }).join('');
@@ -1616,7 +1616,7 @@
         document.getElementById('devicesListSection').style.display = 'none';
         document.getElementById('deviceFormSection').style.display = 'none';
         document.getElementById('assignFormSection').style.display = 'block';
-        document.getElementById('employeeList').innerHTML = '<div class="p-4 text-center text-sm text-slate-400">Loading Employees...</div>';
+        document.getElementById('employeeList').innerHTML = '<div class="p-4 text-center text-sm text-slate-400 dark:text-slate-500">Loading Employees...</div>';
         
         try {
             const res = await fetch('/ui/employees/list');
@@ -1630,13 +1630,13 @@
     function renderEmployeeList(list) {
         const container = document.getElementById('employeeList');
         if (list.length === 0) {
-            container.innerHTML = '<div class="p-4 text-center text-sm text-slate-400">No employees found.</div>';
+            container.innerHTML = '<div class="p-4 text-center text-sm text-slate-400 dark:text-slate-500">No employees found.</div>';
             return;
         }
         container.innerHTML = list.map(e => `
             <div class="employee-item" onclick="selectEmployee('${e.id}', this)">
-                <strong class="text-slate-800">${e.name}</strong><br>
-                <span class="text-xs text-slate-400">PIN: ${e.id} | ${e.dept}</span>
+                <strong class="text-slate-800 dark:text-slate-100">${e.name}</strong><br>
+                <span class="text-xs text-slate-400 dark:text-slate-500">PIN: ${e.id} | ${e.dept}</span>
             </div>
         `).join('');
     }
@@ -1699,7 +1699,7 @@
         
         document.getElementById('onboard_emp_id').value = '';
         document.getElementById('onboard_emp_search').value = '';
-        document.getElementById('onboard_emp_dropdown').innerHTML = '<div class="p-2.5 text-sm text-slate-400">Loading employees...</div>';
+        document.getElementById('onboard_emp_dropdown').innerHTML = '<div class="p-2.5 text-sm text-slate-400 dark:text-slate-500">Loading employees...</div>';
         
         document.getElementById('onboard_branch_id').innerHTML = '<option value="">Loading branch sites...</option>';
         document.getElementById('onboard_key_id').innerHTML = '<option value="">Loading API keys...</option>';
@@ -1758,7 +1758,7 @@
     function renderOnboardEmpDropdown() {
         const dropdown = document.getElementById('onboard_emp_dropdown');
         if (!filteredEmployees || filteredEmployees.length === 0) {
-            dropdown.innerHTML = '<div class="p-2.5 text-sm text-slate-400">No matches found</div>';
+            dropdown.innerHTML = '<div class="p-2.5 text-sm text-slate-400 dark:text-slate-500">No matches found</div>';
             return;
         }
         

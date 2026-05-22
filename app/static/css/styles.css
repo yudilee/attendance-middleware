@@ -122,6 +122,22 @@
     border-left: 4px solid #4f46e5;
 }
 
+/* Dark mode for Employee Picker */
+.dark .employee-item {
+    border-bottom: 1px solid #334155;
+    color: #f1f5f9;
+}
+
+.dark .employee-item:hover {
+    background: #1e293b;
+}
+
+.dark .employee-item.selected {
+    background: rgba(99, 102, 241, 0.15);
+    border-left: 4px solid #6366f1;
+    color: #ffffff;
+}
+
 /* ── Toggle Switch ───────────────────────────────────────────────────── */
 
 .toggle-slider {

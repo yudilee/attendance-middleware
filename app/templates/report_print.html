@@ -34,15 +34,15 @@
         }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased font-sans p-6 min-h-screen">
+<body class="bg-slate-50 text-slate-800 antialiased font-sans p-6 min-h-screen dark:bg-slate-800/50 dark:text-slate-100">
 
     <!-- Top Action Bar (no-print) -->
-    <div class="no-print max-w-6xl mx-auto mb-6 flex justify-between items-center bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+    <div class="no-print max-w-6xl mx-auto mb-6 flex justify-between items-center bg-white border border-slate-200 rounded-xl p-4 shadow-sm dark:bg-slate-900 dark:border-slate-800">
         <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-slate-500">Previewing Print Document</span>
+            <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Previewing Print Document</span>
         </div>
         <div class="flex gap-3">
-            <button onclick="window.close()" class="px-4 py-2 text-sm font-semibold border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-700 transition">
+            <button onclick="window.close()" class="px-4 py-2 text-sm font-semibold border border-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 transition dark:border-slate-700 dark:hover:bg-slate-800/40 dark:text-slate-300">
                 Close Preview
             </button>
             <button onclick="window.print()" class="px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm">
@@ -52,55 +52,55 @@
     </div>
 
     <!-- Main Report Container -->
-    <div class="max-w-6xl mx-auto bg-white border border-slate-200 rounded-2xl shadow-sm p-8 md:p-12 print:border-none print:shadow-none print:p-0">
+    <div class="max-w-6xl mx-auto bg-white border border-slate-200 rounded-2xl shadow-sm p-8 md:p-12 print:border-none print:shadow-none print:p-0 dark:bg-slate-900 dark:border-slate-800">
         <!-- Header -->
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-6 mb-8 gap-4">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-6 mb-8 gap-4 dark:border-slate-800">
             <div>
                 <h1 class="text-2xl font-extrabold tracking-tight text-slate-900">Virtual Attendance Report</h1>
-                <p class="text-sm text-slate-500 mt-1">Generated on {{ generated_at.strftime('%Y-%m-%d %H:%M:%S') }} Local</p>
+                <p class="text-sm text-slate-500 mt-1 dark:text-slate-400">Generated on {{ generated_at.strftime('%Y-%m-%d %H:%M:%S') }} Local</p>
             </div>
             <div class="text-left md:text-right">
-                <span class="inline-block text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-700 px-3 py-1 rounded-full mb-1">
+                <span class="inline-block text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-700 px-3 py-1 rounded-full mb-1 dark:bg-slate-800 dark:text-slate-300">
                     System Report
                 </span>
-                <p class="text-xs text-slate-400">Middleware Version 1.0</p>
+                <p class="text-xs text-slate-400 dark:text-slate-500">Middleware Version 1.0</p>
             </div>
         </div>
 
         <!-- Filter Details & Stats -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div class="bg-slate-50 rounded-xl p-5 border border-slate-100">
-                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Report Scope & Parameters</h3>
+            <div class="bg-slate-50 rounded-xl p-5 border border-slate-100 dark:bg-slate-800/50 dark:border-slate-800/50">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 dark:text-slate-500">Report Scope & Parameters</h3>
                 <table class="w-full text-sm">
                     <tr class="border-b border-slate-200/50 py-1.5">
-                        <td class="text-slate-500 py-1.5 pr-4">Branch:</td>
-                        <td class="font-semibold text-slate-800">{{ branch_name }}</td>
+                        <td class="text-slate-500 py-1.5 pr-4 dark:text-slate-400">Branch:</td>
+                        <td class="font-semibold text-slate-800 dark:text-slate-100">{{ branch_name }}</td>
                     </tr>
                     <tr class="border-b border-slate-200/50 py-1.5">
-                        <td class="text-slate-500 py-1.5 pr-4">Start Date:</td>
-                        <td class="font-semibold text-slate-800">{{ start_date or 'Beginning of time' }}</td>
+                        <td class="text-slate-500 py-1.5 pr-4 dark:text-slate-400">Start Date:</td>
+                        <td class="font-semibold text-slate-800 dark:text-slate-100">{{ start_date or 'Beginning of time' }}</td>
                     </tr>
                     <tr class="py-1.5">
-                        <td class="text-slate-500 py-1.5 pr-4">End Date:</td>
-                        <td class="font-semibold text-slate-800">{{ end_date or 'Present' }}</td>
+                        <td class="text-slate-500 py-1.5 pr-4 dark:text-slate-400">End Date:</td>
+                        <td class="font-semibold text-slate-800 dark:text-slate-100">{{ end_date or 'Present' }}</td>
                     </tr>
                 </table>
             </div>
 
-            <div class="bg-slate-50 rounded-xl p-5 border border-slate-100">
-                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Report Summary</h3>
+            <div class="bg-slate-50 rounded-xl p-5 border border-slate-100 dark:bg-slate-800/50 dark:border-slate-800/50">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 dark:text-slate-500">Report Summary</h3>
                 <div class="grid grid-cols-3 gap-4 text-center mt-1">
                     <div>
-                        <div class="text-2xl font-extrabold text-slate-800">{{ total_count }}</div>
-                        <div class="text-[10px] uppercase font-bold text-slate-400">Total Punches</div>
+                        <div class="text-2xl font-extrabold text-slate-800 dark:text-slate-100">{{ total_count }}</div>
+                        <div class="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Total Punches</div>
                     </div>
                     <div>
                         <div class="text-2xl font-extrabold text-emerald-600">{{ in_count }}</div>
-                        <div class="text-[10px] uppercase font-bold text-slate-400">In / Entry</div>
+                        <div class="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">In / Entry</div>
                     </div>
                     <div>
                         <div class="text-2xl font-extrabold text-red-500">{{ out_count }}</div>
-                        <div class="text-[10px] uppercase font-bold text-slate-400">Out / Exit</div>
+                        <div class="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Out / Exit</div>
                     </div>
                 </div>
             </div>
@@ -110,42 +110,42 @@
         <div class="overflow-x-auto">
             <table class="w-full text-sm border-collapse">
                 <thead>
-                    <tr class="border-b border-slate-300 text-left bg-slate-50">
-                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs">Employee ID</th>
-                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs">Full Name</th>
-                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs">Timestamp (Local)</th>
-                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs">Type</th>
-                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs">Location / Branch</th>
-                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs">Coordinates</th>
-                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs">Sync Status</th>
+                    <tr class="border-b border-slate-300 text-left bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs dark:text-slate-300">Employee ID</th>
+                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs dark:text-slate-300">Full Name</th>
+                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs dark:text-slate-300">Timestamp (Local)</th>
+                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs dark:text-slate-300">Type</th>
+                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs dark:text-slate-300">Location / Branch</th>
+                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs dark:text-slate-300">Coordinates</th>
+                        <th class="px-4 py-3 font-bold text-slate-700 uppercase tracking-wider text-xs dark:text-slate-300">Sync Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
                     {% for log in logs %}
-                    <tr class="hover:bg-slate-50/50 transition">
-                        <td class="px-4 py-3 font-mono text-xs text-slate-600 font-semibold">{{ log.employee_id }}</td>
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40/50 transition">
+                        <td class="px-4 py-3 font-mono text-xs text-slate-600 font-semibold dark:text-slate-400">{{ log.employee_id }}</td>
                         <td class="px-4 py-3 font-semibold text-slate-900">{{ log.employee_name }}</td>
-                        <td class="px-4 py-3 text-slate-700 local-time" data-utc="{{ log.timestamp.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td class="px-4 py-3 text-slate-700 local-time dark:text-slate-300" data-utc="{{ log.timestamp.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                         <td class="px-4 py-3">
                             {% if log.punch_type == 'In' %}
-                            <span class="inline-flex items-center text-xs font-bold text-emerald-700">In</span>
+                            <span class="inline-flex items-center text-xs font-bold text-emerald-700 dark:text-emerald-400">In</span>
                             {% else %}
                             <span class="inline-flex items-center text-xs font-bold text-red-600">Out</span>
                             {% endif %}
                         </td>
-                        <td class="px-4 py-3 text-slate-700">{{ log.resolved_branch_name }}</td>
-                        <td class="px-4 py-3 text-xs font-mono text-slate-400">
+                        <td class="px-4 py-3 text-slate-700 dark:text-slate-300">{{ log.resolved_branch_name }}</td>
+                        <td class="px-4 py-3 text-xs font-mono text-slate-400 dark:text-slate-500">
                             {{ "%.5f"|format(log.latitude) }}, {{ "%.5f"|format(log.longitude) }}
                         </td>
                         <td class="px-4 py-3">
-                            <span class="text-xs font-semibold capitalize {% if log.adms_status == 'uploaded' %}text-emerald-600{% elif log.adms_status == 'failed' %}text-red-500{% else %}text-amber-500{% endif %}">
+                            <span class="text-xs font-semibold capitalize {% if log.adms_status == 'uploaded' %}text-emerald-600{% elif 'failed' %}text-red-500{% else %}text-amber-500{% endif %}">
                                 {{ log.adms_status }}
                             </span>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center py-12 text-slate-400 italic">
+                        <td colspan="7" class="text-center py-12 text-slate-400 italic dark:text-slate-500">
                             No attendance logs matching the filters were found.
                         </td>
                     </tr>
@@ -155,10 +155,10 @@
         </div>
 
         <!-- Footer Signatures (Print Only) -->
-        <div class="hidden print:flex justify-between items-center mt-24 border-t border-slate-200 pt-8 text-xs text-slate-400">
+        <div class="hidden print:flex justify-between items-center mt-24 border-t border-slate-200 pt-8 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
             <div>
                 <p>Approved By:</p>
-                <div class="h-16 w-48 border-b border-slate-300"></div>
+                <div class="h-16 w-48 border-b border-slate-300 dark:border-slate-700"></div>
                 <p class="mt-2 font-semibold">Operations / HR Manager</p>
             </div>
             <div class="text-right">
