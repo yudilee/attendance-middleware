@@ -29,13 +29,14 @@ from app.services.auth_ui import (
     get_current_admin,
 )
 from app.services.adms_scraper import sync_employees_from_adms
-from app.services.adms_service import get_adms_config, test_adms_connection, _handshake_state
+from app.services.adms_service import get_adms_config, test_adms_connection, _handshake_state, delete_employee_from_adms
 from app.api.v1.schemas import (
     ADMSConfigRequest, ADMSCredentialPayload, PunchTypeResponse,
     PunchTypePayload, BranchRequest, AppConfigRequest,
     ProfileUpdateRequest, CreateUserRequest, DeviceLabelRequest,
     CorrectionRequest, CorrectionReview, SupervisorAssignment,
     OnboardGenerateRequest, CheckpointCreate, CheckpointUpdate,
+    EmployeeCreatePayload, EmployeeUpdatePayload, EmployeeResponse,
 )
 from app.cache import invalidate_cache
 
@@ -1022,7 +1023,7 @@ async def get_adms_sync_info(
         "last_sync": get_val("last_adms_sync_time"),
         "last_count": get_val("last_adms_sync_count"),
         "last_status": get_val("last_adms_sync_status"),
-        "total_employees": db.query(Employee).count(),
+        "total_employees": db.query(Employee).filter(Employee.is_deleted == False).count(),
         "heartbeat_connected": get_val("adms_connected", "false") == "true",
         "heartbeat_last_contact": get_val("adms_last_contact", ""),
         "heartbeat_last_error": get_val("adms_last_error", ""),
@@ -1094,7 +1095,7 @@ async def get_employee_count(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ):
-    return {"count": db.query(Employee).count()}
+    return {"count": db.query(Employee).filter(Employee.is_deleted == False).count()}
 
 
 @router.get("/ui/employees/list")
@@ -1102,8 +1103,250 @@ async def list_employees(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(get_current_admin),
 ):
-    emps = db.query(Employee).order_by(Employee.full_name).all()
+    emps = db.query(Employee).filter(Employee.is_deleted == False).order_by(Employee.full_name).all()
     return [{"id": e.employee_id, "name": e.full_name, "dept": e.department} for e in emps]
+
+
+@router.get("/ui/employees", response_model=list[EmployeeResponse])
+async def list_employees_detailed(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """
+    Get detailed list of employees including device count and ADMS registration status.
+    Filters out soft-deleted employees.
+    """
+    # 1. Fetch active employees
+    emps = db.query(Employee).filter(Employee.is_deleted == False).order_by(Employee.full_name).all()
+    
+    # 2. Count active bindings for each employee
+    active_bindings = db.query(DeviceBinding.employee_id, func.count(DeviceBinding.id)).\
+        filter(DeviceBinding.is_active == True).\
+        group_by(DeviceBinding.employee_id).all()
+    device_counts = {emp_id: count for emp_id, count in active_bindings if emp_id}
+
+    # 3. Get ADMS registered employee list
+    adms_registered = db.query(ADMSRegisteredEmployee.employee_id).all()
+    adms_registered_set = {r[0] for r in adms_registered if r[0]}
+
+    result = []
+    for e in emps:
+        result.append(EmployeeResponse(
+            employee_id=e.employee_id,
+            full_name=e.full_name,
+            department=e.department,
+            is_active=e.is_active,
+            is_deleted=e.is_deleted,
+            last_synced=e.last_synced,
+            device_count=device_counts.get(e.employee_id, 0),
+            adms_registered=(e.employee_id in adms_registered_set)
+        ))
+    return result
+
+
+@router.post("/ui/employees")
+async def create_employee(
+    payload: EmployeeCreatePayload,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """
+    Create a new employee locally.
+    Validates unique employee_id and runs registration on ADMS in the background.
+    """
+    import re
+    # Validate PIN is digits only
+    if not re.match(r"^\d+$", payload.employee_id):
+        raise HTTPException(status_code=400, detail="Employee ID (PIN) must contain digits only.")
+    
+    # Check if duplicate PIN exists
+    existing = db.query(Employee).filter(Employee.employee_id == payload.employee_id).first()
+    if existing:
+        if existing.is_deleted:
+            # Re-activate soft-deleted employee if they create it again
+            existing.is_deleted = False
+            existing.full_name = payload.full_name
+            existing.department = payload.department
+            existing.is_active = payload.is_active
+            existing.last_synced = datetime.utcnow()
+            db.commit()
+            db.refresh(existing)
+            logger.info("employee_reactivated", employee_id=payload.employee_id, admin=admin.username)
+        else:
+            raise HTTPException(status_code=400, detail=f"Employee ID {payload.employee_id} already exists.")
+    else:
+        new_emp = Employee(
+            employee_id=payload.employee_id,
+            full_name=payload.full_name,
+            department=payload.department,
+            is_active=payload.is_active,
+            is_deleted=False
+        )
+        db.add(new_emp)
+        db.commit()
+        logger.info("employee_created", employee_id=payload.employee_id, admin=admin.username)
+
+    # ── Auto-register employee on ADMS asynchronously if active ──
+    if payload.is_active:
+        import httpx
+        from app.services.adms_service import register_employee_on_adms
+        server_url, sn, _ = get_adms_config()
+        if server_url:
+            async def _bg_reg():
+                try:
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        await register_employee_on_adms(client, server_url, sn, payload.employee_id, payload.full_name)
+                except Exception as e:
+                    logger.warning("adms_bg_registration_failed", employee_id=payload.employee_id, error=str(e))
+            
+            import asyncio
+            asyncio.create_task(_bg_reg())
+
+    return {"status": "success", "message": "Employee created successfully"}
+
+
+@router.put("/ui/employees/{employee_id}")
+async def update_employee(
+    employee_id: str,
+    payload: EmployeeUpdatePayload,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """
+    Update local employee data.
+    Aligns changes with the ADMS server.
+    """
+    emp = db.query(Employee).filter(Employee.employee_id == employee_id, Employee.is_deleted == False).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    status_changed = False
+    name_changed = False
+    
+    if payload.full_name is not None and payload.full_name != emp.full_name:
+        emp.full_name = payload.full_name
+        name_changed = True
+        
+    if payload.department is not None:
+        emp.department = payload.department
+        
+    if payload.is_active is not None and payload.is_active != emp.is_active:
+        emp.is_active = payload.is_active
+        status_changed = True
+
+    emp.last_synced = datetime.utcnow()
+    db.commit()
+
+    logger.info("employee_updated", employee_id=employee_id, admin=admin.username)
+
+    # If employee is deactivated, invalidate caches for their device bindings
+    if status_changed and not emp.is_active:
+        bindings = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).all()
+        for binding in bindings:
+            await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
+
+    # ── Aligns changes with ADMS asynchronously ──
+    # If the name or status changed, we update their record on the ADMS server via OPERLOG push
+    if name_changed or (status_changed and emp.is_active):
+        import httpx
+        from app.services.adms_service import register_employee_on_adms
+        server_url, sn, _ = get_adms_config()
+        if server_url:
+            async def _bg_sync():
+                try:
+                    # Remove local tracker so register_employee_on_adms forces a push
+                    local_db = SessionLocal()
+                    try:
+                        existing = local_db.query(ADMSRegisteredEmployee).filter(
+                            ADMSRegisteredEmployee.employee_id == employee_id
+                        ).first()
+                        if existing:
+                            local_db.delete(existing)
+                            local_db.commit()
+                    finally:
+                        local_db.close()
+
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        await register_employee_on_adms(client, server_url, sn, employee_id, emp.full_name)
+                except Exception as e:
+                    logger.warning("adms_bg_sync_failed", employee_id=employee_id, error=str(e))
+            
+            import asyncio
+            asyncio.create_task(_bg_sync())
+
+    return {"status": "success", "message": "Employee updated successfully"}
+
+
+@router.delete("/ui/employees/{employee_id}")
+async def soft_delete_employee(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """
+    Soft-deletes employee from local database (marks is_deleted = True, is_active = False).
+    Cascade deletes device bindings, supervisor assignments, ADMSRegisteredEmployee records,
+    and invalidates all cache. Keeps the ADMS server intact.
+    """
+    emp = db.query(Employee).filter(Employee.employee_id == employee_id, Employee.is_deleted == False).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    # 1. Soft-delete employee
+    emp.is_deleted = True
+    emp.is_active = False
+    emp.last_synced = datetime.utcnow()
+
+    # 2. Cascade delete device bindings and clear cache
+    bindings = db.query(DeviceBinding).filter(DeviceBinding.employee_id == employee_id).all()
+    for binding in bindings:
+        await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
+        db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).delete()
+        db.delete(binding)
+
+    # 3. Cascade delete supervisor assignments
+    db.query(EmployeeSupervisor).filter(
+        (EmployeeSupervisor.supervisor_id == employee_id) |
+        (EmployeeSupervisor.employee_id == employee_id)
+    ).delete()
+
+    # 4. Remove from ADMS local tracking so next sync is clean
+    adms_track = db.query(ADMSRegisteredEmployee).filter(
+        ADMSRegisteredEmployee.employee_id == employee_id
+    ).first()
+    if adms_track:
+        db.delete(adms_track)
+
+    db.commit()
+    logger.info("employee_soft_deleted", employee_id=employee_id, admin=admin.username)
+    
+    return {"status": "success", "message": f"Employee {employee_id} soft-deleted and app access cascade-revoked"}
+
+
+@router.post("/ui/employees/{employee_id}/delete-from-adms")
+async def delete_employee_from_adms_endpoint(
+    employee_id: str,
+    current_user: AdminUser = Depends(get_current_admin),
+):
+    """
+    Delete an employee from the ADMS server.
+    Sends a delete command via the ZKTeco device protocol (OPERLOG).
+    Does NOT delete the employee from the local database.
+    """
+    import httpx
+
+    server_url, sn, _ = get_adms_config()
+    if not server_url:
+        raise HTTPException(status_code=400, detail="ADMS server not configured")
+
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        success = await delete_employee_from_adms(client, server_url, sn, employee_id)
+
+    if success:
+        logger.info(f"🗑️ Admin {current_user.username} deleted employee {employee_id} from ADMS")
+        return {"status": "success", "message": f"Delete command sent for {employee_id}"}
+    else:
+        raise HTTPException(status_code=502, detail=f"Failed to delete {employee_id} from ADMS")
 
 
 # ═══════════════════ SELFIE SERVING ═══════════════════

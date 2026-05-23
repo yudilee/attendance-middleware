@@ -170,6 +170,7 @@ def test_submit_punch_geofencing_with_checkpoints(client, db_session, auth_heade
     # Update the "in" punch type to require geofence
     pt = db_session.query(PunchType).filter(PunchType.code == "in").first()
     pt.requires_geofence = True
+    db_session.commit()
 
     # Main branch is at latitude=-6.2, longitude=106.8, radius=100m.
     # 1. A punch at exact center (-6.2, 106.8) should succeed.
@@ -225,6 +226,11 @@ def test_submit_punch_geofencing_with_checkpoints(client, db_session, auth_heade
         is_active=True
     )
     db_session.add(checkpoint)
+    db_session.commit()
+
+    # Clear previous successful punch logs to bypass 5-minute duplicate window check for res3
+    from app.database.models import PunchLog
+    db_session.query(PunchLog).delete()
     db_session.commit()
 
     # 4. Now, the same punch at -6.19, 106.8 should succeed because it lies within the active checkpoint!

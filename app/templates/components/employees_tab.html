@@ -1,0 +1,105 @@
+<!-- ═══════════════════ EMPLOYEES TAB ═══════════════════ -->
+<div id="employees" class="tab-content hidden animate-fade-in">
+    <!-- Header Controls and Search -->
+    <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <!-- Search and Filters -->
+        <div class="relative flex-1 max-w-md">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
+                <i class="ph ph-magnifying-glass text-lg"></i>
+            </span>
+            <input type="text" id="employeeTabSearch" oninput="filterEmployeesTab()" placeholder="Search by name, PIN, or department..." class="block w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
+        </div>
+        
+        <!-- Add Employee Trigger -->
+        <div class="flex items-center gap-3">
+            <button type="button" class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20" onclick="openEmployeeModal()">
+                <i class="ph ph-plus-circle text-lg"></i> Add Employee
+            </button>
+        </div>
+    </div>
+
+    <!-- Employee Grid / Table -->
+    <div class="rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 dark:bg-slate-800/40 dark:border-slate-850">
+                        <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">PIN / ID</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Full Name</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Department</th>
+                        <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">ADMS Sync</th>
+                        <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">App Access (Devices)</th>
+                        <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Last Synced</th>
+                        <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="employeesTabTbody" class="divide-y divide-slate-100 dark:divide-slate-800/40">
+                    <tr>
+                        <td colspan="8" class="text-center py-12 text-sm text-slate-400 dark:text-slate-500">
+                            <div class="flex flex-col items-center gap-2">
+                                <i class="ph ph-circle-notch animate-spin text-2xl text-indigo-500"></i>
+                                <span>Loading employees...</span>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Employee Create / Edit Modal -->
+    <div id="employeeModal" class="modal-overlay fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div class="modal-animated w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 overflow-hidden">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/55 dark:bg-slate-900/50">
+                <div class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2" id="employeeModalTitle">
+                    <i class="ph ph-user-plus text-lg text-indigo-500"></i> Add Employee
+                </div>
+                <button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all text-xl border-0 bg-transparent cursor-pointer dark:text-slate-500 dark:hover:bg-slate-800" onclick="closeEmployeeModal()">&times;</button>
+            </div>
+            
+            <!-- Modal Content Form -->
+            <form id="employeeForm" onsubmit="saveEmployee(event)" class="p-6 space-y-4">
+                <input type="hidden" id="emp_mode" value="create">
+                
+                <!-- PIN ID -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5 dark:text-slate-300">Employee PIN (ID)</label>
+                    <input type="text" id="emp_pin" required placeholder="E.g. 1002" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-905 dark:text-slate-100">
+                    <p class="text-[11px] text-slate-400 mt-1 dark:text-slate-500">Numerical ID used as PIN by attendance devices.</p>
+                </div>
+                
+                <!-- Full Name -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5 dark:text-slate-300">Full Name</label>
+                    <input type="text" id="emp_name" required placeholder="E.g. Alexander Smith" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-905 dark:text-slate-100">
+                </div>
+
+                <!-- Department -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5 dark:text-slate-300">Department</label>
+                    <input type="text" id="emp_dept" placeholder="E.g. Engineering, Sales, HR" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-905 dark:text-slate-100">
+                </div>
+
+                <!-- Active Toggle -->
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl dark:bg-slate-800/40">
+                    <div>
+                        <div class="text-sm font-semibold text-slate-800 dark:text-slate-200">Active Status</div>
+                        <div class="text-[11px] text-slate-400 dark:text-slate-500">Allow mobile app logins and punch syncs</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="emp_active" checked class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:height-5 after:width-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-500"></div>
+                    </label>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                    <button type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors dark:border-slate-700 dark:text-slate-400" onclick="closeEmployeeModal()">Cancel</button>
+                    <button type="submit" class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/10" id="saveEmployeeBtn">Add Employee</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

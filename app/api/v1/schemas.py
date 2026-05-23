@@ -219,3 +219,31 @@ class CheckpointUpdate(BaseModel):
     longitude: Optional[float] = None
     radius_meters: Optional[float] = None
     is_active: Optional[bool] = None
+
+
+# ═══════════════════ Employee Schemas ═══════════════════
+
+class EmployeeCreatePayload(BaseModel):
+    employee_id: str
+    full_name: str
+    department: Optional[str] = None
+    is_active: bool = True
+
+
+class EmployeeUpdatePayload(BaseModel):
+    full_name: Optional[str] = None
+    department: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class EmployeeResponse(BaseModel):
+    employee_id: str
+    full_name: str
+    department: Optional[str] = None
+    is_active: bool
+    is_deleted: bool
+    last_synced: Optional[datetime] = None
+    device_count: int
+    adms_registered: bool
+
+    model_config = ConfigDict(from_attributes=True)

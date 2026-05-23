@@ -90,6 +90,10 @@ def sync_employees_from_adms(db: Session):
             # Update or Create
             emp = db.query(Employee).filter(Employee.employee_id == pin).first()
             if emp:
+                if emp.is_deleted:
+                    # Skip soft-deleted employees to prevent re-activation/re-syncing
+                    logger.debug(f"Skipping soft-deleted employee {pin} from ADMS sync")
+                    continue
                 emp.adms_id = adms_id
                 emp.full_name = name
                 emp.department = dept

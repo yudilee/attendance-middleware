@@ -133,7 +133,8 @@ def validate_and_prepare_punch(
         )
         if not in_fence:
             raise PunchValidationError(
-                f"Outside assigned branches. Nearest: {best_branch} ({distance:.0f}m away)."
+                f"Outside assigned branches. Nearest: {best_branch} ({distance:.0f}m away).",
+                status_code=403,
             )
     else:
         in_fence = True

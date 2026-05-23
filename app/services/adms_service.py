@@ -211,7 +211,63 @@ async def register_employee_on_adms(client: httpx.AsyncClient, server_url: str, 
         db.close()
 
 
-async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch_type: str, tz_offset_minutes: int = None):
+async def delete_employee_from_adms(client: httpx.AsyncClient, server_url: str, sn: str, employee_id: str) -> bool:
+    """
+    Delete an employee from the ADMS server via OPERLOG device protocol.
+
+    Uses the standard ZKTeco device protocol format:
+        DATA DELETE USERINFO PIN=XXXXX
+
+    This is how real fingerprint machines tell ADMS to remove an employee.
+    The server accepts the command (returns OK:1) and processes it asynchronously.
+
+    Also removes the employee from the local ADMSRegisteredEmployee tracking table
+    so the next ATTLOG push will re-register them if needed.
+    """
+    # ── 1. Remove from local tracking DB ──
+    db = SessionLocal()
+    try:
+        existing = db.query(ADMSRegisteredEmployee).filter(
+            ADMSRegisteredEmployee.employee_id == employee_id
+        ).first()
+        if existing:
+            db.delete(existing)
+            db.commit()
+            logger.info(f"🗑️ Removed employee {employee_id} from local ADMS tracking")
+    finally:
+        db.close()
+
+    # ── 2. Send DELETE USERINFO command via OPERLOG ──
+    # Format: DATA DELETE USERINFO PIN=XXXXX
+    # This matches what real ZKTeco fingerprint/face devices send
+    delete_line = f"DATA DELETE USERINFO PIN={employee_id}\r\n"
+
+    url = f"{server_url}/iclock/cdata"
+    params = {"SN": sn, "table": "OPERLOG", "Stamp": "0"}
+
+    headers = {
+        "Content-Type": "text/plain",
+        "User-Agent": ICLOCK_USER_AGENT
+    }
+
+    try:
+        resp = await client.post(
+            url, params=params, content=delete_line,
+            headers=headers
+        )
+
+        if resp.status_code == 200 and "OK" in resp.text:
+            logger.info(f"✅ Delete command sent for employee {employee_id} on ADMS: {resp.text.strip()}")
+            return True
+        else:
+            logger.warning(f"⚠️ Failed to delete employee {employee_id}: HTTP {resp.status_code} → {resp.text[:200]}")
+            return False
+    except Exception as e:
+        logger.error(f"❌ Employee deletion error for {employee_id}: {e}")
+        return False
+
+
+async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch_type: str, tz_offset_minutes: int | None = None, employee_name: str | None = None):
     """
     Format and push a single attendance log to the ADMS Server.
     Auto-registers the employee on the ADMS server if not already registered.
@@ -241,6 +297,15 @@ async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch
             global_offset = config.timezone_offset
     finally:
         db.close()
+
+    # ── Auto-register employee on ADMS before sending ATTLOG ──
+    # ADMS silently drops attendance records for unknown PINs
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as reg_client:
+            await register_employee_on_adms(reg_client, server_url, sn, employee_id, employee_name or "Mobile User")
+    except Exception as e:
+        logger.warning(f"Employee pre-registration attempt for {employee_id} failed (non-fatal): {e}")
+        # Don't abort the ATTLOG push — the server may still accept it
 
     # Punch status mapping
     status = "0" if punch_type.lower() in ["in", "check in"] else "1"

@@ -1878,6 +1878,252 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            document.body.unlink ? document.body.unlink(link) : document.body.removeChild(link);
         }
+    }
+
+    // ── Employee Data Management ───────────────────────────────────────────────
+    let currentEmployees = [];
+
+    async function loadEmployees() {
+        const tbody = document.getElementById('employeesTabTbody');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-12 text-sm text-slate-400 dark:text-slate-500">
+                    <div class="flex flex-col items-center gap-2">
+                        <i class="ph ph-circle-notch animate-spin text-2xl text-indigo-500"></i>
+                        <span>Loading employees...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        try {
+            const res = await fetch('/ui/employees');
+            if (!res.ok) throw new Error('Failed to fetch');
+            currentEmployees = await res.json();
+            renderEmployeesTable(currentEmployees);
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-red-500">Failed to load employees. Please retry.</td></tr>';
+            notify('Error loading employees: ' + e.message, 'error');
+        }
+    }
+
+    function renderEmployeesTable(list) {
+        const tbody = document.getElementById('employeesTabTbody');
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-sm text-slate-400 dark:text-slate-500">No active employees found.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = list.map(e => {
+            const lastSynced = e.last_synced
+                ? new Date(e.last_synced).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
+                : 'Never';
+            
+            const admsBadge = e.adms_registered
+                ? '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-450">✅ Registered</span>'
+                : '<span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">⏳ Pending</span>';
+            
+            const activeStatus = e.is_active
+                ? '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">Active</span>'
+                : '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400">Inactive</span>';
+
+            const deviceBadge = e.device_count > 0
+                ? `<span class="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400">${e.device_count} Bound</span>`
+                : '<span class="text-xs text-slate-400 dark:text-slate-500">—</span>';
+
+            return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                <td class="px-6 py-4 font-mono font-bold text-slate-900 dark:text-slate-100">${e.employee_id}</td>
+                <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800 dark:text-slate-200">${e.full_name}</span></td>
+                <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-450">${e.department || '—'}</td>
+                <td class="px-6 py-4 text-center">${admsBadge}</td>
+                <td class="px-6 py-4 text-center">${deviceBadge}</td>
+                <td class="px-6 py-4 text-center">
+                    <label class="cursor-pointer inline-block" onclick="toggleEmployeeActiveStatus('${e.employee_id}', ${e.is_active})">
+                        <span class="toggle-slider ${e.is_active ? 'active' : 'inactive'}" style="width:32px;height:16px;"></span>
+                    </label>
+                </td>
+                <td class="px-6 py-4 text-xs text-slate-400 dark:text-slate-500">${lastSynced}</td>
+                <td class="px-6 py-4 text-right whitespace-nowrap space-x-1">
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400" onclick="editEmployee('${e.employee_id}')" title="Edit details">✏️ Edit</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400" onclick="syncEmployeeToAdms('${e.employee_id}', '${e.full_name.replace(/'/g, "\\'")}')" title="Sync/Register employee on ADMS">🔄 Sync</button>
+                    ${e.adms_registered ? `<button class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400" onclick="clearEmployeeFromAdms('${e.employee_id}')" title="Delete employee only from ADMS">🔴 Clear ADMS</button>` : ''}
+                    <button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:bg-red-950/30 dark:border-red-900/50 dark:text-red-450" onclick="deleteEmployee('${e.employee_id}')" title="Soft-delete locally and revoke app access">🗑️ Delete</button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function filterEmployeesTab() {
+        const q = document.getElementById('employeeTabSearch').value.toLowerCase().trim();
+        if (!q) {
+            renderEmployeesTable(currentEmployees);
+            return;
+        }
+        const filtered = currentEmployees.filter(e => 
+            e.full_name.toLowerCase().includes(q) || 
+            e.employee_id.includes(q) || 
+            (e.department && e.department.toLowerCase().includes(q))
+        );
+        renderEmployeesTable(filtered);
+    }
+
+    function openEmployeeModal() {
+        document.getElementById('emp_mode').value = 'create';
+        document.getElementById('emp_pin').value = '';
+        document.getElementById('emp_pin').readOnly = false;
+        document.getElementById('emp_name').value = '';
+        document.getElementById('emp_dept').value = '';
+        document.getElementById('emp_active').checked = true;
+        
+        document.getElementById('employeeModalTitle').innerHTML = '<i class="ph ph-user-plus text-lg text-indigo-500"></i> Add Employee';
+        document.getElementById('saveEmployeeBtn').innerText = 'Add Employee';
+        openModal('employeeModal');
+    }
+
+    function editEmployee(pin) {
+        const emp = currentEmployees.find(e => e.employee_id === pin);
+        if (!emp) return;
+
+        document.getElementById('emp_mode').value = 'edit';
+        document.getElementById('emp_pin').value = emp.employee_id;
+        document.getElementById('emp_pin').readOnly = true;
+        document.getElementById('emp_name').value = emp.full_name;
+        document.getElementById('emp_dept').value = emp.department || '';
+        document.getElementById('emp_active').checked = emp.is_active;
+
+        document.getElementById('employeeModalTitle').innerHTML = '<i class="ph ph-note-pencil text-lg text-indigo-500"></i> Edit Employee';
+        document.getElementById('saveEmployeeBtn').innerText = 'Save Changes';
+        openModal('employeeModal');
+    }
+
+    function closeEmployeeModal() {
+        closeModal('employeeModal');
+        document.getElementById('employeeForm').reset();
+    }
+
+    async function saveEmployee(event) {
+        event.preventDefault();
+        const mode = document.getElementById('emp_mode').value;
+        const pin = document.getElementById('emp_pin').value.trim();
+        const name = document.getElementById('emp_name').value.trim();
+        const dept = document.getElementById('emp_dept').value.trim() || null;
+        const active = document.getElementById('emp_active').checked;
+
+        if (!pin || !name) {
+            notify('Please fill out PIN and Full Name.', 'error');
+            return;
+        }
+
+        const payload = {
+            employee_id: pin,
+            full_name: name,
+            department: dept,
+            is_active: active
+        };
+
+        const saveBtn = document.getElementById('saveEmployeeBtn');
+        saveBtn.disabled = true;
+        saveBtn.innerText = 'Saving...';
+
+        try {
+            const url = mode === 'create' ? '/ui/employees' : `/ui/employees/${pin}`;
+            const method = mode === 'create' ? 'POST' : 'PUT';
+
+            const res = await fetch(url, {
+                method: method,
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                notify(mode === 'create' ? 'Employee created successfully!' : 'Employee updated successfully!');
+                closeEmployeeModal();
+                await loadEmployees();
+            } else {
+                notify(data.detail || 'Failed to save employee', 'error');
+            }
+        } catch(e) {
+            notify('Network error saving employee', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerText = mode === 'create' ? 'Add Employee' : 'Save Changes';
+        }
+    }
+
+    async function toggleEmployeeActiveStatus(pin, currentlyActive) {
+        const payload = { is_active: !currentlyActive };
+        try {
+            const res = await fetch(`/ui/employees/${pin}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                notify(!currentlyActive ? 'Employee activated' : 'Employee deactivated');
+                await loadEmployees();
+            } else {
+                notify('Failed to update employee status', 'error');
+            }
+        } catch(e) {
+            notify('Network error updating status', 'error');
+        }
+    }
+
+    async function syncEmployeeToAdms(pin, name) {
+        notify(`Triggering ADMS registration for ${name}...`, 'info');
+        try {
+            const res = await fetch(`/ui/employees/${pin}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ full_name: name })
+            });
+
+            if (res.ok) {
+                notify(`ADMS sync triggered in background for ${name}. Wait a moment.`);
+                setTimeout(loadEmployees, 3000);
+            } else {
+                notify('Failed to trigger sync', 'error');
+            }
+        } catch(e) {
+            notify('Network error triggering sync', 'error');
+        }
+    }
+
+    async function clearEmployeeFromAdms(pin) {
+        showConfirm(`Are you sure you want to delete employee <b>${pin}</b> from the ADMS server? This keeps them in the local database but removes them from the device command database on the ADMS server.`, async () => {
+            notify(`Clearing employee ${pin} from ADMS...`, 'info');
+            try {
+                const res = await fetch(`/ui/employees/${pin}/delete-from-adms`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    notify(`Successfully sent delete command to ADMS!`);
+                    await loadEmployees();
+                } else {
+                    notify(data.detail || 'Clear from ADMS failed', 'error');
+                }
+            } catch(e) {
+                notify('Network error clearing from ADMS', 'error');
+            }
+        });
+    }
+
+    async function deleteEmployee(pin) {
+        showConfirm(`Are you sure you want to delete employee <b>${pin}</b>?<br><br><span class="text-red-500 font-semibold">⚠️ Warning:</span> This will:<br>1. Soft-delete them locally (hiding them from active lists).<br>2. Cascade delete all their mobile app <b>Device Bindings</b> (instantly revoking their app login).<br>3. Remove their supervisor mappings.<br><br><i>Note: Their record is left intact in ADMS for payroll, and historical clock-ins are preserved.</i>`, async () => {
+            try {
+                const res = await fetch(`/ui/employees/${pin}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (res.ok) {
+                    notify(`Employee ${pin} soft-deleted. Mobile app access revoked!`);
+                    await loadEmployees();
+                } else {
+                    notify(data.detail || 'Failed to delete employee', 'error');
+                }
+            } catch(e) {
+                notify('Network error deleting employee', 'error');
+            }
+        });
     }
 </script>

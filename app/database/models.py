@@ -155,6 +155,7 @@ class Employee(Base):
     full_name = Column(String)
     department = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
+    is_deleted = Column(Boolean, default=False, nullable=False)
     last_synced = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -309,6 +310,7 @@ def init_db():
         "ALTER TABLE employees ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
         "ALTER TABLE employees ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
         "ALTER TABLE employees ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0;",
         
         "ALTER TABLE api_keys ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
         "ALTER TABLE api_keys ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
