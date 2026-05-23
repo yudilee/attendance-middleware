@@ -307,7 +307,80 @@
             document.getElementById('sync_password').value = data.password || '';
         }
         updateSyncInfo();
+        loadSmtpSettings();
     }
+
+    async function loadSmtpSettings() {
+        try {
+            const res = await fetch('/ui/app-settings/smtp');
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('smtp_host').value = data.smtp_host || '';
+                document.getElementById('smtp_port').value = data.smtp_port || 587;
+                document.getElementById('smtp_user').value = data.smtp_user || '';
+                document.getElementById('hr_email_recipients').value = data.hr_email_recipients || '';
+                if (data.smtp_password_set) {
+                    document.getElementById('smtp_password').placeholder = '•••••••• (Saved)';
+                    document.getElementById('smtp_password').value = '__UNCHANGED__';
+                } else {
+                    document.getElementById('smtp_password').placeholder = '••••••••';
+                    document.getElementById('smtp_password').value = '';
+                }
+            }
+        } catch (e) {
+            console.error('Error loading SMTP settings:', e);
+        }
+    }
+
+    async function saveSmtpSettings() {
+        const host = document.getElementById('smtp_host').value.trim();
+        const port = parseInt(document.getElementById('smtp_port').value) || 587;
+        const user = document.getElementById('smtp_user').value.trim();
+        const password = document.getElementById('smtp_password').value;
+        const recipients = document.getElementById('hr_email_recipients').value.trim();
+
+        if (!host || !user || !recipients) {
+            notify('Host, Username, and Recipients are required!', 'error');
+            return;
+        }
+
+        const res = await fetch('/ui/app-settings/smtp', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                smtp_host: host,
+                smtp_port: port,
+                smtp_user: user,
+                smtp_password: password,
+                hr_email_recipients: recipients
+            })
+        });
+
+        if (res.ok) {
+            notify('HR SMTP Settings saved successfully!');
+            loadSmtpSettings();
+        } else {
+            notify('Failed to save SMTP settings', 'error');
+        }
+    }
+
+    function toggleSmtpPassword() {
+        const input = document.getElementById('smtp_password');
+        const icon = document.getElementById('smtpEyeIcon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.innerHTML = `
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a10.025 10.025 0 014.132-5.4M9.69 9.69a3 3 0 004.62 4.62M18.364 18.364l-12.729-12.73" />
+            `;
+        } else {
+            input.type = 'password';
+            icon.innerHTML = `
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            `;
+        }
+    }
+
 
     async function updateSyncInfo() {
         try {
@@ -1056,8 +1129,16 @@
         document.getElementById('qr_data_group').style.display = 'none';
         document.getElementById('nfc_data_group').style.display = 'none';
         
+        populateBranchFormDropdowns();
+        document.getElementById('branch_company_id').value = '';
+        document.getElementById('branch_shift_schedule_id').value = '';
+        document.getElementById('branch_timezone_offset').value = '7';
+
         document.getElementById('checkpointNewBranchAlert').style.display = 'block';
         document.getElementById('checkpointContainer').style.display = 'none';
+        
+        document.getElementById('groupNewBranchAlert').style.display = 'block';
+        document.getElementById('groupContainer').style.display = 'none';
         
         setTimeout(() => {
             initBranchMap();
@@ -1099,6 +1180,11 @@
         document.getElementById('branch_lon').value = branch.longitude;
         document.getElementById('branch_rad').value = branch.radius_meters;
         
+        populateBranchFormDropdowns();
+        document.getElementById('branch_company_id').value = branch.company_id || '';
+        document.getElementById('branch_shift_schedule_id').value = branch.shift_schedule_id || '';
+        document.getElementById('branch_timezone_offset').value = branch.timezone_offset !== null ? branch.timezone_offset : '7';
+
         const gType = branch.geofence_type || 'circle';
         document.getElementById('branch_geofence_type').value = gType;
         document.getElementById('branch_polygon_coordinates').value = branch.polygon_coordinates || '';
@@ -1125,6 +1211,10 @@
         document.getElementById('checkpointContainer').style.display = 'block';
         loadCheckpoints(branch.id);
         
+        document.getElementById('groupNewBranchAlert').style.display = 'none';
+        document.getElementById('groupContainer').style.display = 'block';
+        loadGroups(branch.id);
+
         document.getElementById('branchListSection').style.display = 'none';
         document.getElementById('branchFormSection').style.display = 'block';
         
@@ -1226,6 +1316,10 @@
         const gType = document.getElementById('branch_geofence_type').value || 'circle';
         const polyCoords = document.getElementById('branch_polygon_coordinates').value;
         
+        const companyIdVal = document.getElementById('branch_company_id').value;
+        const shiftIdVal = document.getElementById('branch_shift_schedule_id').value;
+        const tzVal = document.getElementById('branch_timezone_offset').value;
+
         const payload = {
             name: document.getElementById('branch_name').value.trim(),
             latitude: parseFloat(document.getElementById('branch_lat').value),
@@ -1237,6 +1331,9 @@
             qr_code_data: qrEnabled ? document.getElementById('branch_qr_data').value.trim() : null,
             nfc_enabled: nfcEnabled,
             nfc_tag_data: nfcEnabled ? document.getElementById('branch_nfc_data').value.trim() : null,
+            company_id: companyIdVal ? parseInt(companyIdVal) : null,
+            shift_schedule_id: shiftIdVal ? parseInt(shiftIdVal) : null,
+            timezone_offset: tzVal ? parseInt(tzVal) : 7
         };
         if (!payload.name || isNaN(payload.latitude) || isNaN(payload.longitude)) {
             notify('Please select location on map and enter branch name', 'error'); return;
@@ -2171,46 +2268,216 @@
             
             const data = await response.json();
             
-            const qrData = encodeURIComponent(JSON.stringify(data));
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}`;
-            
-            document.getElementById('onboardQrImg').src = qrUrl;
-            document.getElementById('onboardQrContainer').style.display = 'block';
-        } catch(err) {
-            notify(err.message);
-        }
-    }
-
-    function exportReport(format) {
-        const start = document.getElementById('reportStartDate').value;
-        const end = document.getElementById('reportEndDate').value;
-        const branch = document.getElementById('reportBranchSelect').value;
-        
-        let url = `/ui/reports/export?format=${format}`;
-        if (start) url += `&start_date=${start}`;
-        if (end) url += `&end_date=${end}`;
-        if (branch) url += `&branch_id=${branch}`;
-        
-        if (format === 'print') {
-            window.open(url, '_blank');
-        } else {
-            const link = document.createElement('a');
-            link.href = url;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            document.body.unlink ? document.body.unlink(link) : document.body.removeChild(link);
-        }
-    }
-
-    // ── Employee Data Management ───────────────────────────────────────────────
+            const qrData =     // ── Employee Data Management ───────────────────────────────────────────────
     let currentEmployees = [];
+    let _allCompanies = [];
+    let _allGroups = [];
+    let _allShiftSchedules = [];
+
+    async function loadOnboardingReferenceData() {
+        try {
+            const [resCo, resGrp, resSch] = await Promise.all([
+                fetch('/ui/companies'),
+                fetch('/ui/employee-groups'),
+                fetch('/ui/shift-schedules')
+            ]);
+            if (resCo.ok) _allCompanies = await resCo.json();
+            if (resGrp.ok) _allGroups = await resGrp.json();
+            if (resSch.ok) _allShiftSchedules = await resSch.json();
+        } catch(e) {
+            console.error("Failed to load reference data", e);
+        }
+    }
+
+    function populateEmployeeFormDropdowns() {
+        const coSelect = document.getElementById('emp_company_id');
+        const grpSelect = document.getElementById('emp_group_id');
+        const schSelect = document.getElementById('emp_shift_schedule_id');
+
+        if (coSelect) {
+            coSelect.innerHTML = '<option value="">No Company assigned</option>';
+            _allCompanies.forEach(c => {
+                coSelect.innerHTML += `<option value="${c.id}">${c.name} (${c.code})</option>`;
+            });
+        }
+
+        if (grpSelect) {
+            grpSelect.innerHTML = '<option value="">No Group assigned</option>';
+            _allGroups.forEach(g => {
+                grpSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+            });
+        }
+
+        if (schSelect) {
+            schSelect.innerHTML = '<option value="">No Override Schedule (Use defaults)</option>';
+            _allShiftSchedules.forEach(s => {
+                schSelect.innerHTML += `<option value="${s.id}">${s.name} (${s.start_time}-${s.end_time})</option>`;
+            });
+        }
+    }
+
+    function populateBranchFormDropdowns() {
+        const coSelect = document.getElementById('branch_company_id');
+        const schSelect = document.getElementById('branch_shift_schedule_id');
+        const grpSchSelect = document.getElementById('grp_shift_schedule_id');
+
+        if (coSelect) {
+            coSelect.innerHTML = '<option value="">No Company assigned</option>';
+            _allCompanies.forEach(c => {
+                coSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+            });
+        }
+
+        if (schSelect) {
+            schSelect.innerHTML = '<option value="">No Default Shift</option>';
+            _allShiftSchedules.forEach(s => {
+                schSelect.innerHTML += `<option value="${s.id}">${s.name} (${s.start_time}-${s.end_time})</option>`;
+            });
+        }
+
+        if (grpSchSelect) {
+            grpSchSelect.innerHTML = '<option value="">No Specific Shift (Use Branch Default)</option>';
+            _allShiftSchedules.forEach(s => {
+                grpSchSelect.innerHTML += `<option value="${s.id}">${s.name} (${s.start_time}-${s.end_time})</option>`;
+            });
+        }
+    }
+
+    function onEmployeeCompanyChange() {
+        const companyIdVal = document.getElementById('emp_company_id').value;
+        const companyId = companyIdVal ? parseInt(companyIdVal) : null;
+        const groupSelect = document.getElementById('emp_group_id');
+        groupSelect.innerHTML = '<option value="">No Group assigned</option>';
+
+        if (!companyId) {
+            _allGroups.forEach(g => {
+                groupSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+            });
+            return;
+        }
+
+        fetch(`/ui/companies/${companyId}/branches`)
+            .then(res => res.json())
+            .then(branches => {
+                const branchIds = new Set(branches.map(b => b.id));
+                const filteredGroups = _allGroups.filter(g => branchIds.has(g.branch_id));
+                filteredGroups.forEach(g => {
+                    groupSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+                });
+            })
+            .catch(err => console.error("Error loading branches for company filtering", err));
+    }
+
+    function onEmployeeTypeChange() {
+        const type = document.getElementById('emp_type').value;
+        let noticeId = 'emp_local_type_notice';
+        let notice = document.getElementById(noticeId);
+        if (type !== 'regular') {
+            if (!notice) {
+                notice = document.createElement('p');
+                notice.id = noticeId;
+                notice.className = 'text-[11px] text-amber-600 font-semibold mt-1 dark:text-amber-400';
+                notice.innerText = '💡 Local-only Employee: ADMS and ZKTeco synchronization will be bypassed entirely.';
+                document.getElementById('emp_type').parentNode.appendChild(notice);
+            }
+        } else {
+            if (notice) notice.remove();
+        }
+    }
+
+    // ── Branch Shift Groups Management JS ──
+    async function loadGroups(branchId) {
+        const tbody = document.getElementById('groupsTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4">Loading groups...</td></tr>';
+        
+        try {
+            const res = await fetch(`/ui/branches/${branchId}/groups`);
+            if (!res.ok) throw new Error("Failed to fetch groups");
+            const groups = await res.json();
+            
+            document.getElementById('groupCountBadge').innerText = `${groups.length} Groups`;
+            
+            if (groups.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-slate-400">No shift groups defined in this branch.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = groups.map(g => {
+                const shift = _allShiftSchedules.find(s => s.id === g.shift_schedule_id);
+                const shiftName = shift ? `${shift.name} (${shift.start_time}-${shift.end_time})` : 'Branch Default';
+                return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td class="px-3 py-2 font-semibold text-slate-800 dark:text-slate-200">${g.name}</td>
+                        <td class="px-3 py-2 text-slate-500 dark:text-slate-400">${shiftName}</td>
+                        <td class="px-3 py-2 text-right">
+                            <button type="button" class="text-red-500 hover:text-red-750 font-bold bg-transparent border-0 cursor-pointer text-sm" onclick="deleteGroup(${g.id}, ${branchId})">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-red-500">Failed to load groups.</td></tr>';
+        }
+    }
+
+    async function submitAddGroup() {
+        const branchId = document.getElementById('edit_branch_id').value;
+        const name = document.getElementById('grp_name').value.trim();
+        const shiftIdVal = document.getElementById('grp_shift_schedule_id').value;
+        
+        if (!branchId || !name) return;
+        
+        const payload = {
+            name: name,
+            branch_id: parseInt(branchId),
+            shift_schedule_id: shiftIdVal ? parseInt(shiftIdVal) : null
+        };
+        
+        try {
+            const res = await fetch('/ui/employee-groups', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                notify("Shift Group added successfully!");
+                document.getElementById('grp_name').value = '';
+                document.getElementById('grp_shift_schedule_id').value = '';
+                await loadOnboardingReferenceData();
+                await loadGroups(branchId);
+            } else {
+                const err = await res.json();
+                notify(err.detail || "Failed to add group", "error");
+            }
+        } catch(e) {
+            notify("Network error adding group", "error");
+        }
+    }
+
+    async function deleteGroup(groupId, branchId) {
+        if (!confirm("Are you sure you want to delete this Shift Group? Any employees assigned to it will default to Branch defaults.")) return;
+        
+        try {
+            const res = await fetch(`/ui/employee-groups/${groupId}`, { method: 'DELETE' });
+            if (res.ok) {
+                notify("Shift Group deleted successfully.");
+                await loadOnboardingReferenceData();
+                await loadGroups(branchId);
+            } else {
+                const err = await res.json();
+                notify(err.detail || "Failed to delete group", "error");
+            }
+        } catch(e) {
+            notify("Network error deleting group", "error");
+        }
+    }
 
     async function loadEmployees() {
         const tbody = document.getElementById('employeesTabTbody');
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="text-center py-12 text-sm text-slate-400 dark:text-slate-500">
+                <td colspan="10" class="text-center py-12 text-sm text-slate-400 dark:text-slate-500">
                     <div class="flex flex-col items-center gap-2">
                         <i class="ph ph-circle-notch animate-spin text-2xl text-indigo-500"></i>
                         <span>Loading employees...</span>
@@ -2219,12 +2486,13 @@
             </tr>
         `;
         try {
+            await loadOnboardingReferenceData();
             const res = await fetch('/ui/employees');
             if (!res.ok) throw new Error('Failed to fetch');
             currentEmployees = await res.json();
             renderEmployeesTable(currentEmployees);
         } catch(e) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-red-500">Failed to load employees. Please retry.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-sm text-red-500">Failed to load employees. Please retry.</td></tr>';
             notify('Error loading employees: ' + e.message, 'error');
         }
     }
@@ -2232,7 +2500,7 @@
     function renderEmployeesTable(list) {
         const tbody = document.getElementById('employeesTabTbody');
         if (!list.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-sm text-slate-400 dark:text-slate-500">No active employees found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center py-12 text-sm text-slate-400 dark:text-slate-500">No active employees found.</td></tr>';
             return;
         }
         tbody.innerHTML = list.map(e => {
@@ -2240,9 +2508,14 @@
                 ? new Date(e.last_synced).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
                 : 'Never';
             
-            const admsBadge = e.adms_registered
-                ? '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-450">✅ Registered</span>'
-                : '<span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">⏳ Pending</span>';
+            let admsBadge = '';
+            if (e.employee_type !== 'regular') {
+                admsBadge = '<span class="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-400 dark:bg-slate-800 dark:text-slate-500">🚫 Skip (Local)</span>';
+            } else {
+                admsBadge = e.adms_registered
+                    ? '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-455">✅ Registered</span>'
+                    : '<span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">⏳ Pending</span>';
+            }
             
             const activeStatus = e.is_active
                 ? '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">Active</span>'
@@ -2250,13 +2523,22 @@
 
             const deviceBadge = e.device_count > 0
                 ? `<span class="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400">${e.device_count} Bound</span>`
-                : '<span class="text-xs text-slate-400 dark:text-slate-500">—</span>';
+                : '<span class="text-xs text-slate-400 dark:text-slate-500">&mdash;</span>';
+
+            const company = _allCompanies.find(c => c.id === e.company_id);
+            const companyName = company ? `<span class="inline-flex items-center rounded-full bg-indigo-50/50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">${company.name}</span>` : '<span class="text-xs text-slate-400 dark:text-slate-500">&mdash;</span>';
+
+            const typeLabel = e.employee_type === 'internship' ? 'Internship' : e.employee_type === 'daily_worker' ? 'Daily Worker' : 'Regular';
+            const typeColor = e.employee_type === 'internship' ? 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/20 dark:text-amber-450 dark:border-amber-900/30' : e.employee_type === 'daily_worker' ? 'bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-950/20 dark:text-sky-450 dark:border-sky-900/30' : 'bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-750';
+            const typeBadge = `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${typeColor}">${typeLabel}</span>`;
 
             return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                 <td class="px-6 py-4 font-mono font-bold text-slate-900 dark:text-slate-100">${e.employee_id}</td>
                 <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800 dark:text-slate-200">${e.full_name || 'Unnamed'}</span></td>
                 <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-450">${e.department || '—'}</td>
+                <td class="px-6 py-4 text-center">${companyName}</td>
+                <td class="px-6 py-4 text-center">${typeBadge}</td>
                 <td class="px-6 py-4 text-center">${admsBadge}</td>
                 <td class="px-6 py-4 text-center">${deviceBadge}</td>
                 <td class="px-6 py-4 text-center">
@@ -2267,9 +2549,9 @@
                 <td class="px-6 py-4 text-xs text-slate-400 dark:text-slate-500">${lastSynced}</td>
                 <td class="px-6 py-4 text-right whitespace-nowrap space-x-1">
                     <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400" onclick="editEmployee('${e.employee_id}')" title="Edit details">✏️ Edit</button>
-                    <button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-450" onclick="syncEmployeeToAdms('${e.employee_id}', '${(e.full_name || '').replace(/'/g, "\\'")}')" title="Sync/Register employee on ADMS">🔄 Sync</button>
-                    ${e.adms_registered ? `<button class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400" onclick="clearEmployeeFromAdms('${e.employee_id}')" title="Delete employee only from ADMS">🔴 Clear ADMS</button>` : ''}
-                    <button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:bg-red-950/30 dark:border-red-900/50 dark:text-red-450" onclick="deleteEmployee('${e.employee_id}')" title="Soft-delete locally and revoke app access">🗑️ Delete</button>
+                    ${e.employee_type === 'regular' ? `<button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-450" onclick="syncEmployeeToAdms('${e.employee_id}', '${(e.full_name || '').replace(/'/g, "\\'")}')" title="Sync/Register employee on ADMS">🔄 Sync</button>` : ''}
+                    ${e.employee_type === 'regular' && e.adms_registered ? `<button class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400" onclick="clearEmployeeFromAdms('${e.employee_id}')" title="Delete employee only from ADMS">🔴 Clear ADMS</button>` : ''}
+                    <button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:bg-red-950/30 dark:border-red-900/50 dark:text-red-455" onclick="deleteEmployee('${e.employee_id}')" title="Soft-delete locally and revoke app access">🗑️ Delete</button>
                 </td>
             </tr>`;
         }).join('');
@@ -2289,30 +2571,55 @@
         renderEmployeesTable(filtered);
     }
 
-    function openEmployeeModal() {
+    async function openEmployeeModal() {
+        await loadOnboardingReferenceData();
+        populateEmployeeFormDropdowns();
+
         document.getElementById('emp_mode').value = 'create';
         document.getElementById('emp_pin').value = '';
         document.getElementById('emp_pin').readOnly = false;
         document.getElementById('emp_name').value = '';
         document.getElementById('emp_dept').value = '';
+        document.getElementById('emp_type').value = 'regular';
+        document.getElementById('emp_company_id').value = '';
+        document.getElementById('emp_group_id').value = '';
+        document.getElementById('emp_shift_schedule_id').value = '';
         document.getElementById('emp_active').checked = true;
         
+        onEmployeeTypeChange();
         document.getElementById('employeeModalTitle').innerHTML = '<i class="ph ph-user-plus text-lg text-indigo-500"></i> Add Employee';
         document.getElementById('saveEmployeeBtn').innerText = 'Add Employee';
         openModal('employeeModal');
     }
 
-    function editEmployee(pin) {
+    async function editEmployee(pin) {
         const emp = currentEmployees.find(e => e.employee_id === pin);
         if (!emp) return;
+
+        await loadOnboardingReferenceData();
+        populateEmployeeFormDropdowns();
 
         document.getElementById('emp_mode').value = 'edit';
         document.getElementById('emp_pin').value = emp.employee_id;
         document.getElementById('emp_pin').readOnly = true;
         document.getElementById('emp_name').value = emp.full_name;
         document.getElementById('emp_dept').value = emp.department || '';
+        document.getElementById('emp_type').value = emp.employee_type || 'regular';
+        document.getElementById('emp_company_id').value = emp.company_id || '';
+        
+        if (emp.company_id) {
+            onEmployeeCompanyChange();
+            setTimeout(() => {
+                document.getElementById('emp_group_id').value = emp.group_id || '';
+            }, 200);
+        } else {
+            document.getElementById('emp_group_id').value = emp.group_id || '';
+        }
+        
+        document.getElementById('emp_shift_schedule_id').value = emp.shift_schedule_id || '';
         document.getElementById('emp_active').checked = emp.is_active;
 
+        onEmployeeTypeChange();
         document.getElementById('employeeModalTitle').innerHTML = '<i class="ph ph-note-pencil text-lg text-indigo-500"></i> Edit Employee';
         document.getElementById('saveEmployeeBtn').innerText = 'Save Changes';
         openModal('employeeModal');
@@ -2330,6 +2637,11 @@
         const name = document.getElementById('emp_name').value.trim();
         const dept = document.getElementById('emp_dept').value.trim() || null;
         const active = document.getElementById('emp_active').checked;
+        
+        const type = document.getElementById('emp_type').value;
+        const companyIdVal = document.getElementById('emp_company_id').value;
+        const groupIdVal = document.getElementById('emp_group_id').value;
+        const shiftIdVal = document.getElementById('emp_shift_schedule_id').value;
 
         if (!pin || !name) {
             notify('Please fill out PIN and Full Name.', 'error');
@@ -2340,7 +2652,11 @@
             employee_id: pin,
             full_name: name,
             department: dept,
-            is_active: active
+            is_active: active,
+            employee_type: type,
+            company_id: companyIdVal ? parseInt(companyIdVal) : null,
+            group_id: groupIdVal ? parseInt(groupIdVal) : null,
+            shift_schedule_id: shiftIdVal ? parseInt(shiftIdVal) : null
         };
 
         const saveBtn = document.getElementById('saveEmployeeBtn');
@@ -2422,6 +2738,32 @@
                 if (res.ok) {
                     notify(`Successfully sent delete command to ADMS!`);
                     await loadEmployees();
+                } else {
+                    notify(data.detail || 'Clear from ADMS failed', 'error');
+                }
+            } catch(e) {
+                notify('Network error clearing from ADMS', 'error');
+            }
+        });
+    }
+
+    async function deleteEmployee(pin) {
+        showConfirm(`Are you sure you want to delete employee <b>${pin}</b>?<br><br><span class="text-red-500 font-semibold">⚠️ Warning:</span> This will:<br>1. Soft-delete them locally (hiding them from active lists).<br>2. Cascade delete all their mobile app <b>Device Bindings</b> (instantly revoking their app login).<br>3. Remove their supervisor mappings.<br><br><i>Note: Their record is left intact in ADMS for payroll, and historical clock-ins are preserved.</i>`, async () => {
+            try {
+                const res = await fetch(`/ui/employees/${pin}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (res.ok) {
+                    notify(`Employee ${pin} soft-deleted. Mobile app access revoked!`);
+                    await loadEmployees();
+                } else {
+                    notify(data.detail || 'Failed to delete employee', 'error');
+                }
+            } catch(e) {
+                notify('Network error deleting employee', 'error');
+            }
+        });
+    }
+</script>    await loadEmployees();
                 } else {
                     notify(data.detail || 'Clear from ADMS failed', 'error');
                 }

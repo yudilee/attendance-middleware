@@ -52,6 +52,72 @@
         </div>
     </div>
 
+    <!-- Visual Analytics & Charts Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Weekly Attendance Rate Trend -->
+        <div class="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        <i class="ph ph-chart-line-up text-indigo-500 text-lg"></i>
+                        Weekly Attendance Trend
+                    </h3>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">Last 7 Days</span>
+                </div>
+                <div id="weeklyTrendChart" class="w-full min-h-[300px]"></div>
+            </div>
+        </div>
+
+        <!-- Branch Distribution -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        <i class="ph ph-chart-pie text-emerald-500 text-lg"></i>
+                        Branch Attendance Share
+                    </h3>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">Last 30 Days share</span>
+                </div>
+                <div id="branchDistributionChart" class="w-full min-h-[300px] flex items-center justify-center"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Peak Hours Distribution -->
+        <div class="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        <i class="ph ph-clock text-amber-500 text-lg"></i>
+                        Peak Hours Activity Profile
+                    </h3>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">Last 30 Days</span>
+                </div>
+                <div id="peakHoursChart" class="w-full min-h-[250px]"></div>
+            </div>
+        </div>
+
+        <!-- Security Anomaly Watchtower -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col p-6">
+            <div class="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <i class="ph ph-shield-warning text-red-500 text-lg"></i>
+                    Security Anomaly Watchtower
+                </h3>
+                <span id="anomalyBadge" class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                    Live
+                </span>
+            </div>
+            <div class="flex-1 overflow-y-auto max-h-[250px] pr-1 space-y-3" id="anomalyLogsContainer">
+                <div class="text-xs text-slate-400 dark:text-slate-500 italic py-4 text-center">
+                    <i class="ph ph-shield-check text-2xl text-emerald-500 mb-1 block"></i>
+                    No recent security anomalies detected. System is secure.
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Live Attendance Stream Ticker -->
     <div id="liveTickerPanel" class="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/20 backdrop-blur-md p-4 shadow-sm relative overflow-hidden border-l-4 border-l-indigo-600 transition-all duration-300 dark:border-indigo-900/40 dark:bg-indigo-950/10">
         <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 pointer-events-none"></div>
@@ -195,3 +261,218 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Only load analytics if the active tab is dashboard
+    if (window.location.hash === '#dashboard' || !window.location.hash) {
+        initAnalyticsDashboard();
+    }
+});
+
+// Hook tab show to load analytics when Overview (dashboard) tab is selected
+const originalShowTab = window.showTab;
+window.showTab = function(tabId) {
+    if (typeof originalShowTab === 'function') {
+        originalShowTab(tabId);
+    }
+    if (tabId === 'dashboard') {
+        initAnalyticsDashboard();
+    }
+};
+
+let weeklyTrendChart = null;
+let branchDistributionChart = null;
+let peakHoursChart = null;
+
+async function initAnalyticsDashboard() {
+    try {
+        const res = await fetch('/ui/analytics');
+        if (!res.ok) throw new Error('Failed to fetch analytics');
+        const data = await res.json();
+        
+        // Update Anomaly Panel
+        renderAnomalyWatchtower(data.anomalies);
+        
+        // Check light/dark mode for chart colors
+        const isDark = document.documentElement.classList.contains('dark');
+        const gridColor = isDark ? '#334155' : '#e2e8f0';
+        const labelColor = isDark ? '#94a3b8' : '#64748b';
+        
+        // --- 1. Weekly Attendance Trend Chart ---
+        const weeklyOptions = {
+            chart: {
+                type: 'area',
+                height: 300,
+                toolbar: { show: false },
+                zoom: { enabled: false },
+                background: 'transparent'
+            },
+            theme: { mode: isDark ? 'dark' : 'light' },
+            stroke: { curve: 'smooth', width: 3, colors: ['#6366f1'] },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shadeIntensity: 1,
+                    opacityFrom: 0.45,
+                    opacityTo: 0.05,
+                    stops: [0, 100]
+                }
+            },
+            colors: ['#6366f1'],
+            series: [{
+                name: 'Attendance Rate',
+                data: data.weekly_trend.rates
+            }],
+            xaxis: {
+                categories: data.weekly_trend.dates,
+                labels: { style: { colors: labelColor } }
+            },
+            yaxis: {
+                max: 100,
+                labels: {
+                    formatter: function(val) { return val + "%"; },
+                    style: { colors: labelColor }
+                }
+            },
+            grid: { borderColor: gridColor },
+            tooltip: {
+                y: {
+                    formatter: function(val, { seriesIndex, dataPointIndex, w }) {
+                        return val + "% (" + data.weekly_trend.presents[dataPointIndex] + " present)";
+                    }
+                }
+            }
+        };
+        
+        if (weeklyTrendChart) {
+            weeklyTrendChart.destroy();
+        }
+        weeklyTrendChart = new ApexCharts(document.querySelector("#weeklyTrendChart"), weeklyOptions);
+        weeklyTrendChart.render();
+        
+        // --- 2. Branch Attendance Share Chart ---
+        const branchOptions = {
+            chart: {
+                type: 'donut',
+                height: 300,
+                background: 'transparent'
+            },
+            theme: { mode: isDark ? 'dark' : 'light' },
+            colors: ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'],
+            series: data.branch_comparison.data,
+            labels: data.branch_comparison.labels,
+            legend: {
+                position: 'bottom',
+                labels: { colors: labelColor }
+            },
+            plotOptions: {
+                pie: {
+                    donut: {
+                        labels: {
+                            show: true,
+                            name: { style: { colors: labelColor } },
+                            value: {
+                                style: { colors: isDark ? '#ffffff' : '#0f172a' },
+                                formatter: function(val) { return val + " punches"; }
+                            },
+                            total: {
+                                show: true,
+                                label: 'Total Punches',
+                                color: labelColor,
+                                formatter: function (w) {
+                                    return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        
+        if (branchDistributionChart) {
+            branchDistributionChart.destroy();
+        }
+        branchDistributionChart = new ApexCharts(document.querySelector("#branchDistributionChart"), branchOptions);
+        branchDistributionChart.render();
+        
+        // --- 3. Peak Hours Activity Chart ---
+        const peakOptions = {
+            chart: {
+                type: 'bar',
+                height: 250,
+                toolbar: { show: false },
+                background: 'transparent'
+            },
+            theme: { mode: isDark ? 'dark' : 'light' },
+            colors: ['#f59e0b'],
+            series: [{
+                name: 'Punch Count',
+                data: data.peak_hours.data
+            }],
+            xaxis: {
+                categories: data.peak_hours.labels,
+                labels: { style: { colors: labelColor } }
+            },
+            yaxis: {
+                labels: { style: { colors: labelColor } }
+            },
+            grid: { borderColor: gridColor },
+            plotOptions: {
+                bar: {
+                    borderRadius: 4,
+                    columnWidth: '60%'
+                }
+            }
+        };
+        
+        if (peakHoursChart) {
+            peakHoursChart.destroy();
+        }
+        peakHoursChart = new ApexCharts(document.querySelector("#peakHoursChart"), peakOptions);
+        peakHoursChart.render();
+        
+    } catch (e) {
+        console.error('Error rendering analytics dashboard:', e);
+    }
+}
+
+function renderAnomalyWatchtower(anomalies) {
+    const container = document.getElementById('anomalyLogsContainer');
+    if (!container) return;
+    
+    if (!anomalies || anomalies.length === 0) {
+        container.innerHTML = `
+            <div class="text-xs text-slate-400 dark:text-slate-500 italic py-8 text-center">
+                <i class="ph ph-shield-check text-2xl text-emerald-500 mb-1 block"></i>
+                No recent security anomalies detected. System is secure.
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = anomalies.map(log => `
+        <div class="p-3 bg-red-50/50 border border-red-100 rounded-xl flex flex-col gap-1 transition-all hover:bg-red-50 dark:bg-red-950/10 dark:border-red-950/40">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1">
+                    <span class="relative flex h-1.5 w-1.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                    </span>
+                    ${log.anomaly_type}
+                </span>
+                <span class="text-[9px] font-mono text-slate-400 dark:text-slate-500">${log.timestamp}</span>
+            </div>
+            <div class="text-[11px] font-medium text-slate-800 dark:text-slate-200">
+                <strong>${log.employee_name}</strong> (ID: ${log.employee_id}) @ ${log.branch_name}
+            </div>
+            <div class="text-[10px] text-slate-500 dark:text-slate-400 italic">
+                ${log.details}
+            </div>
+            <div class="text-[9px] font-mono text-slate-400 dark:text-slate-500">
+                Coords: ${log.coordinates}
+            </div>
+        </div>
+    `).join('');
+}
+</script>

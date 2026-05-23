@@ -192,9 +192,181 @@ async def cleanup_stale_selfies(ctx):
         db.close()
 
 
+async def nightly_missing_punch_scan(ctx):
+    """
+    Nightly scan running at 23:30.
+    1. Resolves employee shifts for today.
+    2. Identifies missing punches (only one punch or no punches on a working day).
+    3. Auto-creates a pending AttendanceCorrection entry if a check-in is unpaired.
+    4. Dispatches an FCM notification.
+    """
+    from datetime import date
+    from app.database.models import Employee, PunchLog, AttendanceCorrection, DeviceBinding
+    from app.services.report_service import resolve_employee_shift, pair_employee_punches
+    from app.services.notification_service import send_push_notification
+    
+    db = SessionLocal()
+    try:
+        today = date.today()
+        # Get all active, regular employees
+        employees = db.query(Employee).filter(Employee.is_deleted == False, Employee.is_active == True).all()
+        
+        flagged_count = 0
+        for emp in employees:
+            # Pair punches for today
+            paired = pair_employee_punches(db, emp, today, today)
+            day_records = paired.get("daily_records", [])
+            if not day_records:
+                continue
+                
+            record = day_records[0]
+            
+            # Check if this has an unpaired check-in
+            if record.get("first_in") and not record.get("last_out"):
+                # Missing punch! Check if we already created a correction request for this date
+                existing = db.query(AttendanceCorrection).filter(
+                    AttendanceCorrection.employee_id == emp.employee_id,
+                    AttendanceCorrection.correction_type == "missing_punch",
+                    AttendanceCorrection.created_at >= datetime.combine(today, datetime.time.min)
+                ).first()
+                
+                if not existing:
+                    # Auto-create correction
+                    correction = AttendanceCorrection(
+                        employee_id=emp.employee_id,
+                        correction_type="missing_punch",
+                        description=f"Auto-flagged missing check-out punch on {today}.",
+                        status="pending"
+                    )
+                    db.add(correction)
+                    db.commit()
+                    
+                    flagged_count += 1
+                    
+                    # Fire FCM push notification to employee's devices
+                    devices = db.query(DeviceBinding).filter(
+                        DeviceBinding.employee_id == emp.employee_id,
+                        DeviceBinding.is_active == True,
+                        DeviceBinding.fcm_token.isnot(None),
+                        DeviceBinding.fcm_token != ""
+                    ).all()
+                    
+                    for dev in devices:
+                        try:
+                            send_push_notification(
+                                fcm_token=dev.fcm_token,
+                                title="⏰ Missing Clock-Out Detected",
+                                body=f"Hi {emp.full_name}, we noticed you missed clocking out today ({today}). Please file a correction in the Employee Portal.",
+                                data={"type": "missing_punch_alert"}
+                            )
+                        except Exception:
+                            pass
+                            
+        return {"status": "success", "flagged_missing_punches": flagged_count}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+    finally:
+        db.close()
+
+
+async def email_scheduled_reports(ctx):
+    """
+    Weekly/Monthly HR Email Excel Report generator.
+    Runs via CRON, generates Openpyxl workbook, sends to HR SMTP recipients.
+    """
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.base import MIMEBase
+    from email import encoders
+    import io
+    from datetime import date, timedelta
+    from app.services.report_service import generate_excel_report
+    
+    db = SessionLocal()
+    try:
+        from app.database.models import AppConfig
+
+        def get_config_val(key, default=""):
+            cfg = db.query(AppConfig).filter(AppConfig.key == key).first()
+            return cfg.value if cfg else default
+
+        SMTP_HOST = get_config_val("smtp_host", os.getenv("SMTP_HOST", ""))
+        SMTP_PORT_STR = get_config_val("smtp_port", "")
+        SMTP_PORT = int(SMTP_PORT_STR) if SMTP_PORT_STR else int(os.getenv("SMTP_PORT", "587"))
+        SMTP_USER = get_config_val("smtp_user", os.getenv("SMTP_USER", ""))
+        SMTP_PASSWORD = get_config_val("smtp_password", os.getenv("SMTP_PASSWORD", ""))
+        HR_RECIPIENTS = get_config_val("hr_email_recipients", os.getenv("HR_EMAIL_RECIPIENTS", ""))
+
+        if not SMTP_HOST or not HR_RECIPIENTS:
+            return {"status": "skipped", "reason": "SMTP host or recipients not configured"}
+
+        # Let's generate report for the last 7 days
+        today = date.today()
+        start_d = today - timedelta(days=7)
+        end_d = today
+        
+        # Generate Excel Report using Openpyxl
+        wb = generate_excel_report(db, start_d, end_d)
+        
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        # Prepare email
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USER
+        msg['To'] = HR_RECIPIENTS
+        msg['Subject'] = f"Weekly Attendance System Report ({start_d} to {end_d})"
+        
+        body = f"""
+        Dear HR Team,
+        
+        Please find attached the Weekly Attendance Aggregate Excel Report for all active companies, branches, and employees.
+        
+        Summary Period: {start_d} to {end_d}
+        Generated on: {today}
+        
+        Best regards,
+        Virtual Attendance Middleware Automated System
+        """
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Attachment
+        part = MIMEBase('application', "octet-stream")
+        part.set_payload(buffer.read())
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f'attachment; filename="attendance_report_{start_d}_to_{end_d}.xlsx"')
+        msg.attach(part)
+        
+        # Send via SMTP
+        smtp_class = smtplib.SMTP_SSL if SMTP_PORT == 465 else smtplib.SMTP
+        with smtp_class(SMTP_HOST, SMTP_PORT) as server:
+            if SMTP_PORT != 465:
+                server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            recipients = [r.strip() for r in HR_RECIPIENTS.split(",") if r.strip()]
+            server.sendmail(SMTP_USER, recipients, msg.as_string())
+            
+        return {"status": "success", "recipients": recipients}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+    finally:
+        db.close()
+
+
 # Worker settings
 class WorkerSettings:
-    functions = [sync_punches_to_adms, retry_failed_punches, adms_heartbeat, cleanup_stale_jobs, send_clock_in_reminders, cleanup_stale_selfies]
+    functions = [
+        sync_punches_to_adms,
+        retry_failed_punches,
+        adms_heartbeat,
+        cleanup_stale_jobs,
+        send_clock_in_reminders,
+        cleanup_stale_selfies,
+        nightly_missing_punch_scan,
+        email_scheduled_reports
+    ]
     redis_settings = arq.connections.RedisSettings(
         host=os.getenv("REDIS_HOST", "redis"),
         port=int(os.getenv("REDIS_PORT", "6379")),
@@ -219,4 +391,8 @@ class WorkerSettings:
         arq.cron(send_clock_in_reminders, hour=8, minute=0, weekday={0, 1, 2, 3, 4}),
         # Cleanup stale selfies daily at 2 AM
         arq.cron(cleanup_stale_selfies, hour=2, minute=0),
+        # Missing punch scan nightly at 23:30
+        arq.cron(nightly_missing_punch_scan, hour=23, minute=30),
+        # Email reports every Monday at 01:00 AM
+        arq.cron(email_scheduled_reports, hour=1, minute=0, weekday=0),
     ]

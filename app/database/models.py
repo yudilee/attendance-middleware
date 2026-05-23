@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create_engine, ForeignKey, UniqueConstraint, Index, func, Text
+from sqlalchemy import Column, Integer, String, DateTime, Date, Float, Boolean, create_engine, ForeignKey, UniqueConstraint, Index, func, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 import datetime
@@ -56,6 +56,33 @@ class AdminUser(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class ShiftSchedule(Base):
+    __tablename__ = "shift_schedules"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    start_time = Column(String(5), default="08:00")
+    end_time = Column(String(5), default="17:00")
+    grace_minutes = Column(Integer, default=15)
+    min_work_hours = Column(Float, default=8.0)
+    overtime_after_hours = Column(Float, default=9.0)
+    working_days = Column(String(50), default="1,2,3,4,5")  # 1=Mon, 7=Sun
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class Company(Base):
+    __tablename__ = "companies"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(150), nullable=False)
+    code = Column(String(50), unique=True, index=True, nullable=False)
+    is_active = Column(Boolean, default=True)
+    shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    shift_schedule = relationship("ShiftSchedule", foreign_keys=[shift_schedule_id])
+
+
 class Branch(Base):
     """Configurable branch site for geofencing."""
     __tablename__ = "branches"
@@ -71,7 +98,35 @@ class Branch(Base):
     qr_code_data = Column(String(256), nullable=True)
     nfc_enabled = Column(Boolean, default=False, nullable=False)
     nfc_tag_data = Column(String(256), nullable=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True)
+    timezone_offset = Column(Integer, default=7)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    company = relationship("Company", foreign_keys=[company_id])
+    shift_schedule = relationship("ShiftSchedule", foreign_keys=[shift_schedule_id])
+
+
+class EmployeeGroup(Base):
+    __tablename__ = "employee_groups"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=False, index=True)
+    shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    shift_schedule = relationship("ShiftSchedule", foreign_keys=[shift_schedule_id])
+    branch = relationship("Branch", foreign_keys=[branch_id])
+
+
+class Holiday(Base):
+    __tablename__ = "holidays"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    date = Column(Date, unique=True, index=True, nullable=False)
+    is_recurring = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 class BranchCheckpoint(Base):
@@ -160,7 +215,42 @@ class Employee(Base):
     department = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     is_deleted = Column(Boolean, default=False, nullable=False)
+    employee_type = Column(String(50), default="regular")  # "regular", "internship", "daily_worker"
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    group_id = Column(Integer, ForeignKey("employee_groups.id"), nullable=True)
+    shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True)
     last_synced = Column(DateTime, default=datetime.datetime.utcnow)
+
+    company = relationship("Company", foreign_keys=[company_id])
+    group = relationship("EmployeeGroup", foreign_keys=[group_id])
+    shift_schedule = relationship("ShiftSchedule", foreign_keys=[shift_schedule_id])
+
+
+class LeaveRequest(Base):
+    __tablename__ = "leave_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(String(50), ForeignKey("employees.employee_id"), nullable=False, index=True)
+    leave_type = Column(String(50), nullable=False)  # 'annual', 'sick', 'permit'
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    reason = Column(String(500), nullable=True)
+    status = Column(String(20), default="pending")  # pending, approved, rejected
+    approved_by = Column(String(50), nullable=True)  # Admin username
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    admin_username = Column(String(100), nullable=False, index=True)
+    action = Column(String(150), nullable=False)  # e.g., "approved_device", "created_employee"
+    target_type = Column(String(50), nullable=True)  # "employee", "branch", "device"
+    target_id = Column(String(50), nullable=True)
+    details = Column(Text, nullable=True)  # JSON description / details
+    ip_address = Column(String(45), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 class AppConfig(Base):
@@ -346,6 +436,20 @@ def init_db():
         "ALTER TABLE branches ADD COLUMN IF NOT EXISTS polygon_coordinates TEXT;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN polygon_coordinates TEXT;",
         "ALTER TABLE branch_checkpoints ADD COLUMN IF NOT EXISTS geofence_type VARCHAR(20) DEFAULT 'circle';" if engine.name != "sqlite" else "ALTER TABLE branch_checkpoints ADD COLUMN geofence_type VARCHAR(20) DEFAULT 'circle';",
         "ALTER TABLE branch_checkpoints ADD COLUMN IF NOT EXISTS polygon_coordinates TEXT;" if engine.name != "sqlite" else "ALTER TABLE branch_checkpoints ADD COLUMN polygon_coordinates TEXT;",
+        # Phase 7: Shift Schedule, Company, Employee Group, Holiday, Leave Request, Audit Log support
+        "CREATE TABLE IF NOT EXISTS shift_schedules (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(100) NOT NULL, start_time VARCHAR(5) DEFAULT '08:00', end_time VARCHAR(5) DEFAULT '17:00', grace_minutes INTEGER DEFAULT 15, min_work_hours REAL DEFAULT 8.0, overtime_after_hours REAL DEFAULT 9.0, working_days VARCHAR(50) DEFAULT '1,2,3,4,5', is_default INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS shift_schedules (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, start_time VARCHAR(5) DEFAULT '08:00', end_time VARCHAR(5) DEFAULT '17:00', grace_minutes INTEGER DEFAULT 15, min_work_hours REAL DEFAULT 8.0, overtime_after_hours REAL DEFAULT 9.0, working_days VARCHAR(50) DEFAULT '1,2,3,4,5', is_default BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
+        "CREATE TABLE IF NOT EXISTS companies (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(150) NOT NULL, code VARCHAR(50) UNIQUE NOT NULL, is_active INTEGER DEFAULT 1, shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS companies (id SERIAL PRIMARY KEY, name VARCHAR(150) NOT NULL, code VARCHAR(50) UNIQUE NOT NULL, is_active BOOLEAN DEFAULT TRUE, shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
+        "CREATE TABLE IF NOT EXISTS employee_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(100) NOT NULL, branch_id INTEGER NOT NULL REFERENCES branches(id), shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS employee_groups (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, branch_id INTEGER NOT NULL REFERENCES branches(id), shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
+        "CREATE TABLE IF NOT EXISTS holidays (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(200) NOT NULL, date DATE UNIQUE NOT NULL, is_recurring INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS holidays (id SERIAL PRIMARY KEY, name VARCHAR(200) NOT NULL, date DATE UNIQUE NOT NULL, is_recurring BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
+        "CREATE TABLE IF NOT EXISTS leave_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id VARCHAR(50) NOT NULL REFERENCES employees(employee_id), leave_type VARCHAR(50) NOT NULL, start_date DATE NOT NULL, end_date DATE NOT NULL, reason VARCHAR(500), status VARCHAR(20) DEFAULT 'pending', approved_by VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS leave_requests (id SERIAL PRIMARY KEY, employee_id VARCHAR(50) NOT NULL REFERENCES employees(employee_id), leave_type VARCHAR(50) NOT NULL, start_date DATE NOT NULL, end_date DATE NOT NULL, reason VARCHAR(500), status VARCHAR(20) DEFAULT 'pending', approved_by VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
+        "CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_username VARCHAR(100) NOT NULL, action VARCHAR(150) NOT NULL, target_type VARCHAR(50), target_id VARCHAR(50), details TEXT, ip_address VARCHAR(45), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS audit_logs (id SERIAL PRIMARY KEY, admin_username VARCHAR(100) NOT NULL, action VARCHAR(150) NOT NULL, target_type VARCHAR(50), target_id VARCHAR(50), details TEXT, ip_address VARCHAR(45), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN company_id INTEGER REFERENCES companies(id);",
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift_schedule_id INTEGER REFERENCES shift_schedules(id);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN shift_schedule_id INTEGER REFERENCES shift_schedules(id);",
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS timezone_offset INTEGER DEFAULT 7;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN timezone_offset INTEGER DEFAULT 7;",
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS employee_type VARCHAR(50) DEFAULT 'regular';" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN employee_type VARCHAR(50) DEFAULT 'regular';",
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id);" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN company_id INTEGER REFERENCES companies(id);",
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES employee_groups(id);" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN group_id INTEGER REFERENCES employee_groups(id);",
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS shift_schedule_id INTEGER REFERENCES shift_schedules(id);" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN shift_schedule_id INTEGER REFERENCES shift_schedules(id);",
     ]
     # Phase 2 migration: BranchCheckpoint table
     migrations.append(

@@ -1,0 +1,217 @@
+<!-- ═══════════════════ AUDIT LOGS TAB ═══════════════════ -->
+<div id="audit-logs" class="tab-content hidden">
+    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 gap-4 bg-slate-50/50 dark:bg-slate-900/50">
+            <div>
+                <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <i class="ph ph-shield text-indigo-500 text-lg"></i>
+                    Administrative Audit Trail
+                </h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Chronological history of all admin modifications and system events</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="relative max-w-xs">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <i class="ph ph-magnifying-glass text-slate-400"></i>
+                    </span>
+                    <input type="text" id="auditSearchInput" onkeyup="filterAuditLogs()" class="block w-full pl-9 pr-4 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" placeholder="Search logs...">
+                </div>
+                <button type="button" onclick="loadAuditLogs(true)" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-800/60 transition-colors shadow-sm" title="Refresh">
+                    <i class="ph ph-arrow-clockwise"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 dark:bg-slate-800/30 dark:border-slate-800">
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Admin User</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Action</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Target Type</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Target ID</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Details</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">IP Address</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="auditLogsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/50">
+                    <tr>
+                        <td colspan="7" class="text-center py-10 text-sm text-slate-400 dark:text-slate-500">
+                            <i class="ph ph-spinner animate-spin text-2xl text-indigo-500 mb-2 block mx-auto"></i>
+                            Retrieving audit logs...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">
+            <div class="text-xs text-slate-500 dark:text-slate-400">
+                Showing logs <span id="auditStartIdx" class="font-bold text-slate-700 dark:text-slate-300">0</span> to <span id="auditEndIdx" class="font-bold text-slate-700 dark:text-slate-300">0</span>
+            </div>
+            <div class="flex gap-2">
+                <button type="button" id="auditPrevBtn" onclick="changeAuditPage(-1)" class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 transition-colors shadow-sm">
+                    <i class="ph ph-caret-left"></i> Previous
+                </button>
+                <button type="button" id="auditNextBtn" onclick="changeAuditPage(1)" class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 transition-colors shadow-sm">
+                    Next <i class="ph ph-caret-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let auditOffset = 0;
+const auditLimit = 25;
+let allAuditLogsCached = [];
+
+async function loadAuditLogs(forceRefresh = false) {
+    const tableBody = document.getElementById('auditLogsTableBody');
+    if (!tableBody) return;
+    
+    if (forceRefresh || allAuditLogsCached.length === 0 || auditOffset > 0) {
+        if (auditOffset === 0 && !forceRefresh) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-10 text-sm text-slate-400 dark:text-slate-500">
+                        <i class="ph ph-spinner animate-spin text-2xl text-indigo-500 mb-2 block mx-auto"></i>
+                        Fetching audit logs...
+                    </td>
+                </tr>
+            `;
+        }
+        
+        try {
+            const res = await fetch(`/ui/audit-logs?limit=${auditLimit * 2}&offset=${auditOffset}`);
+            if (!res.ok) throw new Error('Failed to fetch audit logs');
+            const data = await res.json();
+            
+            if (auditOffset === 0) {
+                allAuditLogsCached = data;
+            } else {
+                allAuditLogsCached = allAuditLogsCached.slice(0, auditOffset).concat(data);
+            }
+        } catch (e) {
+            notify('Failed to load audit logs', 'error');
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-8 text-sm text-red-500 dark:text-red-400">
+                        <i class="ph ph-x-circle text-2xl mb-1 block mx-auto"></i>
+                        Could not load administrative audit logs.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+    }
+
+    renderAuditTable();
+}
+
+function renderAuditTable() {
+    const tableBody = document.getElementById('auditLogsTableBody');
+    const startIdxEl = document.getElementById('auditStartIdx');
+    const endIdxEl = document.getElementById('auditEndIdx');
+    const prevBtn = document.getElementById('auditPrevBtn');
+    const nextBtn = document.getElementById('auditNextBtn');
+    const query = document.getElementById('auditSearchInput').value.toLowerCase().trim();
+    
+    let filtered = allAuditLogsCached;
+    if (query) {
+        filtered = allAuditLogsCached.filter(log => 
+            log.admin_username.toLowerCase().includes(query) ||
+            log.action.toLowerCase().includes(query) ||
+            (log.target_type && log.target_type.toLowerCase().includes(query)) ||
+            (log.details && log.details.toLowerCase().includes(query)) ||
+            (log.ip_address && log.ip_address.toLowerCase().includes(query))
+        );
+    }
+    
+    const displayLogs = filtered.slice(auditOffset, auditOffset + auditLimit);
+    
+    if (displayLogs.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-10 text-sm text-slate-400 dark:text-slate-500">
+                    <i class="ph ph-info text-2xl text-slate-300 mb-1 block mx-auto dark:text-slate-700"></i>
+                    No administrative audit logs found.
+                </td>
+            </tr>
+        `;
+        startIdxEl.textContent = '0';
+        endIdxEl.textContent = '0';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        return;
+    }
+
+    tableBody.innerHTML = displayLogs.map(log => {
+        let actionBadgeColor = 'bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+        if (log.action.includes('create') || log.action.includes('onboard') || log.action.includes('approve')) {
+            actionBadgeColor = 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400';
+        } else if (log.action.includes('delete') || log.action.includes('unbind') || log.action.includes('suspend')) {
+            actionBadgeColor = 'bg-red-50 text-red-700 dark:bg-red-950/20 dark:text-red-400';
+        } else if (log.action.includes('update') || log.action.includes('edit')) {
+            actionBadgeColor = 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400';
+        }
+
+        const dateLocal = log.created_at ? new Date(log.created_at + 'Z').toLocaleString() : '&mdash;';
+
+        return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                <td class="px-5 py-3.5 font-semibold text-slate-800 dark:text-slate-200">
+                    <span class="inline-flex items-center gap-1">
+                        <i class="ph-fill ph-user text-slate-400"></i>
+                        ${log.admin_username}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${actionBadgeColor}">
+                        ${log.action}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-xs text-slate-500 dark:text-slate-400 capitalize">${log.target_type || '&mdash;'}</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-slate-400 dark:text-slate-500">${log.target_id || '&mdash;'}</td>
+                <td class="px-5 py-3.5 text-xs text-slate-600 dark:text-slate-300 max-w-xs truncate" title="${log.details || ''}">${log.details || '&mdash;'}</td>
+                <td class="px-5 py-3.5 font-mono text-xs text-slate-500 dark:text-slate-400">${log.ip_address || '&mdash;'}</td>
+                <td class="px-5 py-3.5 text-xs text-slate-500 dark:text-slate-400">${dateLocal}</td>
+            </tr>
+        `;
+    }).join('');
+    
+    startIdxEl.textContent = auditOffset + 1;
+    endIdxEl.textContent = auditOffset + displayLogs.length;
+    
+    prevBtn.disabled = (auditOffset === 0);
+    // If we loaded fewer logs than limit * 2, we might be at the end, or we can look ahead
+    nextBtn.disabled = (displayLogs.length < auditLimit);
+}
+
+function changeAuditPage(direction) {
+    if (direction === -1) {
+        auditOffset = Math.max(0, auditOffset - auditLimit);
+    } else {
+        auditOffset += auditLimit;
+    }
+    loadAuditLogs();
+}
+
+function filterAuditLogs() {
+    auditOffset = 0;
+    renderAuditTable();
+}
+
+// Intercept tab loading to pull Audit logs
+const originalShowTabForAudit = window.showTab;
+window.showTab = function(tabId) {
+    if (typeof originalShowTabForAudit === 'function') {
+        originalShowTabForAudit(tabId);
+    }
+    if (tabId === 'audit-logs') {
+        loadAuditLogs();
+    }
+};
+</script>

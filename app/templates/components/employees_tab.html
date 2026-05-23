@@ -27,6 +27,8 @@
                         <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">PIN / ID</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Full Name</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Department</th>
+                        <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Company</th>
+                        <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
                         <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">ADMS Sync</th>
                         <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">App Access (Devices)</th>
                         <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
@@ -36,7 +38,7 @@
                 </thead>
                 <tbody id="employeesTabTbody" class="divide-y divide-slate-100 dark:divide-slate-800/40">
                     <tr>
-                        <td colspan="8" class="text-center py-12 text-sm text-slate-400 dark:text-slate-500">
+                        <td colspan="10" class="text-center py-12 text-sm text-slate-400 dark:text-slate-500">
                             <div class="flex flex-col items-center gap-2">
                                 <i class="ph ph-circle-notch animate-spin text-2xl text-indigo-500"></i>
                                 <span>Loading employees...</span>
@@ -60,7 +62,7 @@
             </div>
             
             <!-- Modal Content Form -->
-            <form id="employeeForm" onsubmit="saveEmployee(event)" class="p-6 space-y-4">
+            <form id="employeeForm" onsubmit="saveEmployee(event)" class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
                 <input type="hidden" id="emp_mode" value="create">
                 
                 <!-- PIN ID -->
@@ -80,6 +82,40 @@
                 <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1.5 dark:text-slate-300">Department</label>
                     <input type="text" id="emp_dept" placeholder="E.g. Engineering, Sales, HR" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                </div>
+
+                <!-- Employee Type -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5 dark:text-slate-300">Employee Type</label>
+                    <select id="emp_type" onchange="onEmployeeTypeChange()" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                        <option value="regular">Regular (ADMS Synchronized)</option>
+                        <option value="internship">Internship (Local-Only)</option>
+                        <option value="daily_worker">Daily Worker (Local-Only)</option>
+                    </select>
+                </div>
+
+                <!-- Company -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5 dark:text-slate-300">Company</label>
+                    <select id="emp_company_id" onchange="onEmployeeCompanyChange()" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                        <option value="">No Company assigned</option>
+                    </select>
+                </div>
+
+                <!-- Employee Group / Shift Group -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5 dark:text-slate-300">Employee/Shift Group</label>
+                    <select id="emp_group_id" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                        <option value="">No Group assigned</option>
+                    </select>
+                </div>
+
+                <!-- Custom Override Shift Schedule -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5 dark:text-slate-300">Custom Shift Override</label>
+                    <select id="emp_shift_schedule_id" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                        <option value="">No Override Schedule (Use Company/Branch/Group defaults)</option>
+                    </select>
                 </div>
 
                 <!-- Active Toggle -->

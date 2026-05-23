@@ -38,3 +38,63 @@ def test_get_device_config(client, db_session):
     data = response.json()
     assert "status" in data
     assert "branches" in data
+
+
+def test_smtp_settings(client, db_session):
+    """Admin should be able to get and set SMTP configurations."""
+    from app.services.auth_ui import create_access_token
+    from app.database.models import AdminUser, AppConfig
+    
+    # Create admin
+    admin = AdminUser(username="settingsadmin", hashed_password="hashed_placeholder")
+    db_session.add(admin)
+    db_session.commit()
+    
+    # Authenticate via cookie
+    token = create_access_token(data={"sub": "settingsadmin"})
+    client.cookies.set("dashboard_session", token)
+    
+    # 1. Post new SMTP settings
+    smtp_payload = {
+        "smtp_host": "smtp.test.com",
+        "smtp_port": 587,
+        "smtp_user": "test-user@test.com",
+        "smtp_password": "supersecretpassword",
+        "hr_email_recipients": "hr1@test.com,hr2@test.com"
+    }
+    
+    post_res = client.post("/ui/app-settings/smtp", json=smtp_payload)
+    assert post_res.status_code == 200
+    assert post_res.json() == {"status": "success"}
+    
+    # 2. Get SMTP settings and verify password is NOT returned directly but indicates set=True
+    get_res = client.get("/ui/app-settings/smtp")
+    assert get_res.status_code == 200
+    get_data = get_res.json()
+    assert get_data["smtp_host"] == "smtp.test.com"
+    assert get_data["smtp_port"] == 587
+    assert get_data["smtp_user"] == "test-user@test.com"
+    assert get_data["smtp_password_set"] is True
+    assert get_data["hr_email_recipients"] == "hr1@test.com,hr2@test.com"
+    
+    # 3. Modify settings without changing password (using __UNCHANGED__ value)
+    smtp_payload_modified = {
+        "smtp_host": "smtp.new.com",
+        "smtp_port": 465,
+        "smtp_user": "new-user@test.com",
+        "smtp_password": "__UNCHANGED__",
+        "hr_email_recipients": "hr-new@test.com"
+    }
+    
+    post_res2 = client.post("/ui/app-settings/smtp", json=smtp_payload_modified)
+    assert post_res2.status_code == 200
+    
+    # Verify password was preserved
+    pwd_cfg = db_session.query(AppConfig).filter(AppConfig.key == "smtp_password").first()
+    assert pwd_cfg.value == "supersecretpassword"
+    
+    # Verify other values updated
+    get_res2 = client.get("/ui/app-settings/smtp")
+    assert get_res2.json()["smtp_host"] == "smtp.new.com"
+    assert get_res2.json()["smtp_port"] == 465
+

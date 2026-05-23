@@ -48,6 +48,7 @@ def client():
     from app.api.v1.routes.supervisor import get_db as supervisor_get_db
     from app.api.v1.routes.admin_ui import get_db as admin_ui_get_db
     from app.api.v1.routes.summary import get_db as summary_get_db
+    from app.api.v1.routes.portal import get_db as portal_get_db
     from app.services.auth import get_db as auth_get_db
     from app.services.auth_ui import get_db as auth_ui_get_db
 
@@ -56,6 +57,7 @@ def client():
     app.dependency_overrides[supervisor_get_db] = _override_get_db
     app.dependency_overrides[admin_ui_get_db] = _override_get_db
     app.dependency_overrides[summary_get_db] = _override_get_db
+    app.dependency_overrides[portal_get_db] = _override_get_db
     app.dependency_overrides[auth_get_db] = _override_get_db
     app.dependency_overrides[auth_ui_get_db] = _override_get_db
 

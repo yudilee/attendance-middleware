@@ -94,6 +94,10 @@ def sync_employees_from_adms(db: Session):
                     # Skip soft-deleted employees to prevent re-activation/re-syncing
                     logger.debug(f"Skipping soft-deleted employee {pin} from ADMS sync")
                     continue
+                if emp.employee_type != "regular":
+                    # Skip local-only employees (internship/daily_worker) to avoid overwriting them
+                    logger.debug(f"Skipping local-only employee {pin} ({emp.employee_type}) from ADMS sync")
+                    continue
                 emp.adms_id = adms_id
                 emp.full_name = name
                 emp.department = dept

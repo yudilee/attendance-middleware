@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 
@@ -113,6 +113,23 @@ class AppConfigRequest(BaseModel):
     max_devices_per_employee: int = 5
 
 
+class SmtpSettingsRequest(BaseModel):
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_password: Optional[str] = None
+    hr_email_recipients: str
+
+
+class SmtpSettingsResponse(BaseModel):
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_password_set: bool
+    hr_email_recipients: str
+
+
+
 class ProfileUpdateRequest(BaseModel):
     username: str
     new_password: str
@@ -140,6 +157,9 @@ class BranchRequest(BaseModel):
     qr_code_data: Optional[str] = None
     nfc_enabled: bool = False
     nfc_tag_data: Optional[str] = None
+    company_id: Optional[int] = None
+    shift_schedule_id: Optional[int] = None
+    timezone_offset: Optional[int] = 7
 
 
 class PunchTypePayload(BaseModel):
@@ -238,12 +258,20 @@ class EmployeeCreatePayload(BaseModel):
     full_name: str
     department: Optional[str] = None
     is_active: bool = True
+    employee_type: str = "regular"  # "regular", "internship", "daily_worker"
+    company_id: Optional[int] = None
+    group_id: Optional[int] = None
+    shift_schedule_id: Optional[int] = None
 
 
 class EmployeeUpdatePayload(BaseModel):
     full_name: Optional[str] = None
     department: Optional[str] = None
     is_active: Optional[bool] = None
+    employee_type: Optional[str] = None
+    company_id: Optional[int] = None
+    group_id: Optional[int] = None
+    shift_schedule_id: Optional[int] = None
 
 
 class EmployeeResponse(BaseModel):
@@ -252,8 +280,160 @@ class EmployeeResponse(BaseModel):
     department: Optional[str] = None
     is_active: bool
     is_deleted: bool
+    employee_type: str
+    company_id: Optional[int] = None
+    group_id: Optional[int] = None
+    shift_schedule_id: Optional[int] = None
     last_synced: Optional[datetime] = None
     device_count: int
     adms_registered: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════ Shift Schedule Schemas ═══════════════════
+class ShiftScheduleCreate(BaseModel):
+    name: str
+    start_time: str = "08:00"
+    end_time: str = "17:00"
+    grace_minutes: int = 15
+    min_work_hours: float = 8.0
+    overtime_after_hours: float = 9.0
+    working_days: str = "1,2,3,4,5"
+    is_default: bool = False
+
+
+class ShiftScheduleUpdate(BaseModel):
+    name: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    grace_minutes: Optional[int] = None
+    min_work_hours: Optional[float] = None
+    overtime_after_hours: Optional[float] = None
+    working_days: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class ShiftScheduleResponse(BaseModel):
+    id: int
+    name: str
+    start_time: str
+    end_time: str
+    grace_minutes: int
+    min_work_hours: float
+    overtime_after_hours: float
+    working_days: str
+    is_default: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════ Company Schemas ═══════════════════
+class CompanyCreate(BaseModel):
+    name: str
+    code: str
+    is_active: bool = True
+    shift_schedule_id: Optional[int] = None
+
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    is_active: Optional[bool] = None
+    shift_schedule_id: Optional[int] = None
+
+
+class CompanyResponse(BaseModel):
+    id: int
+    name: str
+    code: str
+    is_active: bool
+    shift_schedule_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════ Employee Group Schemas ═══════════════════
+class EmployeeGroupCreate(BaseModel):
+    name: str
+    branch_id: int
+    shift_schedule_id: Optional[int] = None
+
+
+class EmployeeGroupUpdate(BaseModel):
+    name: Optional[str] = None
+    branch_id: Optional[int] = None
+    shift_schedule_id: Optional[int] = None
+
+
+class EmployeeGroupResponse(BaseModel):
+    id: int
+    name: str
+    branch_id: int
+    shift_schedule_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════ Holiday Schemas ═══════════════════
+class HolidayCreate(BaseModel):
+    name: str
+    date: date
+    is_recurring: bool = False
+
+
+class HolidayResponse(BaseModel):
+    id: int
+    name: str
+    date: date
+    is_recurring: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════ Leave Request Schemas ═══════════════════
+class LeaveRequestCreate(BaseModel):
+    employee_id: str
+    leave_type: str
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+
+
+class LeaveRequestUpdate(BaseModel):
+    status: str  # 'approved' or 'rejected'
+    reason: Optional[str] = None
+
+
+class LeaveRequestResponse(BaseModel):
+    id: int
+    employee_id: str
+    leave_type: str
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+    status: str
+    approved_by: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════ Audit Log Schemas ═══════════════════
+class AuditLogResponse(BaseModel):
+    id: int
+    admin_username: str
+    action: str
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+    details: Optional[str] = None
+    ip_address: Optional[str] = None
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

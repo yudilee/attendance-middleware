@@ -273,6 +273,22 @@ async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch
     Auto-registers the employee on the ADMS server if not already registered.
     Updates PunchLog.adms_status to 'uploaded' or 'failed'.
     """
+    db = SessionLocal()
+    try:
+        from app.database.models import Employee
+        emp = db.query(Employee).filter(Employee.employee_id == employee_id).first()
+        if emp and emp.employee_type != "regular":
+            logger.info(f"Bypassing ADMS push for local-only employee {employee_id} ({emp.employee_type})")
+            log = db.query(PunchLog).filter(PunchLog.id == log_id).first()
+            if log:
+                log.adms_status = "local_only"
+                log.server_sync_status = "local_only"
+                log.synced_at = datetime.utcnow()
+                db.commit()
+            return True
+    finally:
+        db.close()
+
     server_url, sn, _ = get_adms_config()
 
     if not server_url:

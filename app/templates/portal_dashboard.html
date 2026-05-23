@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Self-Service Portal — Dashboard</title>
+    
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+    
+    <style>
+        .portal-tab-content { display: none; }
+        .portal-tab-content.active { display: block; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col font-sans">
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 max-w-sm"></div>
+
+    <!-- Navigation Header -->
+    <header class="bg-white border-b border-slate-200 h-16 sticky top-0 z-40 flex items-center justify-between px-6 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="h-9 w-9 rounded-lg bg-indigo-600 flex items-center justify-center shadow-md">
+                <i class="ph-fill ph-fingerprint text-xl text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-sm font-bold text-slate-800 leading-tight">Employee Portal</h1>
+                <p class="text-[10px] text-indigo-600 font-semibold tracking-wider uppercase">Self-Service Dashboard</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div class="flex flex-col text-right">
+                <span class="text-sm font-bold text-slate-800">{{ employee.full_name }}</span>
+                <span class="text-[10px] text-slate-400 font-medium">PIN: {{ employee.employee_id }}</span>
+            </div>
+            <a href="/portal/logout" class="inline-flex items-center justify-center h-9 w-9 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors border border-slate-200" title="Logout">
+                <i class="ph ph-sign-out text-lg"></i>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        
+        <!-- Welcome Hero Card -->
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-900 to-slate-900 text-white p-6 shadow-md">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.15),transparent_40%)]"></div>
+            <div class="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <span class="text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2.5 py-0.5 rounded-full uppercase tracking-wider">{{ employee.employee_type.replace('_', ' ') }}</span>
+                        <span class="text-xs font-semibold bg-white/10 text-slate-300 px-2.5 py-0.5 rounded-full uppercase tracking-wider">{{ employee.department or "General" }}</span>
+                    </div>
+                    <h2 class="text-2xl font-extrabold tracking-tight">Welcome, {{ employee.full_name }}</h2>
+                    <p class="text-xs text-indigo-200/70 mt-1">Easily verify your attendance history, submit leaves, and correction requests below.</p>
+                </div>
+                
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-3 gap-3 md:gap-6 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4">
+                    <div class="text-center">
+                        <span class="block text-lg font-extrabold text-indigo-300">{{ total_present }}</span>
+                        <span class="text-[9px] uppercase tracking-wider text-slate-400">Present</span>
+                    </div>
+                    <div class="text-center border-x border-white/10 px-3 md:px-6">
+                        <span class="block text-lg font-extrabold text-amber-400">{{ total_late }}</span>
+                        <span class="text-[9px] uppercase tracking-wider text-slate-400">Lates</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="block text-lg font-extrabold text-emerald-400">{{ "%.1f"|format(total_hours) }}</span>
+                        <span class="text-[9px] uppercase tracking-wider text-slate-400">Hours</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Notification Banner -->
+        <div id="successBanner" class="hidden rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-3">
+                <i class="ph ph-check-circle text-lg text-emerald-600"></i>
+                <span id="successMessage" class="font-medium"></span>
+            </div>
+            <button onclick="document.getElementById('successBanner').style.display='none'" class="text-emerald-500 hover:text-emerald-700">
+                <i class="ph ph-x text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Today's Clock status Card -->
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Today's Punch Status</h3>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-sm font-bold text-slate-800">
+                            {% if today_rec %}
+                                {% if today_rec.status == 'Present' %}
+                                    <span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span> Clocked-In & Active
+                                {% else %}
+                                    {{ today_rec.status }}
+                                {% endif %}
+                            {% else %}
+                                Not Clocked-In Yet
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="flex flex-wrap gap-4 text-xs font-semibold text-slate-600">
+                    <div>
+                        <span class="block text-[10px] uppercase text-slate-400">Shift</span>
+                        <span>{{ today_rec.shift_name if today_rec else 'Regular Shift' }} ({{ today_rec.shift_start if today_rec else '08:00' }} - {{ today_rec.shift_end if today_rec else '17:00' }})</span>
+                    </div>
+                    <div class="border-l border-slate-200 pl-4">
+                        <span class="block text-[10px] uppercase text-slate-400">Clock-In</span>
+                        <span class="font-mono text-emerald-600 font-bold">{{ today_rec.first_in.strftime('%H:%M:%S') if (today_rec and today_rec.first_in) else '--:--:--' }}</span>
+                    </div>
+                    <div class="border-l border-slate-200 pl-4">
+                        <span class="block text-[10px] uppercase text-slate-400">Clock-Out</span>
+                        <span class="font-mono text-red-500 font-bold">{{ today_rec.last_out.strftime('%H:%M:%S') if (today_rec and today_rec.last_out) else '--:--:--' }}</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="openLeaveModal()" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 text-xs font-bold transition-all shadow-sm">
+                        <i class="ph ph-calendar-plus text-base text-slate-500"></i> Request Leave
+                    </button>
+                    <button onclick="openCorrectionModal()" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-xs font-bold transition-all shadow-sm">
+                        <i class="ph ph-receipt text-base"></i> File Correction
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Layout Tabs Section -->
+        <div>
+            <!-- Tabs Menu -->
+            <div class="flex border-b border-slate-200 gap-6 mb-6">
+                <button onclick="switchPortalTab('attendance-history')" class="portal-tab-btn border-b-2 border-indigo-600 pb-3 text-sm font-semibold text-indigo-600 focus:outline-none transition-all active" id="tabBtn-attendance-history">
+                    Attendance History
+                </button>
+                <button onclick="switchPortalTab('leaves')" class="portal-tab-btn border-b-2 border-transparent pb-3 text-sm font-medium text-slate-500 hover:text-slate-800 focus:outline-none transition-all" id="tabBtn-leaves">
+                    Leave Requests
+                </button>
+                <button onclick="switchPortalTab('corrections')" class="portal-tab-btn border-b-2 border-transparent pb-3 text-sm font-medium text-slate-500 hover:text-slate-800 focus:outline-none transition-all" id="tabBtn-corrections">
+                    Punch Corrections
+                </button>
+                <button onclick="switchPortalTab('workplaces')" class="portal-tab-btn border-b-2 border-transparent pb-3 text-sm font-medium text-slate-500 hover:text-slate-800 focus:outline-none transition-all" id="tabBtn-workplaces">
+                    My Workplaces
+                </button>
+            </div>
+
+            <!-- Tab 1: Attendance History -->
+            <div id="portalTab-attendance-history" class="portal-tab-content active rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                    <h3 class="text-sm font-semibold text-slate-800">My 30-Day Activity Log</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                <th class="px-6 py-3.5">Date</th>
+                                <th class="px-6 py-3.5">Shift</th>
+                                <th class="px-6 py-3.5">Clock In</th>
+                                <th class="px-6 py-3.5">Clock Out</th>
+                                <th class="px-6 py-3.5">Work Hours</th>
+                                <th class="px-6 py-3.5">Overtime</th>
+                                <th class="px-6 py-3.5">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for rec in daily_records %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="px-6 py-4 font-semibold text-slate-800">{{ rec.date.strftime('%a, %d %b %Y') }}</td>
+                                <td class="px-6 py-4 text-xs text-slate-500">{{ rec.shift_name }}</td>
+                                <td class="px-6 py-4 font-mono font-bold text-xs text-emerald-600">{{ rec.first_in.strftime('%H:%M') if rec.first_in else '&mdash;' }}</td>
+                                <td class="px-6 py-4 font-mono font-bold text-xs text-red-500">{{ rec.last_out.strftime('%H:%M') if rec.last_out else '&mdash;' }}</td>
+                                <td class="px-6 py-4 font-mono text-slate-700 font-semibold">{{ "%.2f"|format(rec.work_hours) }} hrs</td>
+                                <td class="px-6 py-4 font-mono text-slate-500">{{ "%.2f"|format(rec.overtime_hours) }} hrs</td>
+                                <td class="px-6 py-4">
+                                    {% if rec.status == 'Present' %}
+                                        {% if rec.is_late %}
+                                            <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Late In</span>
+                                        {% else %}
+                                            <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Present</span>
+                                        {% endif %}
+                                    {% elif rec.status.startswith('Leave') %}
+                                        <span class="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">Leave</span>
+                                    {% elif rec.status.startswith('Holiday') %}
+                                        <span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700">Holiday</span>
+                                    {% elif rec.status == 'Rest Day' %}
+                                        <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Rest Day</span>
+                                    {% else %}
+                                        <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">Absent</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center py-12 text-slate-400">
+                                    <i class="ph ph-calendar text-3xl mb-2 block mx-auto text-slate-300"></i>
+                                    No attendance activity recorded in the last 30 days.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 2: Leave Requests -->
+            <div id="portalTab-leaves" class="portal-tab-content rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                    <h3 class="text-sm font-semibold text-slate-800">My Leave Applications</h3>
+                    <button onclick="openLeaveModal()" class="inline-flex items-center gap-1 rounded bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 transition-colors shadow-sm">
+                        ➕ Request Leave
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                <th class="px-6 py-3.5">Leave Type</th>
+                                <th class="px-6 py-3.5">Start Date</th>
+                                <th class="px-6 py-3.5">End Date</th>
+                                <th class="px-6 py-3.5">Reason</th>
+                                <th class="px-6 py-3.5">Approved By</th>
+                                <th class="px-6 py-3.5">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for l in leaves %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="px-6 py-4 font-semibold text-slate-800 capitalize">{{ l.leave_type }}</td>
+                                <td class="px-6 py-4">{{ l.start_date.strftime('%d %b %Y') }}</td>
+                                <td class="px-6 py-4">{{ l.end_date.strftime('%d %b %Y') }}</td>
+                                <td class="px-6 py-4 text-xs text-slate-500 max-w-xs truncate" title="{{ l.reason }}">{{ l.reason or '&mdash;' }}</td>
+                                <td class="px-6 py-4 text-xs">{{ l.approved_by or '&mdash;' }}</td>
+                                <td class="px-6 py-4">
+                                    {% if l.status == 'approved' %}
+                                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Approved</span>
+                                    {% elif l.status == 'rejected' %}
+                                        <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">Rejected</span>
+                                    {% else %}
+                                        <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Pending Approval</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-12 text-slate-400">
+                                    <i class="ph ph-calendar-x text-3xl mb-2 block mx-auto text-slate-300"></i>
+                                    No leave requests submitted yet.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 3: Corrections -->
+            <div id="portalTab-corrections" class="portal-tab-content rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                    <h3 class="text-sm font-semibold text-slate-800">My Attendance Corrections</h3>
+                    <button onclick="openCorrectionModal()" class="inline-flex items-center gap-1 rounded bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 transition-colors shadow-sm">
+                        ➕ File Correction
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                <th class="px-6 py-3.5">Type</th>
+                                <th class="px-6 py-3.5">Proposed Punch</th>
+                                <th class="px-6 py-3.5">Reason / Notes</th>
+                                <th class="px-6 py-3.5">Reviewed By</th>
+                                <th class="px-6 py-3.5">Filing Date</th>
+                                <th class="px-6 py-3.5">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for c in corrections %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="px-6 py-4 font-semibold text-slate-800 capitalize">{{ c.correction_type.replace('_', ' ') }}</td>
+                                <td class="px-6 py-4 font-mono text-xs">
+                                    {% if c.proposed_timestamp %}
+                                        <span class="font-bold {{ 'text-emerald-600' if c.proposed_punch_type == 'In' else 'text-red-500' }}">{{ c.proposed_punch_type }}</span> @ ${c.proposed_timestamp.strftime('%Y-%m-%d %H:%M')}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 text-xs text-slate-500 max-w-xs truncate" title="{{ c.description }}">{{ c.description }}</td>
+                                <td class="px-6 py-4 text-xs">{{ c.reviewed_by or '&mdash;' }}</td>
+                                <td class="px-6 py-4 text-xs text-slate-400">{{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td class="px-6 py-4">
+                                    {% if c.status == 'approved' %}
+                                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Approved</span>
+                                    {% elif c.status == 'rejected' %}
+                                        <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">Rejected</span>
+                                    {% else %}
+                                        <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Pending Review</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-12 text-slate-400">
+                                    <i class="ph ph-receipt-x text-3xl mb-2 block mx-auto text-slate-300"></i>
+                                    No punch correction requests filed yet.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 4: Workplaces -->
+            <div id="portalTab-workplaces" class="portal-tab-content rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                    <h3 class="text-sm font-semibold text-slate-800">My Authorized Clock-In Locations</h3>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for br in branches %}
+                    <div class="rounded-xl border border-slate-200 p-4 hover:shadow-md transition-all flex items-start gap-4">
+                        <div class="h-10 w-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                            <i class="ph ph-map-pin text-xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-slate-800 text-sm">{{ br.name }}</h4>
+                            <p class="text-xs text-slate-400 mt-0.5">Geofence: {{ br.radius_meters }}m circle boundary</p>
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-600 mt-2">Active Authorized Area</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="col-span-2 text-center py-12 text-slate-400">
+                        <i class="ph ph-map text-3xl mb-2 block mx-auto text-slate-300"></i>
+                        No explicit geofence assignments. You are authorized globally!
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal 1: Request Leave Modal -->
+    <div id="leaveModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden">
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-xl w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-200">
+            <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <i class="ph ph-calendar-plus text-indigo-500 text-lg"></i>
+                    New Leave Request
+                </h3>
+                <button onclick="closeLeaveModal()" class="text-slate-400 hover:text-slate-600">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+            <form action="/portal/leave-request" method="POST" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Leave Type</label>
+                    <select name="leave_type" required class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        <option value="annual">Annual Leave</option>
+                        <option value="sick">Sick Leave</option>
+                        <option value="permit">Personal Permit</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Start Date</label>
+                        <input type="date" name="start_date" required class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1.5">End Date</label>
+                        <input type="date" name="end_date" required class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Reason</label>
+                    <textarea name="reason" placeholder="Provide leave request reason..." required class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm h-20 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"></textarea>
+                </div>
+                <div class="flex gap-3 pt-3">
+                    <button type="button" onclick="closeLeaveModal()" class="flex-1 rounded-lg border border-slate-300 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 rounded-lg bg-indigo-600 py-2.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/10">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: File Correction Modal -->
+    <div id="correctionModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden">
+        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-xl w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-200">
+            <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <i class="ph ph-receipt text-indigo-500 text-lg"></i>
+                    File Attendance Correction
+                </h3>
+                <button onclick="closeCorrectionModal()" class="text-slate-400 hover:text-slate-600">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+            <form action="/portal/correction" method="POST" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Correction Type</label>
+                    <select name="correction_type" required class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        <option value="missing_punch">Missing Clock-Out</option>
+                        <option value="wrong_time">Incorrect Punch Time</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Proposed Date</label>
+                        <input type="date" name="proposed_date" required class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Proposed Time</label>
+                        <input type="time" name="proposed_time" required class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Proposed Punch Type</label>
+                    <select name="proposed_punch_type" required class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        <option value="In">In (Clock-In)</option>
+                        <option value="Out">Out (Clock-Out)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Reason for Correction</label>
+                    <textarea name="description" placeholder="Explain the reason for correcting the punch log..." required class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm h-20 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"></textarea>
+                </div>
+                <div class="flex gap-3 pt-3">
+                    <button type="button" onclick="closeCorrectionModal()" class="flex-1 rounded-lg border border-slate-300 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 rounded-lg bg-indigo-600 py-2.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/10">Submit Filing</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Script Block -->
+    <script>
+        // Check url search params for success messaging
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const successMsg = urlParams.get('success');
+            if (successMsg) {
+                const banner = document.getElementById('successBanner');
+                const message = document.getElementById('successMessage');
+                if (banner && message) {
+                    message.textContent = successMsg;
+                    banner.style.display = 'flex';
+                    banner.classList.remove('hidden');
+                }
+            }
+        });
+
+        function switchPortalTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.portal-tab-content').forEach(el => el.classList.remove('active'));
+            // Remove active classes from buttons
+            document.querySelectorAll('.portal-tab-btn').forEach(btn => {
+                btn.classList.remove('border-indigo-600', 'text-indigo-600');
+                btn.classList.add('border-transparent', 'text-slate-500', 'hover:text-slate-800');
+            });
+            
+            // Show target tab
+            const target = document.getElementById(`portalTab-${tabId}`);
+            if (target) target.classList.add('active');
+            
+            const btn = document.getElementById(`tabBtn-${tabId}`);
+            if (btn) {
+                btn.classList.add('border-indigo-600', 'text-indigo-600');
+                btn.classList.remove('border-transparent', 'text-slate-500', 'hover:text-slate-800');
+            }
+        }
+
+        // Leave Modal functions
+        function openLeaveModal() {
+            const m = document.getElementById('leaveModal');
+            if (m) { m.style.display = 'flex'; m.classList.remove('hidden'); }
+        }
+        function closeLeaveModal() {
+            const m = document.getElementById('leaveModal');
+            if (m) { m.style.display = 'none'; m.classList.add('hidden'); }
+        }
+
+        // Correction Modal functions
+        function openCorrectionModal() {
+            const m = document.getElementById('correctionModal');
+            if (m) { m.style.display = 'flex'; m.classList.remove('hidden'); }
+        }
+        function closeCorrectionModal() {
+            const m = document.getElementById('correctionModal');
+            if (m) { m.style.display = 'none'; m.classList.add('hidden'); }
+        }
+
+        // Close on overlay click
+        window.addEventListener('click', (e) => {
+            const leaveM = document.getElementById('leaveModal');
+            if (e.target === leaveM) closeLeaveModal();
+            const corrM = document.getElementById('correctionModal');
+            if (e.target === corrM) closeCorrectionModal();
+        });
+    </script>
+</body>
+</html>

@@ -13,7 +13,7 @@ from fastapi import (
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_, and_
 from pydantic import BaseModel
 
 from app.database.models import (
@@ -22,6 +22,7 @@ from app.database.models import (
     ApiKey, ADMSRegisteredEmployee, AdminUser, PunchType,
     Employee, AppConfig, ADMSCredential, BindingBranch,
     EmployeeSupervisor, AttendanceCorrection,
+    Company, EmployeeGroup, ShiftSchedule, Holiday, LeaveRequest, AuditLog,
 )
 from app.services.auth import verify_api_key, generate_api_key, hash_api_key
 from app.services.auth_ui import (
@@ -37,6 +38,12 @@ from app.api.v1.schemas import (
     CorrectionRequest, CorrectionReview, SupervisorAssignment,
     OnboardGenerateRequest, CheckpointCreate, CheckpointUpdate,
     EmployeeCreatePayload, EmployeeUpdatePayload, EmployeeResponse,
+    ShiftScheduleCreate, ShiftScheduleUpdate, ShiftScheduleResponse,
+    CompanyCreate, CompanyUpdate, CompanyResponse,
+    EmployeeGroupCreate, EmployeeGroupUpdate, EmployeeGroupResponse,
+    HolidayCreate, HolidayResponse,
+    LeaveRequestCreate, LeaveRequestUpdate, LeaveRequestResponse,
+    AuditLogResponse, SmtpSettingsRequest, SmtpSettingsResponse,
 )
 from app.cache import invalidate_cache
 
@@ -294,6 +301,65 @@ async def update_app_settings(
         ))
     db.commit()
     return {"status": "success"}
+
+
+@router.get("/ui/app-settings/smtp", response_model=SmtpSettingsResponse)
+async def get_smtp_settings(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    def get_config_val(key, default=""):
+        cfg = db.query(AppConfig).filter(AppConfig.key == key).first()
+        return cfg.value if cfg else default
+
+    return SmtpSettingsResponse(
+        smtp_host=get_config_val("smtp_host", ""),
+        smtp_port=int(get_config_val("smtp_port", "587")),
+        smtp_user=get_config_val("smtp_user", ""),
+        smtp_password_set=bool(get_config_val("smtp_password", "")),
+        hr_email_recipients=get_config_val("hr_email_recipients", "")
+    )
+
+
+@router.post("/ui/app-settings/smtp")
+async def update_smtp_settings(
+    config: SmtpSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    def set_config_val(key, val, description=None):
+        entry = db.query(AppConfig).filter(AppConfig.key == key).first()
+        if entry:
+            entry.value = str(val)
+        else:
+            db.add(AppConfig(
+                key=key,
+                value=str(val),
+                description=description
+            ))
+
+    set_config_val("smtp_host", config.smtp_host, "HR report SMTP host server")
+    set_config_val("smtp_port", config.smtp_port, "HR report SMTP server port")
+    set_config_val("smtp_user", config.smtp_user, "HR report SMTP account user")
+    set_config_val("hr_email_recipients", config.hr_email_recipients, "HR report email recipients (comma separated)")
+
+    if config.smtp_password and config.smtp_password != "__UNCHANGED__":
+        set_config_val("smtp_password", config.smtp_password, "HR report SMTP account password")
+
+    db.commit()
+
+    log_audit_action(
+        db=db,
+        admin_username=admin.username,
+        action="update_smtp_settings",
+        target_type="AppConfig",
+        details=f"SMTP configurations updated (host: {config.smtp_host}, user: {config.smtp_user})",
+        request=request
+    )
+
+    return {"status": "success"}
+
 
 
 # ═══════════════════ ADMIN PROFILE ═══════════════════
@@ -604,6 +670,18 @@ async def assign_branch_to_device(
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
+        
+    # Validate company alignment if both employee and branch have companies assigned
+    if binding.employee_id:
+        employee = db.query(Employee).filter(Employee.employee_id == binding.employee_id).first()
+        print(f"DEBUG EMP ID: {binding.employee_id}, FOUND EMP: {employee}, EMP COMP: {employee.company_id if employee else 'NONE'}, BRANCH COMP: {branch.company_id}")
+        if employee and employee.company_id is not None and branch.company_id is not None:
+            if employee.company_id != branch.company_id:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Company mismatch: Cannot assign employee to a branch belonging to a different company."
+                )
+
     existing = db.query(BindingBranch).filter(
         BindingBranch.binding_id == binding_id,
         BindingBranch.branch_id == branch_id,
@@ -662,6 +740,9 @@ async def get_branches(
             "nfc_enabled": b.nfc_enabled,
             "nfc_tag_data": b.nfc_tag_data if b.nfc_enabled else None,
             "device_count": device_count,
+            "company_id": getattr(b, "company_id", None),
+            "shift_schedule_id": getattr(b, "shift_schedule_id", None),
+            "timezone_offset": getattr(b, "timezone_offset", 7),
         })
     return result
 
@@ -684,6 +765,9 @@ async def create_branch(
         qr_code_data=req.qr_code_data if req.qr_code_enabled else None,
         nfc_enabled=req.nfc_enabled,
         nfc_tag_data=req.nfc_tag_data if req.nfc_enabled else None,
+        company_id=req.company_id,
+        shift_schedule_id=req.shift_schedule_id,
+        timezone_offset=req.timezone_offset,
     )
     db.add(new_branch)
     db.commit()
@@ -711,6 +795,9 @@ async def update_branch(
     branch.qr_code_data = req.qr_code_data if req.qr_code_enabled else None
     branch.nfc_enabled = req.nfc_enabled
     branch.nfc_tag_data = req.nfc_tag_data if req.nfc_enabled else None
+    branch.company_id = req.company_id
+    branch.shift_schedule_id = req.shift_schedule_id
+    branch.timezone_offset = req.timezone_offset
     db.commit()
     affected_bindings = db.query(DeviceBinding).outerjoin(
         BindingBranch, DeviceBinding.id == BindingBranch.binding_id
@@ -1143,6 +1230,10 @@ async def list_employees_detailed(
             department=e.department,
             is_active=e.is_active,
             is_deleted=e.is_deleted,
+            employee_type=e.employee_type or "regular",
+            company_id=e.company_id,
+            group_id=e.group_id,
+            shift_schedule_id=e.shift_schedule_id,
             last_synced=e.last_synced,
             device_count=device_counts.get(e.employee_id, 0),
             adms_registered=(e.employee_id in adms_registered_set)
@@ -1174,10 +1265,15 @@ async def create_employee(
             existing.full_name = payload.full_name
             existing.department = payload.department
             existing.is_active = payload.is_active
+            existing.employee_type = payload.employee_type
+            existing.company_id = payload.company_id
+            existing.group_id = payload.group_id
+            existing.shift_schedule_id = payload.shift_schedule_id
             existing.last_synced = datetime.utcnow()
             db.commit()
             db.refresh(existing)
             logger.info("employee_reactivated", employee_id=payload.employee_id, admin=admin.username)
+            log_audit_action(db, admin.username, "reactivated_employee", "employee", payload.employee_id, f"Reactivated employee {payload.full_name} ({payload.employee_type})")
         else:
             raise HTTPException(status_code=400, detail=f"Employee ID {payload.employee_id} already exists.")
     else:
@@ -1186,14 +1282,19 @@ async def create_employee(
             full_name=payload.full_name,
             department=payload.department,
             is_active=payload.is_active,
+            employee_type=payload.employee_type,
+            company_id=payload.company_id,
+            group_id=payload.group_id,
+            shift_schedule_id=payload.shift_schedule_id,
             is_deleted=False
         )
         db.add(new_emp)
         db.commit()
         logger.info("employee_created", employee_id=payload.employee_id, admin=admin.username)
+        log_audit_action(db, admin.username, "created_employee", "employee", payload.employee_id, f"Created employee {payload.full_name} ({payload.employee_type})")
 
-    # ── Auto-register employee on ADMS asynchronously if active ──
-    if payload.is_active:
+    # ── Auto-register employee on ADMS asynchronously if active and regular ──
+    if payload.is_active and payload.employee_type == "regular":
         import httpx
         from app.services.adms_service import register_employee_on_adms
         server_url, sn, _ = get_adms_config()
@@ -1240,10 +1341,23 @@ async def update_employee(
         emp.is_active = payload.is_active
         status_changed = True
 
+    if payload.employee_type is not None:
+        emp.employee_type = payload.employee_type
+        
+    if payload.company_id is not None:
+        emp.company_id = payload.company_id
+        
+    if payload.group_id is not None:
+        emp.group_id = payload.group_id
+        
+    if payload.shift_schedule_id is not None:
+        emp.shift_schedule_id = payload.shift_schedule_id
+
     emp.last_synced = datetime.utcnow()
     db.commit()
 
     logger.info("employee_updated", employee_id=employee_id, admin=admin.username)
+    log_audit_action(db, admin.username, "updated_employee", "employee", employee_id, f"Updated employee {emp.full_name} details")
 
     # If employee is deactivated, invalidate caches for their device bindings
     if status_changed and not emp.is_active:
@@ -1251,9 +1365,9 @@ async def update_employee(
         for binding in bindings:
             await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
 
-    # ── Aligns changes with ADMS asynchronously ──
+    # ── Aligns changes with ADMS asynchronously (Only for regular employees) ──
     # If the name or status changed, we update their record on the ADMS server via OPERLOG push
-    if name_changed or (status_changed and emp.is_active):
+    if emp.employee_type == "regular" and (name_changed or (status_changed and emp.is_active)):
         import httpx
         from app.services.adms_service import register_employee_on_adms
         server_url, sn, _ = get_adms_config()
@@ -1325,7 +1439,7 @@ async def soft_delete_employee(
 
     db.commit()
     logger.info("employee_soft_deleted", employee_id=employee_id, admin=admin.username)
-    
+    log_audit_action(db, admin.username, "deleted_employee", "employee", employee_id, f"Soft-deleted employee {emp.full_name} and cascade-revoked device bindings")
     return {"status": "success", "message": f"Employee {employee_id} soft-deleted and app access cascade-revoked"}
 
 
@@ -1741,8 +1855,713 @@ async def export_reports(
             yield f'"{log.employee_id}","{log.employee_name}","{local_time_str}","{log.punch_type}",{log.latitude},{log.longitude},"{log.resolved_branch_name}","{log.adms_status}"\n'
 
     filename_scope = f"_branch_{branch_id}" if branch_id else ""
+    from fastapi.responses import StreamingResponse
     return StreamingResponse(
         generate_csv(),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=attendance_report{filename_scope}.csv"},
+    )
+
+
+# ═══════════════════ Audit Log Helper ═══════════════════
+def log_audit_action(db: Session, admin_username: str, action: str, target_type: str = None, target_id: str = None, details: str = None, request: Request = None):
+    ip_address = None
+    if request:
+        ip_address = request.client.host
+    log_entry = AuditLog(
+        admin_username=admin_username,
+        action=action,
+        target_type=target_type,
+        target_id=str(target_id) if target_id else None,
+        details=details,
+        ip_address=ip_address
+    )
+    db.add(log_entry)
+    db.commit()
+
+
+# ═══════════════════ Company CRUD Endpoints ═══════════════════
+@router.get("/ui/companies", response_model=list[CompanyResponse])
+async def get_companies(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    return db.query(Company).order_by(Company.name).all()
+
+
+@router.post("/ui/companies", response_model=CompanyResponse)
+async def create_company(
+    payload: CompanyCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    existing = db.query(Company).filter(Company.code == payload.code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Company code already exists.")
+    
+    company = Company(
+        name=payload.name,
+        code=payload.code,
+        is_active=payload.is_active,
+        shift_schedule_id=payload.shift_schedule_id
+    )
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+    
+    log_audit_action(db, admin.username, "created_company", "company", company.id, f"Created company {company.name} ({company.code})", request)
+    return company
+
+
+@router.put("/ui/companies/{company_id}", response_model=CompanyResponse)
+async def update_company(
+    company_id: int,
+    payload: CompanyUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+        
+    if payload.name is not None:
+        company.name = payload.name
+    if payload.code is not None:
+        # Check unique
+        existing = db.query(Company).filter(Company.code == payload.code, Company.id != company_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Company code already exists.")
+        company.code = payload.code
+    if payload.is_active is not None:
+        company.is_active = payload.is_active
+    if payload.shift_schedule_id is not None:
+        company.shift_schedule_id = payload.shift_schedule_id
+        
+    company.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(company)
+    
+    log_audit_action(db, admin.username, "updated_company", "company", company.id, f"Updated company {company.name}", request)
+    return company
+
+
+@router.delete("/ui/companies/{company_id}")
+async def delete_company(
+    company_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Check if branches depend on this company
+    has_branches = db.query(Branch).filter(Branch.company_id == company_id).first()
+    if has_branches:
+        raise HTTPException(status_code=400, detail="Cannot delete company. It still has active branches associated.")
+        
+    company_name = company.name
+    db.delete(company)
+    db.commit()
+    
+    log_audit_action(db, admin.username, "deleted_company", "company", company_id, f"Deleted company {company_name}", request)
+    return {"status": "success", "message": "Company deleted successfully."}
+
+
+@router.get("/ui/companies/{company_id}/branches")
+async def get_company_branches(
+    company_id: int,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    """Fetch branches belonging to a specific company for cascading selectors."""
+    branches = db.query(Branch).filter(Branch.company_id == company_id, Branch.is_active == True).order_by(Branch.name).all()
+    return [{"id": b.id, "name": b.name} for b in branches]
+
+
+# ═══════════════════ Employee Group CRUD Endpoints ═══════════════════
+@router.get("/ui/employee-groups", response_model=list[EmployeeGroupResponse])
+async def get_employee_groups(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    return db.query(EmployeeGroup).order_by(EmployeeGroup.name).all()
+
+
+@router.get("/ui/branches/{branch_id}/groups")
+async def get_branch_groups(
+    branch_id: int,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    """Fetch employee groups belonging to a specific branch for selectors."""
+    groups = db.query(EmployeeGroup).filter(EmployeeGroup.branch_id == branch_id).order_by(EmployeeGroup.name).all()
+    return [{"id": g.id, "name": g.name} for g in groups]
+
+
+@router.post("/ui/employee-groups", response_model=EmployeeGroupResponse)
+async def create_employee_group(
+    payload: EmployeeGroupCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    group = EmployeeGroup(
+        name=payload.name,
+        branch_id=payload.branch_id,
+        shift_schedule_id=payload.shift_schedule_id
+    )
+    db.add(group)
+    db.commit()
+    db.refresh(group)
+    
+    log_audit_action(db, admin.username, "created_group", "employee_group", group.id, f"Created group {group.name} inside branch {group.branch_id}", request)
+    return group
+
+
+@router.put("/ui/employee-groups/{group_id}", response_model=EmployeeGroupResponse)
+async def update_employee_group(
+    group_id: int,
+    payload: EmployeeGroupUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    group = db.query(EmployeeGroup).filter(EmployeeGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Employee group not found")
+        
+    if payload.name is not None:
+        group.name = payload.name
+    if payload.branch_id is not None:
+        group.branch_id = payload.branch_id
+    if payload.shift_schedule_id is not None:
+        group.shift_schedule_id = payload.shift_schedule_id
+        
+    group.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(group)
+    
+    log_audit_action(db, admin.username, "updated_group", "employee_group", group.id, f"Updated group {group.name}", request)
+    return group
+
+
+@router.delete("/ui/employee-groups/{group_id}")
+async def delete_employee_group(
+    group_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    group = db.query(EmployeeGroup).filter(EmployeeGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Employee group not found")
+        
+    group_name = group.name
+    db.delete(group)
+    db.commit()
+    
+    log_audit_action(db, admin.username, "deleted_group", "employee_group", group_id, f"Deleted group {group_name}", request)
+    return {"status": "success", "message": "Employee group deleted successfully."}
+
+
+# ═══════════════════ Shift Schedule CRUD Endpoints ═══════════════════
+@router.get("/ui/shift-schedules", response_model=list[ShiftScheduleResponse])
+async def get_shift_schedules(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    return db.query(ShiftSchedule).order_by(ShiftSchedule.name).all()
+
+
+@router.post("/ui/shift-schedules", response_model=ShiftScheduleResponse)
+async def create_shift_schedule(
+    payload: ShiftScheduleCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    # If is_default is true, unset default from other schedules
+    if payload.is_default:
+        db.query(ShiftSchedule).update({"is_default": False})
+        
+    schedule = ShiftSchedule(
+        name=payload.name,
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+        grace_minutes=payload.grace_minutes,
+        min_work_hours=payload.min_work_hours,
+        overtime_after_hours=payload.overtime_after_hours,
+        working_days=payload.working_days,
+        is_default=payload.is_default
+    )
+    db.add(schedule)
+    db.commit()
+    db.refresh(schedule)
+    
+    log_audit_action(db, admin.username, "created_shift", "shift_schedule", schedule.id, f"Created shift schedule {schedule.name} ({schedule.start_time}-{schedule.end_time})", request)
+    return schedule
+
+
+@router.put("/ui/shift-schedules/{schedule_id}", response_model=ShiftScheduleResponse)
+async def update_shift_schedule(
+    schedule_id: int,
+    payload: ShiftScheduleUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Shift schedule not found")
+        
+    if payload.is_default is True:
+        # Unset other defaults
+        db.query(ShiftSchedule).filter(ShiftSchedule.id != schedule_id).update({"is_default": False})
+        schedule.is_default = True
+    elif payload.is_default is False:
+        schedule.is_default = False
+        
+    if payload.name is not None:
+        schedule.name = payload.name
+    if payload.start_time is not None:
+        schedule.start_time = payload.start_time
+    if payload.end_time is not None:
+        schedule.end_time = payload.end_time
+    if payload.grace_minutes is not None:
+        schedule.grace_minutes = payload.grace_minutes
+    if payload.min_work_hours is not None:
+        schedule.min_work_hours = payload.min_work_hours
+    if payload.overtime_after_hours is not None:
+        schedule.overtime_after_hours = payload.overtime_after_hours
+    if payload.working_days is not None:
+        schedule.working_days = payload.working_days
+        
+    db.commit()
+    db.refresh(schedule)
+    
+    log_audit_action(db, admin.username, "updated_shift", "shift_schedule", schedule.id, f"Updated shift schedule {schedule.name}", request)
+    return schedule
+
+
+@router.delete("/ui/shift-schedules/{schedule_id}")
+async def delete_shift_schedule(
+    schedule_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Shift schedule not found")
+        
+    schedule_name = schedule.name
+    db.delete(schedule)
+    db.commit()
+    
+    log_audit_action(db, admin.username, "deleted_shift", "shift_schedule", schedule_id, f"Deleted shift schedule {schedule_name}", request)
+    return {"status": "success", "message": "Shift schedule deleted successfully."}
+
+
+# ═══════════════════ Holiday CRUD Endpoints ═══════════════════
+@router.get("/ui/holidays", response_model=list[HolidayResponse])
+async def get_holidays(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    return db.query(Holiday).order_by(Holiday.date.desc()).all()
+
+
+@router.post("/ui/holidays", response_model=HolidayResponse)
+async def create_holiday(
+    payload: HolidayCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    existing = db.query(Holiday).filter(Holiday.date == payload.date).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Holiday for this date already exists.")
+        
+    holiday = Holiday(
+        name=payload.name,
+        date=payload.date,
+        is_recurring=payload.is_recurring
+    )
+    db.add(holiday)
+    db.commit()
+    db.refresh(holiday)
+    
+    log_audit_action(db, admin.username, "created_holiday", "holiday", holiday.id, f"Created holiday {holiday.name} on {holiday.date}", request)
+    return holiday
+
+
+@router.delete("/ui/holidays/{holiday_id}")
+async def delete_holiday(
+    holiday_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    holiday = db.query(Holiday).filter(Holiday.id == holiday_id).first()
+    if not holiday:
+        raise HTTPException(status_code=404, detail="Holiday not found")
+        
+    holiday_name = holiday.name
+    db.delete(holiday)
+    db.commit()
+    
+    log_audit_action(db, admin.username, "deleted_holiday", "holiday", holiday_id, f"Deleted holiday {holiday_name}", request)
+    return {"status": "success", "message": "Holiday deleted successfully."}
+
+
+# ═══════════════════ Leave Request CRUD Endpoints ═══════════════════
+@router.get("/ui/leave-requests", response_model=list[LeaveRequestResponse])
+async def get_leave_requests(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    return db.query(LeaveRequest).order_by(LeaveRequest.created_at.desc()).all()
+
+
+@router.post("/ui/leave-requests", response_model=LeaveRequestResponse)
+async def create_leave_request(
+    payload: LeaveRequestCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    # Verify employee exists
+    emp = db.query(Employee).filter(Employee.employee_id == payload.employee_id, Employee.is_deleted == False).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    leave = LeaveRequest(
+        employee_id=payload.employee_id,
+        leave_type=payload.leave_type,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        reason=payload.reason,
+        status="approved", # Admin created is auto-approved
+        approved_by=admin.username
+    )
+    db.add(leave)
+    db.commit()
+    db.refresh(leave)
+    
+    log_audit_action(db, admin.username, "created_leave", "leave_request", leave.id, f"Created approved leave request for {leave.employee_id} ({leave.start_date} to {leave.end_date})", request)
+    return leave
+
+
+@router.put("/ui/leave-requests/{leave_id}", response_model=LeaveRequestResponse)
+async def review_leave_request(
+    leave_id: int,
+    payload: LeaveRequestUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    leave = db.query(LeaveRequest).filter(LeaveRequest.id == leave_id).first()
+    if not leave:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+        
+    leave.status = payload.status
+    leave.approved_by = admin.username
+    db.commit()
+    db.refresh(leave)
+    
+    log_audit_action(db, admin.username, f"reviewed_leave_{payload.status}", "leave_request", leave.id, f"Reviewed leave request for {leave.employee_id} status={payload.status}", request)
+    return leave
+
+
+@router.delete("/ui/leave-requests/{leave_id}")
+async def delete_leave_request(
+    leave_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    leave = db.query(LeaveRequest).filter(LeaveRequest.id == leave_id).first()
+    if not leave:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+        
+    db.delete(leave)
+    db.commit()
+    
+    log_audit_action(db, admin.username, "deleted_leave", "leave_request", leave_id, "Deleted leave request record", request)
+    return {"status": "success", "message": "Leave request deleted successfully."}
+
+
+# ═══════════════════ Audit Log Endpoints ═══════════════════
+@router.get("/ui/audit-logs", response_model=list[AuditLogResponse])
+async def get_audit_logs(
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    return db.query(AuditLog).order_by(AuditLog.created_at.desc()).offset(offset).limit(limit).all()
+
+
+@router.get("/ui/analytics")
+async def get_analytics_dashboard(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    import datetime
+    from datetime import timedelta
+    from sqlalchemy import func
+    from app.database.models import Employee, PunchLog, Branch, DeviceBinding, BindingBranch
+
+    # 1. Headcount
+    active_headcount = db.query(Employee).filter(Employee.is_deleted == False, Employee.is_active == True).count()
+
+    # Today's local date range (GMT+7 default)
+    now_local = datetime.datetime.utcnow() + timedelta(hours=7)
+    today_start_local = datetime.datetime.combine(now_local.date(), datetime.time.min)
+    today_end_local = datetime.datetime.combine(now_local.date(), datetime.time.max)
+
+    # Convert local bounds to UTC for DB
+    today_start_utc = today_start_local - timedelta(hours=7)
+    today_end_utc = today_end_local - timedelta(hours=7)
+
+    # Today's unique check-ins
+    today_present = db.query(func.count(func.distinct(PunchLog.employee_id))).filter(
+        PunchLog.timestamp >= today_start_utc,
+        PunchLog.timestamp <= today_end_utc,
+        func.lower(PunchLog.punch_type).in_(["in", "check in"])
+    ).scalar() or 0
+
+    attendance_rate = 0.0
+    if active_headcount > 0:
+        attendance_rate = round((today_present / active_headcount) * 100, 1)
+
+    # Total punches today
+    today_punches = db.query(PunchLog).filter(
+        PunchLog.timestamp >= today_start_utc,
+        PunchLog.timestamp <= today_end_utc
+    ).count()
+
+    # Today's mock locations count
+    today_mocks = db.query(PunchLog).filter(
+        PunchLog.timestamp >= today_start_utc,
+        PunchLog.timestamp <= today_end_utc,
+        PunchLog.is_mock_location == True
+    ).count()
+
+    # 2. Seven-Day Trend
+    trend_dates = []
+    trend_rates = []
+    trend_presents = []
+    
+    for i in range(6, -1, -1):
+        day = now_local.date() - timedelta(days=i)
+        day_start_utc = datetime.datetime.combine(day, datetime.time.min) - timedelta(hours=7)
+        day_end_utc = datetime.datetime.combine(day, datetime.time.max) - timedelta(hours=7)
+        
+        day_present = db.query(func.count(func.distinct(PunchLog.employee_id))).filter(
+            PunchLog.timestamp >= day_start_utc,
+            PunchLog.timestamp <= day_end_utc,
+            func.lower(PunchLog.punch_type).in_(["in", "check in"])
+        ).scalar() or 0
+        
+        day_rate = 0.0
+        if active_headcount > 0:
+            day_rate = round((day_present / active_headcount) * 100, 1)
+            
+        trend_dates.append(day.strftime("%a %d %b"))
+        trend_rates.append(day_rate)
+        trend_presents.append(day_present)
+
+    # 3. Branch breakdown & Hourly distribution in last 30 days
+    days_30_ago = datetime.datetime.utcnow() - timedelta(days=30)
+    
+    branch_stats = {}
+    branches = db.query(Branch).filter(Branch.is_active == True).all()
+    for b in branches:
+        branch_stats[b.name] = 0
+
+    # Get employee to branch mappings
+    emp_branches = db.query(Employee.employee_id, Branch.name).select_from(Employee).join(
+        DeviceBinding, Employee.employee_id == DeviceBinding.employee_id
+    ).join(
+        BindingBranch, DeviceBinding.id == BindingBranch.binding_id
+    ).join(
+        Branch, BindingBranch.branch_id == Branch.id
+    ).all()
+    
+    emp_to_branch = {eb[0]: eb[1] for eb in emp_branches}
+    
+    punches_30 = db.query(PunchLog.employee_id, PunchLog.timestamp).filter(
+        PunchLog.timestamp >= days_30_ago
+    ).all()
+    
+    hourly_distribution = [0] * 24
+    for p in punches_30:
+        # Branch breakdown
+        br_name = emp_to_branch.get(p.employee_id)
+        if br_name and br_name in branch_stats:
+            branch_stats[br_name] += 1
+            
+        # Peak hours local calculation
+        local_time = p.timestamp + timedelta(hours=7)
+        hourly_distribution[local_time.hour] += 1
+
+    # 4. Security warnings / Anomalies (last 30 days)
+    anomaly_logs = db.query(PunchLog).filter(
+        PunchLog.timestamp >= days_30_ago,
+        or_(
+            PunchLog.is_mock_location == True,
+            PunchLog.notes.like("%off-site%"),
+            PunchLog.notes.like("%geofence%")
+        )
+    ).order_by(PunchLog.timestamp.desc()).limit(15).all()
+
+    anomalies_list = []
+    for log in anomaly_logs:
+        emp = db.query(Employee).filter(Employee.employee_id == log.employee_id).first()
+        emp_name = emp.full_name if emp else "Unknown"
+        
+        # Determine branch
+        branch_name = "Unknown Branch"
+        if emp:
+            binding = db.query(DeviceBinding).filter(DeviceBinding.employee_id == emp.employee_id, DeviceBinding.is_active == True).first()
+            if binding:
+                ba = db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).first()
+                if ba:
+                    br = db.query(Branch).filter(Branch.id == ba.branch_id).first()
+                    if br:
+                        branch_name = br.name
+        
+        anomaly_type = "Mock Location" if log.is_mock_location else "Geofence Violation"
+        details = log.notes or "Coordinates outside authorized boundaries"
+        if log.is_mock_location:
+            details = "Mock GPS application detected on device"
+            
+        anomalies_list.append({
+            "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "employee_id": log.employee_id,
+            "employee_name": emp_name,
+            "branch_name": branch_name,
+            "anomaly_type": anomaly_type,
+            "details": details,
+            "coordinates": f"{log.latitude:.5f}, {log.longitude:.5f}" if log.latitude is not None and log.longitude is not None else "0.00000, 0.00000"
+        })
+
+    return {
+        "headcount": active_headcount,
+        "today_present": today_present,
+        "today_punches": today_punches,
+        "attendance_rate": attendance_rate,
+        "today_mocks": today_mocks,
+        "weekly_trend": {
+            "dates": trend_dates,
+            "rates": trend_rates,
+            "presents": trend_presents
+        },
+        "branch_comparison": {
+            "labels": list(branch_stats.keys()),
+            "data": list(branch_stats.values())
+        },
+        "peak_hours": {
+            "labels": [f"{h:02d}:00" for h in range(24)],
+            "data": hourly_distribution
+        },
+        "anomalies": anomalies_list
+    }
+
+
+# ═══════════════════ Report Endpoints ═══════════════════
+@router.get("/ui/reports/work-hours")
+async def get_work_hours_report(
+    from_date: str,
+    to_date: str,
+    company_id: Optional[int] = None,
+    branch_id: Optional[int] = None,
+    group_id: Optional[int] = None,
+    department: Optional[str] = None,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    from app.services.report_service import pair_employee_punches
+    from datetime import date
+    try:
+        start_d = date.fromisoformat(from_date)
+        end_d = date.fromisoformat(to_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    # Fetch employees applying filters
+    query = db.query(Employee).filter(Employee.is_deleted == False)
+    if company_id:
+        query = query.filter(Employee.company_id == company_id)
+    if group_id:
+        query = query.filter(Employee.group_id == group_id)
+    if department:
+        query = query.filter(Employee.department == department)
+        
+    if branch_id:
+        from app.database.models import DeviceBinding, BindingBranch
+        bindings = db.query(DeviceBinding.employee_id).outerjoin(
+            BindingBranch, DeviceBinding.id == BindingBranch.binding_id
+        ).filter(
+            or_(DeviceBinding.branch_id == branch_id, BindingBranch.branch_id == branch_id)
+        ).subquery()
+        query = query.filter(Employee.employee_id.in_(bindings))
+
+    employees = query.order_by(Employee.full_name).all()
+    
+    results = []
+    for emp in employees:
+        paired = pair_employee_punches(db, emp, start_d, end_d)
+        results.append(paired)
+        
+    return results
+
+
+@router.get("/ui/reports/export")
+async def export_excel_report(
+    from_date: str,
+    to_date: str,
+    company_id: Optional[int] = None,
+    branch_id: Optional[int] = None,
+    group_id: Optional[int] = None,
+    department: Optional[str] = None,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin)
+):
+    from app.services.report_service import generate_excel_report
+    from datetime import date
+    import io
+    from fastapi.responses import StreamingResponse
+    try:
+        start_d = date.fromisoformat(from_date)
+        end_d = date.fromisoformat(to_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    # Generate workbook
+    wb = generate_excel_report(
+        db, start_d, end_d,
+        company_id=company_id,
+        branch_id=branch_id,
+        group_id=group_id,
+        department=department
+    )
+    
+    # Save workbook to memory buffer
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    log_audit_action(db, admin.username, "exported_excel_report", "report", None, f"Exported attendance report from {from_date} to {to_date}")
+    
+    filename = f"attendance_report_{from_date}_to_{to_date}.xlsx"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )

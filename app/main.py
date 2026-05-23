@@ -171,6 +171,7 @@ from app.api.v1.routes import supervisor as supervisor_routes
 from app.api.v1.routes import health as health_routes
 from app.api.v1.routes import admin_ui as admin_ui_routes
 from app.api.v1.routes import summary as summary_routes
+from app.api.v1.routes import portal as portal_routes
 
 # Configure shared ARQ pool and limiter references
 punch_routes.configure(arq_pool, limiter)
@@ -184,3 +185,4 @@ app.include_router(supervisor_routes.router)
 app.include_router(health_routes.router)
 app.include_router(admin_ui_routes.router)
 app.include_router(summary_routes.router)
+app.include_router(portal_routes.router)
