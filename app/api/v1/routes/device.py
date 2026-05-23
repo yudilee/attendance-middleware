@@ -198,6 +198,8 @@ async def get_device_config(
                     longitude=cp.longitude,
                     radius_meters=cp.radius_meters,
                     is_active=cp.is_active,
+                    geofence_type=cp.geofence_type,
+                    polygon_coordinates=cp.polygon_coordinates,
                     created_at=cp.created_at.isoformat() if cp.created_at else None,
                     updated_at=cp.updated_at.isoformat() if cp.updated_at else None
                 )
@@ -209,6 +211,8 @@ async def get_device_config(
                 latitude=branch.latitude,
                 longitude=branch.longitude,
                 radius_meters=branch.radius_meters,
+                geofence_type=branch.geofence_type,
+                polygon_coordinates=branch.polygon_coordinates,
                 qr_code_enabled=branch.qr_code_enabled,
                 qr_code_data=branch.qr_code_data if branch.qr_code_enabled else None,
                 nfc_enabled=branch.nfc_enabled,
