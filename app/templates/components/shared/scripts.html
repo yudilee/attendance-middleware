@@ -903,7 +903,10 @@
         tbody.innerHTML = filtered.map(b => `
             <tr class="${b.is_active ? 'hover:bg-slate-50 dark:hover:bg-slate-800/40' : 'opacity-60 hover:bg-slate-50 dark:hover:bg-slate-800/40'} transition-colors">
                 <td class="px-5 py-4"><strong class="text-slate-800 dark:text-slate-100">${b.name}</strong></td>
-                <td class="px-5 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">${b.latitude.toFixed(5)}, ${b.longitude.toFixed(5)}</td>
+                <td class="px-5 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">
+                    ${b.latitude !== null && b.latitude !== undefined ? b.latitude.toFixed(5) : '0.00000'}, 
+                    ${b.longitude !== null && b.longitude !== undefined ? b.longitude.toFixed(5) : '0.00000'}
+                </td>
                 <td class="px-5 py-4 text-sm text-slate-700 dark:text-slate-300">${b.radius_meters}m</td>
                 <td class="px-5 py-4 text-center">${b.qr_code_enabled ? '<span class="text-emerald-600 font-semibold">✓</span>' : '<span class="text-slate-300">—</span>'}</td>
                 <td class="px-5 py-4 text-center">${b.nfc_enabled ? '<span class="text-indigo-600 font-semibold dark:text-indigo-400">✓</span>' : '<span class="text-slate-300">—</span>'}</td>
@@ -926,6 +929,7 @@
 
     async function loadBranches() {
         try {
+            await loadOnboardingReferenceData();
             const res = await fetch('/ui/branches');
             if (!res.ok) {
                 const errText = await res.text();
@@ -1515,7 +1519,10 @@
             tbody.innerHTML = data.map(cp => `
                 <tr class="${cp.is_active ? 'hover:bg-slate-50 dark:hover:bg-slate-800/40' : 'opacity-60 hover:bg-slate-50 dark:hover:bg-slate-800/40'} transition-colors">
                     <td class="px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100">${cp.name}</td>
-                    <td class="px-3 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">${cp.latitude.toFixed(5)}, ${cp.longitude.toFixed(5)}</td>
+                    <td class="px-3 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">
+                        ${cp.latitude !== null && cp.latitude !== undefined ? cp.latitude.toFixed(5) : '0.00000'}, 
+                        ${cp.longitude !== null && cp.longitude !== undefined ? cp.longitude.toFixed(5) : '0.00000'}
+                    </td>
                     <td class="px-3 py-2.5 text-sm text-center text-slate-700 dark:text-slate-300">${cp.geofence_type === 'polygon' ? '⬡ Polygon' : cp.radius_meters + 'm'}</td>
                     <td class="px-3 py-2.5 text-center">
                         <label class="cursor-pointer" onclick="toggleCheckpointStatus(${branchId}, ${cp.id}, ${cp.is_active})">
