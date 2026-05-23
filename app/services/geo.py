@@ -5,6 +5,7 @@ Geofencing service with support for:
 - Branch checkpoint validation (multiple clock-in points per branch)
 """
 import math
+import json
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,32 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return c * 6371000  # Earth radius in meters
 
 
+def point_in_polygon(lat: float, lon: float, polygon: list[list[float]]) -> bool:
+    """
+    Check if a coordinate (lat, lon) is inside a polygon using Ray-Casting algorithm.
+    polygon is a list of [lat, lon] coordinates, e.g. [[lat1, lon1], [lat2, lon2], ...]
+    """
+    num_points = len(polygon)
+    if num_points < 3:
+        return False
+        
+    inside = False
+    j = num_points - 1
+    
+    for i in range(num_points):
+        lat_i, lon_i = polygon[i][0], polygon[i][1]
+        lat_j, lon_j = polygon[j][0], polygon[j][1]
+        
+        # Ray casting check
+        intersect = ((lon_i > lon) != (lon_j > lon)) and \
+                    (lat < (lat_j - lat_i) * (lon - lon_i) / (lon_j - lon_i) + lat_i)
+        if intersect:
+            inside = not inside
+        j = i
+        
+    return inside
+
+
 def is_within_fence(lat: float, lon: float, branch) -> tuple[bool, float]:
     """
     Check if the given coordinates are within the specified branch's geofence.
@@ -34,20 +61,45 @@ def is_within_fence(lat: float, lon: float, branch) -> tuple[bool, float]:
     if not branch:
         return False, float("inf")
 
-    # First: check branch center point
-    center_dist = haversine(lat, lon, branch.latitude, branch.longitude)
-    if center_dist <= branch.radius_meters:
+    # First: check branch perimeter
+    is_inside = False
+    center_dist = float("inf")
+    
+    if getattr(branch, "geofence_type", "circle") == "polygon" and getattr(branch, "polygon_coordinates", None):
+        try:
+            coords = json.loads(branch.polygon_coordinates)
+            is_inside = point_in_polygon(lat, lon, coords)
+            center_dist = 0.0 if is_inside else haversine(lat, lon, branch.latitude, branch.longitude)
+        except Exception:
+            pass
+    else:
+        center_dist = haversine(lat, lon, branch.latitude, branch.longitude)
+        is_inside = center_dist <= branch.radius_meters
+
+    if is_inside:
         return True, center_dist
 
     # Second: check all active checkpoints for this branch
-    # (checkpoints are fetched from DB — this function receives the branch object
-    #  and we look up checkpoints lazily if not pre-loaded)
     if hasattr(branch, 'checkpoints') and branch.checkpoints:
         for cp in branch.checkpoints:
             if not cp.is_active:
                 continue
-            cp_dist = haversine(lat, lon, cp.latitude, cp.longitude)
-            if cp_dist <= cp.radius_meters:
+            
+            cp_inside = False
+            cp_dist = float("inf")
+            
+            if getattr(cp, "geofence_type", "circle") == "polygon" and getattr(cp, "polygon_coordinates", None):
+                try:
+                    cp_coords = json.loads(cp.polygon_coordinates)
+                    cp_inside = point_in_polygon(lat, lon, cp_coords)
+                    cp_dist = 0.0 if cp_inside else haversine(lat, lon, cp.latitude, cp.longitude)
+                except Exception:
+                    pass
+            else:
+                cp_dist = haversine(lat, lon, cp.latitude, cp.longitude)
+                cp_inside = cp_dist <= cp.radius_meters
+                
+            if cp_inside:
                 return True, cp_dist
 
     return False, center_dist
@@ -81,9 +133,22 @@ def is_within_any_fence(
         if not branch.is_active:
             continue
 
-        # Check branch center point
-        dist = haversine(lat, lon, branch.latitude, branch.longitude)
-        if dist <= branch.radius_meters:
+        # Check branch perimeter
+        is_inside = False
+        dist = float("inf")
+        
+        if getattr(branch, "geofence_type", "circle") == "polygon" and getattr(branch, "polygon_coordinates", None):
+            try:
+                coords = json.loads(branch.polygon_coordinates)
+                is_inside = point_in_polygon(lat, lon, coords)
+                dist = 0.0 if is_inside else haversine(lat, lon, branch.latitude, branch.longitude)
+            except Exception:
+                dist = haversine(lat, lon, branch.latitude, branch.longitude)
+        else:
+            dist = haversine(lat, lon, branch.latitude, branch.longitude)
+            is_inside = dist <= branch.radius_meters
+
+        if is_inside:
             return True, dist, branch.name
 
         # Check branch checkpoints
@@ -98,12 +163,27 @@ def is_within_any_fence(
             checkpoints = []
 
         for cp in checkpoints:
-            cp_dist = haversine(lat, lon, cp.latitude, cp.longitude)
-            if cp_dist <= cp.radius_meters:
+            cp_inside = False
+            cp_dist = float("inf")
+            
+            if getattr(cp, "geofence_type", "circle") == "polygon" and getattr(cp, "polygon_coordinates", None):
+                try:
+                    cp_coords = json.loads(cp.polygon_coordinates)
+                    cp_inside = point_in_polygon(lat, lon, cp_coords)
+                    cp_dist = 0.0 if cp_inside else haversine(lat, lon, cp.latitude, cp.longitude)
+                except Exception:
+                    cp_dist = haversine(lat, lon, cp.latitude, cp.longitude)
+            else:
+                cp_dist = haversine(lat, lon, cp.latitude, cp.longitude)
+                cp_inside = cp_dist <= cp.radius_meters
+                
+            if cp_inside:
                 return True, cp_dist, f"{branch.name} ({cp.name})"
 
         # Track closest for error message
-        if dist < best_dist:
-            best_dist, best_branch = dist, branch.name
+        # Use center point distance as reference for polygons if outside
+        ref_dist = dist if dist != 0.0 else haversine(lat, lon, branch.latitude, branch.longitude)
+        if ref_dist < best_dist:
+            best_dist, best_branch = ref_dist, branch.name
 
     return False, best_dist, best_branch

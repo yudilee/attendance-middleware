@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create_engine, ForeignKey, UniqueConstraint, Index, func
+from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, create_engine, ForeignKey, UniqueConstraint, Index, func, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 import datetime
@@ -65,6 +65,8 @@ class Branch(Base):
     longitude = Column(Float, default=0.0)
     radius_meters = Column(Float, default=100.0)
     is_active = Column(Boolean, default=True)
+    geofence_type = Column(String(20), default="circle", nullable=False)
+    polygon_coordinates = Column(Text, nullable=True)
     qr_code_enabled = Column(Boolean, default=False, nullable=False)
     qr_code_data = Column(String(256), nullable=True)
     nfc_enabled = Column(Boolean, default=False, nullable=False)
@@ -92,6 +94,8 @@ class BranchCheckpoint(Base):
     longitude = Column(Float, nullable=False)
     radius_meters = Column(Float, default=50.0)              # Smaller radius than branch
     is_active = Column(Boolean, default=True)
+    geofence_type = Column(String(20), default="circle", nullable=False)
+    polygon_coordinates = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -337,6 +341,11 @@ def init_db():
         "ALTER TABLE branches ADD COLUMN IF NOT EXISTS nfc_tag_data VARCHAR(256);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN nfc_tag_data VARCHAR(256);",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'admin';" if engine.name != "sqlite" else "ALTER TABLE admin_users ADD COLUMN role VARCHAR(50) DEFAULT 'admin';",
         "UPDATE admin_users SET role = 'superadmin' WHERE username = 'admin';",
+        # Custom Polygon / Free-Select geofencing support
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS geofence_type VARCHAR(20) DEFAULT 'circle';" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN geofence_type VARCHAR(20) DEFAULT 'circle';",
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS polygon_coordinates TEXT;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN polygon_coordinates TEXT;",
+        "ALTER TABLE branch_checkpoints ADD COLUMN IF NOT EXISTS geofence_type VARCHAR(20) DEFAULT 'circle';" if engine.name != "sqlite" else "ALTER TABLE branch_checkpoints ADD COLUMN geofence_type VARCHAR(20) DEFAULT 'circle';",
+        "ALTER TABLE branch_checkpoints ADD COLUMN IF NOT EXISTS polygon_coordinates TEXT;" if engine.name != "sqlite" else "ALTER TABLE branch_checkpoints ADD COLUMN polygon_coordinates TEXT;",
     ]
     # Phase 2 migration: BranchCheckpoint table
     migrations.append(

@@ -493,10 +493,12 @@
     let branchMap = null;
     let branchMarker = null;
     let branchCircle = null;
+    let branchPolygon = null;
     let branchMapInitialized = false;
     let checkpointLayers = [];
     let tempCheckpointMarker = null;
     let tempCheckpointCircle = null;
+    let tempCheckpointPolygon = null;
     let mapMode = 'primary';
 
     function setMapMode(mode) {
@@ -601,6 +603,29 @@
         }
     }
 
+    function updateGeomanToolbarVisibility() {
+        if (!branchMap) return;
+        const isPolygon = document.getElementById('branch_geofence_type').value === 'polygon';
+        const cpIsPolygon = document.getElementById('cp_geofence_type').value === 'polygon';
+        
+        if (isPolygon || cpIsPolygon) {
+            branchMap.pm.addControls({
+                position: 'topleft',
+                drawMarker: false,
+                drawCircleMarker: false,
+                drawPolyline: false,
+                drawRectangle: true,
+                drawPolygon: true,
+                drawCircle: false,
+                editMode: true,
+                dragMode: true,
+                removalMode: true
+            });
+        } else {
+            branchMap.pm.removeControls();
+        }
+    }
+
     function initBranchMap() {
         const container = document.getElementById('branchMap');
         if (!container || container._leaflet_id) return;
@@ -613,6 +638,9 @@
             attribution: '&copy; OpenStreetMap',
             maxZoom: 19,
         }).addTo(branchMap);
+
+        // Initialize Geoman Controls
+        updateGeomanToolbarVisibility();
 
         branchMarker = L.marker([defaultLat, defaultLon], { draggable: true }).addTo(branchMap);
         branchCircle = L.circle([defaultLat, defaultLon], {
@@ -627,13 +655,76 @@
         });
 
         branchMap.on('click', function(e) {
+            const isPolygon = document.getElementById('branch_geofence_type').value === 'polygon';
             if (mapMode === 'primary') {
+                if (isPolygon) return; // Do not place marker in polygon draw mode
                 branchMarker.setLatLng(e.latlng);
                 document.getElementById('branch_lat').value = e.latlng.lat.toFixed(6);
                 document.getElementById('branch_lon').value = e.latlng.lng.toFixed(6);
                 updateCircle();
             } else {
+                const cpIsPolygon = document.getElementById('cp_geofence_type').value === 'polygon';
+                if (cpIsPolygon) return;
                 setCheckpointCoordinates(e.latlng);
+            }
+        });
+
+        // Geoman Shape drawing complete listener
+        branchMap.on('pm:create', function(e) {
+            const layer = e.layer;
+            if (e.shape === 'Polygon' || e.shape === 'Rectangle') {
+                const rawLatLngs = layer.getLatLngs();
+                const latlngs = Array.isArray(rawLatLngs[0]) ? rawLatLngs[0] : rawLatLngs;
+                const coordinates = latlngs.map(pt => [pt.lat, pt.lng]);
+                
+                // Close the polygon boundary
+                if (coordinates.length > 0 && (coordinates[0][0] !== coordinates[coordinates.length-1][0] || coordinates[0][1] !== coordinates[coordinates.length-1][1])) {
+                    coordinates.push(coordinates[0]);
+                }
+                const coordsStr = JSON.stringify(coordinates);
+                
+                // Centroid calculation
+                let sumLat = 0, sumLng = 0;
+                latlngs.forEach(pt => {
+                    sumLat += pt.lat;
+                    sumLng += pt.lng;
+                });
+                const centerLat = sumLat / latlngs.length;
+                const centerLng = sumLng / latlngs.length;
+
+                if (mapMode === 'primary') {
+                    if (branchPolygon) branchMap.removeLayer(branchPolygon);
+                    branchPolygon = layer;
+                    document.getElementById('branch_polygon_coordinates').value = coordsStr;
+                    document.getElementById('branch_lat').value = centerLat.toFixed(6);
+                    document.getElementById('branch_lon').value = centerLng.toFixed(6);
+                    
+                    // Hide circle overlay
+                    if (branchMarker && branchMap.hasLayer(branchMarker)) branchMap.removeLayer(branchMarker);
+                    if (branchCircle && branchMap.hasLayer(branchCircle)) branchMap.removeLayer(branchCircle);
+                } else {
+                    if (tempCheckpointPolygon) branchMap.removeLayer(tempCheckpointPolygon);
+                    tempCheckpointPolygon = layer;
+                    document.getElementById('cp_polygon_coordinates').value = coordsStr;
+                    document.getElementById('cp_lat').value = centerLat.toFixed(6);
+                    document.getElementById('cp_lon').value = centerLng.toFixed(6);
+                    
+                    // Hide circle overlay
+                    if (tempCheckpointMarker && branchMap.hasLayer(tempCheckpointMarker)) branchMap.removeLayer(tempCheckpointMarker);
+                    if (tempCheckpointCircle && branchMap.hasLayer(tempCheckpointCircle)) branchMap.removeLayer(tempCheckpointCircle);
+                }
+            }
+        });
+
+        // Geoman removal listener
+        branchMap.on('pm:remove', function(e) {
+            const layer = e.layer;
+            if (layer === branchPolygon) {
+                branchPolygon = null;
+                document.getElementById('branch_polygon_coordinates').value = '';
+            } else if (layer === tempCheckpointPolygon) {
+                tempCheckpointPolygon = null;
+                document.getElementById('cp_polygon_coordinates').value = '';
             }
         });
 
@@ -730,6 +821,99 @@
             console.error('loadBranches error:', e);
             notify('Failed to load branches: ' + (e.message || 'network error'), 'error');
         }
+    }
+
+    function toggleGeofenceType(type) {
+        document.getElementById('branch_geofence_type').value = type;
+        
+        const btnCircle = document.getElementById('branchGeofenceTypeCircle');
+        const btnPolygon = document.getElementById('branchGeofenceTypePolygon');
+        const radGroup = document.getElementById('branch_rad').parentNode;
+        const latInput = document.getElementById('branch_lat');
+        const lonInput = document.getElementById('branch_lon');
+        
+        if (type === 'circle') {
+            btnCircle.className = "py-1.5 text-xs font-semibold rounded-lg bg-white text-indigo-600 shadow-sm transition-all dark:bg-slate-900 dark:text-indigo-400";
+            btnPolygon.className = "py-1.5 text-xs font-semibold rounded-lg text-slate-505 hover:bg-slate-50 transition-all dark:text-slate-400 dark:hover:bg-slate-800/40";
+            
+            if (radGroup) radGroup.style.display = 'block';
+            latInput.disabled = false;
+            lonInput.disabled = false;
+            document.getElementById('mapDrawingInstructions').innerHTML = `<i class="ph ph-info"></i> <strong>Map Mode:</strong> Single-click the map to place the coordinate marker. Drag it to adjust.`;
+            
+            if (branchMap) {
+                if (branchPolygon) { branchMap.removeLayer(branchPolygon); branchPolygon = null; }
+                document.getElementById('branch_polygon_coordinates').value = '';
+                
+                const lat = parseFloat(latInput.value) || -6.175392;
+                const lon = parseFloat(lonInput.value) || 106.827153;
+                if (branchMarker) branchMarker.setLatLng([lat, lon]).addTo(branchMap);
+                if (branchCircle) branchCircle.setLatLng([lat, lon]).addTo(branchMap);
+            }
+        } else {
+            btnCircle.className = "py-1.5 text-xs font-semibold rounded-lg text-slate-505 hover:bg-slate-50 transition-all dark:text-slate-400 dark:hover:bg-slate-800/40";
+            btnPolygon.className = "py-1.5 text-xs font-semibold rounded-lg bg-white text-indigo-600 shadow-sm transition-all dark:bg-slate-900 dark:text-indigo-400";
+            
+            if (radGroup) radGroup.style.display = 'none';
+            latInput.disabled = true;
+            lonInput.disabled = true;
+            document.getElementById('mapDrawingInstructions').innerHTML = `<i class="ph ph-info"></i> <strong>Polygon Mode:</strong> Click the polygon tool in the top-left of the map, and click on map corners to draw the perimeter.`;
+            
+            if (branchMap) {
+                if (branchMarker) branchMap.removeLayer(branchMarker);
+                if (branchCircle) branchMap.removeLayer(branchCircle);
+            }
+        }
+        
+        updateGeomanToolbarVisibility();
+    }
+
+    function toggleCheckpointGeofenceType(type) {
+        document.getElementById('cp_geofence_type').value = type;
+        
+        const btnCircle = document.getElementById('checkpointGeofenceTypeCircle');
+        const btnPolygon = document.getElementById('checkpointGeofenceTypePolygon');
+        const radGroup = document.getElementById('cp_rad').parentNode;
+        const latInput = document.getElementById('cp_lat');
+        const lonInput = document.getElementById('cp_lon');
+        
+        if (type === 'circle') {
+            btnCircle.className = "py-1.5 text-xs font-semibold rounded-lg bg-white text-indigo-600 shadow-sm transition-all dark:bg-slate-900 dark:text-indigo-400";
+            btnPolygon.className = "py-1.5 text-xs font-semibold rounded-lg text-slate-505 hover:bg-slate-50 transition-all dark:text-slate-400 dark:hover:bg-slate-800/40";
+            
+            if (radGroup) radGroup.style.display = 'block';
+            latInput.disabled = false;
+            lonInput.disabled = false;
+            
+            if (branchMap) {
+                if (tempCheckpointPolygon) { branchMap.removeLayer(tempCheckpointPolygon); tempCheckpointPolygon = null; }
+                document.getElementById('cp_polygon_coordinates').value = '';
+                
+                const lat = parseFloat(latInput.value) || -6.175392;
+                const lon = parseFloat(lonInput.value) || 106.827153;
+                const rad = parseFloat(document.getElementById('cp_rad').value) || 50;
+                
+                if (!tempCheckpointMarker) tempCheckpointMarker = L.marker([lat, lon], {icon: L.divIcon({className: 'bg-amber-500 w-3 h-3 rounded-full border-2 border-white shadow-sm'})});
+                tempCheckpointMarker.setLatLng([lat, lon]).addTo(branchMap);
+                
+                if (!tempCheckpointCircle) tempCheckpointCircle = L.circle([lat, lon], {radius: rad, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.1, weight: 2});
+                tempCheckpointCircle.setLatLng([lat, lon]).setRadius(rad).addTo(branchMap);
+            }
+        } else {
+            btnCircle.className = "py-1.5 text-xs font-semibold rounded-lg text-slate-505 hover:bg-slate-50 transition-all dark:text-slate-400 dark:hover:bg-slate-800/40";
+            btnPolygon.className = "py-1.5 text-xs font-semibold rounded-lg bg-white text-indigo-600 shadow-sm transition-all dark:bg-slate-900 dark:text-indigo-400";
+            
+            if (radGroup) radGroup.style.display = 'none';
+            latInput.disabled = true;
+            lonInput.disabled = true;
+            
+            if (branchMap) {
+                if (tempCheckpointMarker) branchMap.removeLayer(tempCheckpointMarker);
+                if (tempCheckpointCircle) branchMap.removeLayer(tempCheckpointCircle);
+            }
+        }
+        
+        updateGeomanToolbarVisibility();
     }
 
     function toggleQrField() {
@@ -861,6 +1045,12 @@
         document.getElementById('branch_lat').value = branch.latitude;
         document.getElementById('branch_lon').value = branch.longitude;
         document.getElementById('branch_rad').value = branch.radius_meters;
+        
+        const gType = branch.geofence_type || 'circle';
+        document.getElementById('branch_geofence_type').value = gType;
+        document.getElementById('branch_polygon_coordinates').value = branch.polygon_coordinates || '';
+        toggleGeofenceType(gType);
+
         document.getElementById('branch_qr_enabled').checked = branch.qr_code_enabled || false;
         document.getElementById('branch_qr_data').value = branch.qr_code_data || '';
         toggleQrField();
@@ -874,6 +1064,9 @@
         document.getElementById('cp_lon').value = branch.longitude;
         document.getElementById('cp_name').value = '';
         document.getElementById('cp_rad').value = 50;
+        document.getElementById('cp_geofence_type').value = 'circle';
+        document.getElementById('cp_polygon_coordinates').value = '';
+        toggleCheckpointGeofenceType('circle');
         
         document.getElementById('checkpointNewBranchAlert').style.display = 'none';
         document.getElementById('checkpointContainer').style.display = 'block';
@@ -888,12 +1081,28 @@
                 branchMap.invalidateSize();
                 branchMap.setView([branch.latitude, branch.longitude], 15);
             }
-            if (branchMarker) {
-                branchMarker.setLatLng([branch.latitude, branch.longitude]);
+            if (branchPolygon) {
+                branchMap.removeLayer(branchPolygon);
+                branchPolygon = null;
             }
-            if (branchCircle) {
-                branchCircle.setLatLng([branch.latitude, branch.longitude]);
-                branchCircle.setRadius(branch.radius_meters);
+            if (gType === 'polygon' && branch.polygon_coordinates) {
+                try {
+                    const coords = JSON.parse(branch.polygon_coordinates);
+                    branchPolygon = L.polygon(coords, { color: '#6366f1', fillColor: '#6366f1', fillOpacity: 0.1, weight: 2 }).addTo(branchMap);
+                    
+                    if (branchMarker && branchMap.hasLayer(branchMarker)) branchMap.removeLayer(branchMarker);
+                    if (branchCircle && branchMap.hasLayer(branchCircle)) branchMap.removeLayer(branchCircle);
+                } catch(e) {
+                    console.error('Error drawing loaded branch polygon:', e);
+                }
+            } else {
+                if (branchMarker) {
+                    branchMarker.setLatLng([branch.latitude, branch.longitude]).addTo(branchMap);
+                }
+                if (branchCircle) {
+                    branchCircle.setLatLng([branch.latitude, branch.longitude]);
+                    branchCircle.setRadius(branch.radius_meters).addTo(branchMap);
+                }
             }
         }, 50);
         
@@ -924,6 +1133,21 @@
             if (branchMap) branchMap.removeLayer(tempCheckpointCircle);
             tempCheckpointCircle = null;
         }
+        if (branchPolygon) {
+            if (branchMap) branchMap.removeLayer(branchPolygon);
+            branchPolygon = null;
+        }
+        if (tempCheckpointPolygon) {
+            if (branchMap) branchMap.removeLayer(tempCheckpointPolygon);
+            tempCheckpointPolygon = null;
+        }
+        document.getElementById('branch_geofence_type').value = 'circle';
+        document.getElementById('branch_polygon_coordinates').value = '';
+        document.getElementById('cp_geofence_type').value = 'circle';
+        document.getElementById('cp_polygon_coordinates').value = '';
+        toggleGeofenceType('circle');
+        toggleCheckpointGeofenceType('circle');
+        
         setMapMode('primary');
 
         const defaultLat = -6.175392;
@@ -946,18 +1170,26 @@
     async function saveBranch() {
         const qrEnabled = document.getElementById('branch_qr_enabled').checked;
         const nfcEnabled = document.getElementById('branch_nfc_enabled').checked;
+        const gType = document.getElementById('branch_geofence_type').value || 'circle';
+        const polyCoords = document.getElementById('branch_polygon_coordinates').value;
+        
         const payload = {
             name: document.getElementById('branch_name').value.trim(),
             latitude: parseFloat(document.getElementById('branch_lat').value),
             longitude: parseFloat(document.getElementById('branch_lon').value),
-            radius_meters: parseFloat(document.getElementById('branch_rad').value),
+            radius_meters: parseFloat(document.getElementById('branch_rad').value) || 50,
+            geofence_type: gType,
+            polygon_coordinates: gType === 'polygon' ? polyCoords : null,
             qr_code_enabled: qrEnabled,
             qr_code_data: qrEnabled ? document.getElementById('branch_qr_data').value.trim() : null,
             nfc_enabled: nfcEnabled,
             nfc_tag_data: nfcEnabled ? document.getElementById('branch_nfc_data').value.trim() : null,
         };
-        if (!payload.name || isNaN(payload.latitude) || isNaN(payload.longitude) || isNaN(payload.radius_meters)) {
-            notify('Please fill all branch fields correctly', 'error'); return;
+        if (!payload.name || isNaN(payload.latitude) || isNaN(payload.longitude)) {
+            notify('Please select location on map and enter branch name', 'error'); return;
+        }
+        if (gType === 'polygon' && !payload.polygon_coordinates) {
+            notify('Please draw the geofence perimeter on the map', 'error'); return;
         }
         if (qrEnabled && !payload.qr_code_data) {
             notify('Please enter or generate QR code data', 'error'); return;
@@ -1082,33 +1314,51 @@
                 data.forEach(cp => {
                     const cpColor = cp.is_active ? '#10b981' : '#f59e0b';
                     
-                    const circle = L.circle([cp.latitude, cp.longitude], {
-                        radius: cp.radius_meters || 50,
-                        color: cpColor,
-                        fillColor: cpColor,
-                        fillOpacity: 0.15,
-                        weight: 2
-                    }).addTo(branchMap);
-                    
-                    const marker = L.marker([cp.latitude, cp.longitude], {
-                        draggable: true,
-                        title: cp.name
-                    }).addTo(branchMap);
-                    
-                    marker.bindPopup(`<b>Checkpoint: ${cp.name}</b><br>Radius: ${cp.radius_meters}m<br>Status: ${cp.is_active ? 'Active' : 'Inactive'}<br><small class="text-slate-400 dark:text-slate-500">Drag to relocate and click 'Add Point' to update.</small>`);
-                    
-                    marker.on('dragend', function() {
-                        const pos = marker.getLatLng();
-                        document.getElementById('cp_lat').value = pos.lat.toFixed(6);
-                        document.getElementById('cp_lon').value = pos.lng.toFixed(6);
-                        document.getElementById('cp_name').value = cp.name;
-                        document.getElementById('cp_rad').value = cp.radius_meters || 50;
-                        circle.setLatLng(pos);
-                        notify(`Relocated checkpoint "${cp.name}". Click "Add Point" to save.`);
-                    });
-                    
-                    checkpointLayers.push(circle);
-                    checkpointLayers.push(marker);
+                    if (cp.geofence_type === 'polygon' && cp.polygon_coordinates) {
+                        try {
+                            const coords = JSON.parse(cp.polygon_coordinates);
+                            const polygonLayer = L.polygon(coords, {
+                                color: cpColor,
+                                fillColor: cpColor,
+                                fillOpacity: 0.15,
+                                weight: 2,
+                                title: cp.name
+                            }).addTo(branchMap);
+                            
+                            polygonLayer.bindPopup(`<b>Checkpoint (Polygon): ${cp.name}</b><br>Status: ${cp.is_active ? 'Active' : 'Inactive'}`);
+                            checkpointLayers.push(polygonLayer);
+                        } catch(e) {
+                            console.error('Error drawing checkpoint polygon:', e);
+                        }
+                    } else {
+                        const circle = L.circle([cp.latitude, cp.longitude], {
+                            radius: cp.radius_meters || 50,
+                            color: cpColor,
+                            fillColor: cpColor,
+                            fillOpacity: 0.15,
+                            weight: 2
+                        }).addTo(branchMap);
+                        
+                        const marker = L.marker([cp.latitude, cp.longitude], {
+                            draggable: true,
+                            title: cp.name
+                        }).addTo(branchMap);
+                        
+                        marker.bindPopup(`<b>Checkpoint: ${cp.name}</b><br>Radius: ${cp.radius_meters}m<br>Status: ${cp.is_active ? 'Active' : 'Inactive'}<br><small class="text-slate-400 dark:text-slate-500">Drag to relocate and click 'Add Point' to update.</small>`);
+                        
+                        marker.on('dragend', function() {
+                            const pos = marker.getLatLng();
+                            document.getElementById('cp_lat').value = pos.lat.toFixed(6);
+                            document.getElementById('cp_lon').value = pos.lng.toFixed(6);
+                            document.getElementById('cp_name').value = cp.name;
+                            document.getElementById('cp_rad').value = cp.radius_meters || 50;
+                            circle.setLatLng(pos);
+                            notify(`Relocated checkpoint "${cp.name}". Click "Add Point" to save.`);
+                        });
+                        
+                        checkpointLayers.push(circle);
+                        checkpointLayers.push(marker);
+                    }
                 });
             }
 
@@ -1116,7 +1366,7 @@
                 <tr class="${cp.is_active ? 'hover:bg-slate-50 dark:hover:bg-slate-800/40' : 'opacity-60 hover:bg-slate-50 dark:hover:bg-slate-800/40'} transition-colors">
                     <td class="px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100">${cp.name}</td>
                     <td class="px-3 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">${cp.latitude.toFixed(5)}, ${cp.longitude.toFixed(5)}</td>
-                    <td class="px-3 py-2.5 text-sm text-center text-slate-700 dark:text-slate-300">${cp.radius_meters}m</td>
+                    <td class="px-3 py-2.5 text-sm text-center text-slate-700 dark:text-slate-300">${cp.geofence_type === 'polygon' ? '⬡ Polygon' : cp.radius_meters + 'm'}</td>
                     <td class="px-3 py-2.5 text-center">
                         <label class="cursor-pointer" onclick="toggleCheckpointStatus(${branchId}, ${cp.id}, ${cp.is_active})">
                             <span class="toggle-slider ${cp.is_active ? 'active' : 'inactive'}" style="width:32px;height:16px;"></span>
@@ -1134,15 +1384,24 @@
 
     async function submitAddCheckpoint() {
         const branchId = document.getElementById('checkpoint_branch_id').value;
+        const cpGType = document.getElementById('cp_geofence_type').value || 'circle';
+        const cpPolyCoords = document.getElementById('cp_polygon_coordinates').value;
+        
         const payload = {
             name: document.getElementById('cp_name').value.trim(),
             latitude: parseFloat(document.getElementById('cp_lat').value),
             longitude: parseFloat(document.getElementById('cp_lon').value),
-            radius_meters: parseFloat(document.getElementById('cp_rad').value)
+            radius_meters: parseFloat(document.getElementById('cp_rad').value) || 50,
+            geofence_type: cpGType,
+            polygon_coordinates: cpGType === 'polygon' ? cpPolyCoords : null
         };
         
-        if (!payload.name || isNaN(payload.latitude) || isNaN(payload.longitude) || isNaN(payload.radius_meters)) {
-            notify('Please fill all fields correctly', 'error');
+        if (!payload.name || isNaN(payload.latitude) || isNaN(payload.longitude)) {
+            notify('Please specify checkpoint coordinates and point name', 'error');
+            return;
+        }
+        if (cpGType === 'polygon' && !payload.polygon_coordinates) {
+            notify('Please draw checkpoint polygon geofence on map', 'error');
             return;
         }
         
@@ -1159,6 +1418,10 @@
                 document.getElementById('cp_lat').value = '';
                 document.getElementById('cp_lon').value = '';
                 document.getElementById('cp_rad').value = 50;
+                document.getElementById('cp_geofence_type').value = 'circle';
+                document.getElementById('cp_polygon_coordinates').value = '';
+                toggleCheckpointGeofenceType('circle');
+                
                 if (tempCheckpointMarker) {
                     if (branchMap) branchMap.removeLayer(tempCheckpointMarker);
                     tempCheckpointMarker = null;
@@ -1166,6 +1429,10 @@
                 if (tempCheckpointCircle) {
                     if (branchMap) branchMap.removeLayer(tempCheckpointCircle);
                     tempCheckpointCircle = null;
+                }
+                if (tempCheckpointPolygon) {
+                    if (branchMap) branchMap.removeLayer(tempCheckpointPolygon);
+                    tempCheckpointPolygon = null;
                 }
                 loadCheckpoints(branchId);
             } else {

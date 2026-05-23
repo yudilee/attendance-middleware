@@ -655,6 +655,8 @@ async def get_branches(
             "longitude": b.longitude,
             "radius_meters": b.radius_meters,
             "is_active": b.is_active,
+            "geofence_type": getattr(b, "geofence_type", "circle") or "circle",
+            "polygon_coordinates": getattr(b, "polygon_coordinates", None),
             "qr_code_enabled": b.qr_code_enabled,
             "qr_code_data": b.qr_code_data if b.qr_code_enabled else None,
             "nfc_enabled": b.nfc_enabled,
@@ -676,6 +678,8 @@ async def create_branch(
         longitude=req.longitude,
         radius_meters=req.radius_meters,
         is_active=True,
+        geofence_type=req.geofence_type or "circle",
+        polygon_coordinates=req.polygon_coordinates,
         qr_code_enabled=req.qr_code_enabled,
         qr_code_data=req.qr_code_data if req.qr_code_enabled else None,
         nfc_enabled=req.nfc_enabled,
@@ -701,6 +705,8 @@ async def update_branch(
     branch.latitude = req.latitude
     branch.longitude = req.longitude
     branch.radius_meters = req.radius_meters
+    branch.geofence_type = req.geofence_type or "circle"
+    branch.polygon_coordinates = req.polygon_coordinates
     branch.qr_code_enabled = req.qr_code_enabled
     branch.qr_code_data = req.qr_code_data if req.qr_code_enabled else None
     branch.nfc_enabled = req.nfc_enabled
@@ -1471,6 +1477,8 @@ async def list_checkpoints(
             "longitude": cp.longitude,
             "radius_meters": cp.radius_meters,
             "is_active": cp.is_active,
+            "geofence_type": getattr(cp, "geofence_type", "circle") or "circle",
+            "polygon_coordinates": getattr(cp, "polygon_coordinates", None),
             "created_at": cp.created_at.isoformat() if cp.created_at else None,
         }
         for cp in checkpoints
@@ -1496,6 +1504,8 @@ async def create_checkpoint(
         longitude=req.longitude,
         radius_meters=req.radius_meters,
         is_active=req.is_active,
+        geofence_type=req.geofence_type or "circle",
+        polygon_coordinates=req.polygon_coordinates,
     )
     db.add(cp)
     db.commit()
@@ -1537,6 +1547,10 @@ async def update_checkpoint(
         cp.radius_meters = req.radius_meters
     if req.is_active is not None:
         cp.is_active = req.is_active
+    if req.geofence_type is not None:
+        cp.geofence_type = req.geofence_type
+    if req.polygon_coordinates is not None:
+        cp.polygon_coordinates = req.polygon_coordinates
 
     db.commit()
     logger.info("checkpoint_updated", checkpoint_id=checkpoint_id, admin=admin.username)

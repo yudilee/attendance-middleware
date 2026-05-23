@@ -65,6 +65,8 @@ class BranchInfo(BaseModel):
     latitude: float
     longitude: float
     radius_meters: float
+    geofence_type: str = "circle"
+    polygon_coordinates: Optional[str] = None
     qr_code_enabled: bool = False
     qr_code_data: Optional[str] = None
     nfc_enabled: bool = False
@@ -132,6 +134,8 @@ class BranchRequest(BaseModel):
     latitude: float
     longitude: float
     radius_meters: float
+    geofence_type: Optional[str] = "circle"
+    polygon_coordinates: Optional[str] = None
     qr_code_enabled: bool = False
     qr_code_data: Optional[str] = None
     nfc_enabled: bool = False
@@ -201,6 +205,8 @@ class CheckpointInfo(BaseModel):
     longitude: float
     radius_meters: float
     is_active: bool
+    geofence_type: str = "circle"
+    polygon_coordinates: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -211,6 +217,8 @@ class CheckpointCreate(BaseModel):
     longitude: float
     radius_meters: float = 50.0
     is_active: bool = True
+    geofence_type: str = "circle"
+    polygon_coordinates: Optional[str] = None
 
 
 class CheckpointUpdate(BaseModel):
@@ -219,6 +227,8 @@ class CheckpointUpdate(BaseModel):
     longitude: Optional[float] = None
     radius_meters: Optional[float] = None
     is_active: Optional[bool] = None
+    geofence_type: Optional[str] = None
+    polygon_coordinates: Optional[str] = None
 
 
 # ═══════════════════ Employee Schemas ═══════════════════
