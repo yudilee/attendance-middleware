@@ -2275,7 +2275,17 @@
             
             const data = await response.json();
             
-            const qrData =     // ── Employee Data Management ───────────────────────────────────────────────
+            const qrData = encodeURIComponent(JSON.stringify(data));
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}`;
+
+            document.getElementById('onboardQrImg').src = qrUrl;
+            document.getElementById('onboardQrContainer').style.display = 'block';
+        } catch(err) {
+            notify(err.message);
+        }
+    }
+
+    // ── Employee Data Management ───────────────────────────────────────────────
     let currentEmployees = [];
     let _allCompanies = [];
     let _allGroups = [];
