@@ -8,9 +8,12 @@
                     <input type="text" id="branchSearch" placeholder="🔍 Search branches by name..." oninput="filterBranches()" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                 </div>
                 <select id="branchFilter" onchange="filterBranches()" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 min-w-[140px] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                    <option value="all">📋 All Branches</option>
+                    <option value="all">📋 All Statuses</option>
                     <option value="active">🟢 Active Only</option>
                     <option value="inactive">🔴 Inactive Only</option>
+                </select>
+                <select id="branchCompanyFilter" onchange="filterBranches()" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 min-w-[160px] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                    <option value="all">🏢 All Companies</option>
                 </select>
                 <span id="branchCount" class="text-sm text-slate-400 whitespace-nowrap dark:text-slate-500"></span>
             </div>
@@ -27,6 +30,7 @@
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200 dark:bg-slate-800/50 dark:border-slate-800">
                             <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Name</th>
+                            <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Company</th>
                             <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Coordinates</th>
                             <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Radius</th>
                             <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">QR</th>
@@ -37,7 +41,7 @@
                         </tr>
                     </thead>
                     <tbody id="branchesTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/50">
-                        <tr><td colspan="8" class="text-center py-8 text-sm text-slate-400 dark:text-slate-500">Loading...</td></tr>
+                        <tr><td colspan="9" class="text-center py-8 text-sm text-slate-400 dark:text-slate-500">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>

@@ -881,6 +881,7 @@
     function filterBranches() {
         const query = document.getElementById('branchSearch').value.toLowerCase().trim();
         const filter = document.getElementById('branchFilter').value;
+        const coFilter = document.getElementById('branchCompanyFilter') ? document.getElementById('branchCompanyFilter').value : 'all';
         const tbody = document.getElementById('branchesTableBody');
         
         const branches = Array.isArray(currentBranches) ? currentBranches : [];
@@ -890,19 +891,31 @@
             const matchesFilter = filter === 'all'
                 || (filter === 'active' && b.is_active)
                 || (filter === 'inactive' && !b.is_active);
-            return matchesSearch && matchesFilter;
+            const matchesCompany = coFilter === 'all' || String(b.company_id) === coFilter;
+            return matchesSearch && matchesFilter && matchesCompany;
         });
 
         document.getElementById('branchCount').innerText = `${filtered.length} / ${branches.length} branches`;
 
         if (!filtered.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-sm text-slate-400 dark:text-slate-500">No matching branches.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-sm text-slate-400 dark:text-slate-500">No matching branches.</td></tr>';
             return;
         }
 
         tbody.innerHTML = filtered.map(b => `
             <tr class="${b.is_active ? 'hover:bg-slate-50 dark:hover:bg-slate-800/40' : 'opacity-60 hover:bg-slate-50 dark:hover:bg-slate-800/40'} transition-colors">
                 <td class="px-5 py-4"><strong class="text-slate-800 dark:text-slate-100">${b.name}</strong></td>
+                <td class="px-5 py-4">
+                    ${b.company_name ? `
+                        <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50">
+                            <i class="ph ph-buildings"></i> ${b.company_name} (${b.company_code})
+                        </span>
+                    ` : `
+                        <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-400 dark:bg-slate-800/40 dark:text-slate-500 border border-slate-200/50 dark:border-slate-700/50">
+                            <i class="ph ph-buildings"></i> Unassigned
+                        </span>
+                    `}
+                </td>
                 <td class="px-5 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">
                     ${b.latitude !== null && b.latitude !== undefined ? b.latitude.toFixed(5) : '0.00000'}, 
                     ${b.longitude !== null && b.longitude !== undefined ? b.longitude.toFixed(5) : '0.00000'}
@@ -927,6 +940,17 @@
             </tr>`).join('');
     }
 
+    function populateBranchCompanyFilter() {
+        const filterEl = document.getElementById('branchCompanyFilter');
+        if (!filterEl) return;
+        const currentVal = filterEl.value;
+        filterEl.innerHTML = '<option value="all">🏢 All Companies</option>';
+        _allCompanies.forEach(c => {
+            filterEl.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+        });
+        filterEl.value = currentVal || 'all';
+    }
+
     async function loadBranches() {
         try {
             await loadOnboardingReferenceData();
@@ -944,6 +968,7 @@
                 return;
             }
             currentBranches = data;
+            populateBranchCompanyFilter();
             filterBranches();
         } catch(e) {
             console.error('loadBranches error:', e);

@@ -741,6 +741,8 @@ async def get_branches(
             "nfc_tag_data": b.nfc_tag_data if b.nfc_enabled else None,
             "device_count": device_count,
             "company_id": getattr(b, "company_id", None),
+            "company_name": b.company.name if b.company else None,
+            "company_code": b.company.code if b.company else None,
             "shift_schedule_id": getattr(b, "shift_schedule_id", None),
             "timezone_offset": getattr(b, "timezone_offset", 7),
         })
