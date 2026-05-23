@@ -907,9 +907,9 @@
                 <td class="px-5 py-4"><strong class="text-slate-800 dark:text-slate-100">${b.name}</strong></td>
                 <td class="px-5 py-4">
                     ${b.company_name ? `
-                        <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50">
+                        <button type="button" class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/45 transition-colors cursor-pointer" onclick="quickFilterByCompany(${b.company_id})" title="Click to filter by ${b.company_name}">
                             <i class="ph ph-buildings"></i> ${b.company_name} (${b.company_code})
-                        </span>
+                        </button>
                     ` : `
                         <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-400 dark:bg-slate-800/40 dark:text-slate-500 border border-slate-200/50 dark:border-slate-700/50">
                             <i class="ph ph-buildings"></i> Unassigned
@@ -3114,6 +3114,208 @@
                 }
             } catch(e) {
                 notify('Network error deleting shift schedule', 'error');
+            }
+        });
+    }
+
+    function quickFilterByCompany(companyId) {
+        // Go to geofence tab and filter
+        showTab('geofence');
+        window.location.hash = 'geofence';
+        setTimeout(() => {
+            const filterEl = document.getElementById('branchCompanyFilter');
+            if (filterEl) {
+                filterEl.value = String(companyId);
+                filterBranches();
+            }
+        }, 100);
+    }
+
+    // ═══════════════════ Companies Management JS ═══════════════════
+    async function loadCompanies() {
+        const grid = document.getElementById('companiesGrid');
+        grid.innerHTML = `
+            <div class="col-span-full text-center py-12 text-sm text-slate-400 dark:text-slate-500">
+                <div class="flex flex-col items-center gap-2">
+                    <i class="ph ph-circle-notch animate-spin text-2xl text-indigo-500"></i>
+                    <span>Loading companies...</span>
+                </div>
+            </div>
+        `;
+        try {
+            // Pre-load dependencies
+            await Promise.all([
+                loadOnboardingReferenceData(),
+                fetch('/ui/branches').then(r => r.ok ? r.json() : []).then(data => { currentBranches = data; })
+            ]);
+
+            renderCompaniesGrid(_allCompanies);
+            populateCompanyShiftDropdown();
+        } catch(e) {
+            grid.innerHTML = '<div class="col-span-full text-center py-8 text-sm text-red-500">Failed to load companies. Please retry.</div>';
+            notify('Error loading companies: ' + e.message, 'error');
+        }
+    }
+
+    function populateCompanyShiftDropdown() {
+        const select = document.getElementById('company_shift_schedule_id');
+        if (!select) return;
+        select.innerHTML = '<option value="">No Default Shift (Fallback to global default)</option>';
+        _allShiftSchedules.forEach(s => {
+            select.innerHTML += `<option value="${s.id}">${s.name} (${s.start_time}-${s.end_time})</option>`;
+        });
+    }
+
+    function renderCompaniesGrid(list) {
+        const grid = document.getElementById('companiesGrid');
+        if (!list.length) {
+            grid.innerHTML = `
+                <div class="col-span-full text-center py-12 text-sm text-slate-400 dark:text-slate-500 border border-dashed border-slate-300 dark:border-slate-800 rounded-xl p-6">
+                    <i class="ph ph-buildings text-3xl mb-2 text-slate-350 dark:text-slate-650 block"></i>
+                    <span>No companies defined. Click "Add Company" to start!</span>
+                </div>
+            `;
+            return;
+        }
+
+        grid.innerHTML = list.map(c => {
+            const statusBadge = c.is_active 
+                ? `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">Active</span>` 
+                : `<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">Inactive</span>`;
+
+            // Find default shift schedule details
+            const defaultShift = _allShiftSchedules.find(s => s.id === c.shift_schedule_id);
+            const defaultShiftName = defaultShift ? `${defaultShift.name} (${defaultShift.start_time}-${defaultShift.end_time})` : 'Fallback Global Default';
+
+            // Calculate linked branches
+            const branchCount = currentBranches.filter(b => b.company_id === c.id).length;
+
+            return `
+                <div class="group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start gap-2 mb-3">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">${c.name}</h3>
+                                <span class="font-mono text-xs font-bold text-slate-400 dark:text-slate-500">Code: ${c.code}</span>
+                            </div>
+                            <div>${statusBadge}</div>
+                        </div>
+
+                        <div class="py-3 border-t border-slate-100 dark:border-slate-850 space-y-3 text-xs">
+                            <div>
+                                <span class="text-slate-400 block mb-0.5">💼 Company Default Shift</span>
+                                <span class="font-bold text-slate-700 dark:text-slate-300 text-xs">${defaultShiftName}</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block mb-1">📍 Assigned Branch Sites</span>
+                                <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50/50 hover:bg-indigo-100/60 px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 cursor-pointer transition-colors" onclick="quickFilterByCompany(${c.id})" title="View branch perimeters for ${c.name}">
+                                    <i class="ph ph-map-pin"></i> ${branchCount} Branch${branchCount !== 1 ? 'es' : ''} Linked
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-slate-100 dark:border-slate-850">
+                        <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400" onclick="editCompanyDetails(${c.id})">✏️ Edit</button>
+                        <button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:bg-red-950/30 dark:border-red-900/50 dark:text-red-455" onclick="deleteCompanyRecord(${c.id})">🗑️ Delete</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function showCreateCompanyForm() {
+        const container = document.getElementById('companyFormContainer');
+        container.classList.remove('hidden');
+        document.getElementById('companyFormTitle').innerText = 'Create New Company';
+        document.getElementById('companyForm').reset();
+        document.getElementById('edit_company_id').value = '';
+        
+        container.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function hideCompanyForm() {
+        document.getElementById('companyFormContainer').classList.add('hidden');
+        document.getElementById('companyForm').reset();
+    }
+
+    async function editCompanyDetails(id) {
+        const c = _allCompanies.find(x => x.id === id);
+        if (!c) return;
+
+        const container = document.getElementById('companyFormContainer');
+        container.classList.remove('hidden');
+        document.getElementById('companyFormTitle').innerText = `✏️ Edit Company: ${c.name}`;
+        
+        document.getElementById('edit_company_id').value = c.id;
+        document.getElementById('company_name').value = c.name;
+        document.getElementById('company_code').value = c.code;
+        document.getElementById('company_shift_schedule_id').value = c.shift_schedule_id || '';
+        document.getElementById('company_is_active').checked = c.is_active;
+
+        container.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function saveCompanyDetails() {
+        const id = document.getElementById('edit_company_id').value;
+        const name = document.getElementById('company_name').value.trim();
+        const code = document.getElementById('company_code').value.toUpperCase().trim();
+        const shiftIdVal = document.getElementById('company_shift_schedule_id').value;
+        const isActive = document.getElementById('company_is_active').checked;
+
+        if (!name || !code) {
+            notify('Please fill in both Company Name and Unique Code.', 'error');
+            return;
+        }
+
+        const payload = {
+            name,
+            code,
+            shift_schedule_id: shiftIdVal ? parseInt(shiftIdVal) : null,
+            is_active: isActive
+        };
+
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `/ui/companies/${id}` : '/ui/companies';
+
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                notify(id ? 'Company details updated successfully!' : 'Company entity added successfully!');
+                hideCompanyForm();
+                await loadCompanies();
+            } else {
+                const data = await res.json();
+                notify(data.detail || 'Failed to save company information', 'error');
+            }
+        } catch(e) {
+            notify('Network error saving company', 'error');
+        }
+    }
+
+    async function deleteCompanyRecord(id) {
+        const linkedBranches = currentBranches.filter(b => b.company_id === id);
+        if (linkedBranches.length > 0) {
+            notify(`Cannot delete: this company still has ${linkedBranches.length} active Branch Sites assigned to it. Unassign or delete those branches first.`, 'error');
+            return;
+        }
+
+        showConfirm('Are you sure you want to delete this company? Employees belonging to this company will no longer be linked to it.', async () => {
+            try {
+                const res = await fetch(`/ui/companies/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    notify('Company entity deleted successfully.');
+                    await loadCompanies();
+                } else {
+                    notify('Failed to delete company.', 'error');
+                }
+            } catch(e) {
+                notify('Network error deleting company', 'error');
             }
         });
     }
