@@ -71,6 +71,7 @@
             if (tabId === 'profile') loadUsers();
             if (tabId === 'punch-types') loadPunchTypes();
             if (tabId === 'settings') loadAdmsSyncSettings();
+            if (tabId === 'employees') loadEmployees();
         }
     }
 
@@ -1934,7 +1935,7 @@
             return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                 <td class="px-6 py-4 font-mono font-bold text-slate-900 dark:text-slate-100">${e.employee_id}</td>
-                <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800 dark:text-slate-200">${e.full_name}</span></td>
+                <td class="px-6 py-4"><span class="text-sm font-semibold text-slate-800 dark:text-slate-200">${e.full_name || 'Unnamed'}</span></td>
                 <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-450">${e.department || '—'}</td>
                 <td class="px-6 py-4 text-center">${admsBadge}</td>
                 <td class="px-6 py-4 text-center">${deviceBadge}</td>
@@ -1946,7 +1947,7 @@
                 <td class="px-6 py-4 text-xs text-slate-400 dark:text-slate-500">${lastSynced}</td>
                 <td class="px-6 py-4 text-right whitespace-nowrap space-x-1">
                     <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400" onclick="editEmployee('${e.employee_id}')" title="Edit details">✏️ Edit</button>
-                    <button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400" onclick="syncEmployeeToAdms('${e.employee_id}', '${e.full_name.replace(/'/g, "\\'")}')" title="Sync/Register employee on ADMS">🔄 Sync</button>
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-450" onclick="syncEmployeeToAdms('${e.employee_id}', '${(e.full_name || '').replace(/'/g, "\\'")}')" title="Sync/Register employee on ADMS">🔄 Sync</button>
                     ${e.adms_registered ? `<button class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400" onclick="clearEmployeeFromAdms('${e.employee_id}')" title="Delete employee only from ADMS">🔴 Clear ADMS</button>` : ''}
                     <button class="inline-flex items-center gap-1 rounded-lg bg-red-50 border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:bg-red-950/30 dark:border-red-900/50 dark:text-red-450" onclick="deleteEmployee('${e.employee_id}')" title="Soft-delete locally and revoke app access">🗑️ Delete</button>
                 </td>
