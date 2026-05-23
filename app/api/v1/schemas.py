@@ -301,6 +301,9 @@ class ShiftScheduleCreate(BaseModel):
     overtime_after_hours: float = 9.0
     working_days: str = "1,2,3,4,5"
     is_default: bool = False
+    schedule_type: Optional[str] = "weekly"
+    interval_days: Optional[int] = None
+    anchor_date: Optional[date] = None
 
 
 class ShiftScheduleUpdate(BaseModel):
@@ -312,6 +315,9 @@ class ShiftScheduleUpdate(BaseModel):
     overtime_after_hours: Optional[float] = None
     working_days: Optional[str] = None
     is_default: Optional[bool] = None
+    schedule_type: Optional[str] = None
+    interval_days: Optional[int] = None
+    anchor_date: Optional[date] = None
 
 
 class ShiftScheduleResponse(BaseModel):
@@ -324,6 +330,9 @@ class ShiftScheduleResponse(BaseModel):
     overtime_after_hours: float
     working_days: str
     is_default: bool
+    schedule_type: Optional[str]
+    interval_days: Optional[int]
+    anchor_date: Optional[date]
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

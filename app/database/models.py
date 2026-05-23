@@ -65,8 +65,11 @@ class ShiftSchedule(Base):
     grace_minutes = Column(Integer, default=15)
     min_work_hours = Column(Float, default=8.0)
     overtime_after_hours = Column(Float, default=9.0)
-    working_days = Column(String(50), default="1,2,3,4,5")  # 1=Mon, 7=Sun
+    working_days = Column(String(50), default="1,2,3,4,5")  # 1=Mon, 7=Sun or cycle indexes
     is_default = Column(Boolean, default=False)
+    schedule_type = Column(String(50), default="weekly", nullable=True)  # "weekly", "cyclic"
+    interval_days = Column(Integer, nullable=True)
+    anchor_date = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -438,6 +441,9 @@ def init_db():
         "ALTER TABLE branch_checkpoints ADD COLUMN IF NOT EXISTS polygon_coordinates TEXT;" if engine.name != "sqlite" else "ALTER TABLE branch_checkpoints ADD COLUMN polygon_coordinates TEXT;",
         # Phase 7: Shift Schedule, Company, Employee Group, Holiday, Leave Request, Audit Log support
         "CREATE TABLE IF NOT EXISTS shift_schedules (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(100) NOT NULL, start_time VARCHAR(5) DEFAULT '08:00', end_time VARCHAR(5) DEFAULT '17:00', grace_minutes INTEGER DEFAULT 15, min_work_hours REAL DEFAULT 8.0, overtime_after_hours REAL DEFAULT 9.0, working_days VARCHAR(50) DEFAULT '1,2,3,4,5', is_default INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS shift_schedules (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, start_time VARCHAR(5) DEFAULT '08:00', end_time VARCHAR(5) DEFAULT '17:00', grace_minutes INTEGER DEFAULT 15, min_work_hours REAL DEFAULT 8.0, overtime_after_hours REAL DEFAULT 9.0, working_days VARCHAR(50) DEFAULT '1,2,3,4,5', is_default BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
+        "ALTER TABLE shift_schedules ADD COLUMN IF NOT EXISTS schedule_type VARCHAR(50) DEFAULT 'weekly';" if engine.name != "sqlite" else "ALTER TABLE shift_schedules ADD COLUMN schedule_type VARCHAR(50) DEFAULT 'weekly';",
+        "ALTER TABLE shift_schedules ADD COLUMN IF NOT EXISTS interval_days INTEGER;" if engine.name != "sqlite" else "ALTER TABLE shift_schedules ADD COLUMN interval_days INTEGER;",
+        "ALTER TABLE shift_schedules ADD COLUMN IF NOT EXISTS anchor_date DATE;" if engine.name != "sqlite" else "ALTER TABLE shift_schedules ADD COLUMN anchor_date DATE;",
         "CREATE TABLE IF NOT EXISTS companies (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(150) NOT NULL, code VARCHAR(50) UNIQUE NOT NULL, is_active INTEGER DEFAULT 1, shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS companies (id SERIAL PRIMARY KEY, name VARCHAR(150) NOT NULL, code VARCHAR(50) UNIQUE NOT NULL, is_active BOOLEAN DEFAULT TRUE, shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
         "CREATE TABLE IF NOT EXISTS employee_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(100) NOT NULL, branch_id INTEGER NOT NULL REFERENCES branches(id), shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS employee_groups (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, branch_id INTEGER NOT NULL REFERENCES branches(id), shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
         "CREATE TABLE IF NOT EXISTS holidays (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(200) NOT NULL, date DATE UNIQUE NOT NULL, is_recurring INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS holidays (id SERIAL PRIMARY KEY, name VARCHAR(200) NOT NULL, date DATE UNIQUE NOT NULL, is_recurring BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",

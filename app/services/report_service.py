@@ -86,7 +86,10 @@ def resolve_employee_shift(db: Session, employee: Employee, target_date: date) -
         grace_minutes=15,
         min_work_hours=8.0,
         overtime_after_hours=9.0,
-        working_days="1,2,3,4,5"
+        working_days="1,2,3,4,5",
+        schedule_type="weekly",
+        interval_days=None,
+        anchor_date=None
     )
 
 
@@ -172,7 +175,27 @@ def pair_employee_punches(
 
         # Parse shift details
         working_days = [int(x.strip()) for x in shift.working_days.split(",") if x.strip().isdigit()]
-        is_working_day = (curr_date.isoweekday() in working_days)
+        
+        # Determine if shift is weekly or cyclic
+        schedule_type = getattr(shift, "schedule_type", "weekly") or "weekly"
+        if schedule_type == "cyclic" and shift.interval_days and shift.anchor_date:
+            anchor = shift.anchor_date
+            if isinstance(anchor, str):
+                try:
+                    anchor = datetime.datetime.strptime(anchor, "%Y-%m-%d").date()
+                except ValueError:
+                    anchor = None
+            elif isinstance(anchor, datetime.datetime):
+                anchor = anchor.date()
+                
+            if anchor:
+                days_elapsed = (curr_date - anchor).days
+                cycle_day = (days_elapsed % shift.interval_days) + 1
+                is_working_day = (cycle_day in working_days)
+            else:
+                is_working_day = (curr_date.isoweekday() in working_days)
+        else:
+            is_working_day = (curr_date.isoweekday() in working_days)
         is_holiday = curr_date in holiday_dates
         is_leave = curr_date in leave_dates
 

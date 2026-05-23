@@ -1,0 +1,138 @@
+<div id="shift-schedules" class="tab-content hidden">
+    <!-- Shift schedules list and cards -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1 dark:text-slate-400">Shift & Schedule Configurations</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Define operational shifts, work days, grace periods, and rotational/cyclic patterns for daily workers, interns, and standard staff.
+                </p>
+            </div>
+            <button class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" onclick="showCreateShiftForm()">
+                ➕ Create Shift
+            </button>
+        </div>
+
+        <!-- Cards Grid -->
+        <div id="shiftsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Dynamically populated -->
+        </div>
+    </div>
+
+    <!-- Create/Edit Form (Card/Panel) -->
+    <div id="shiftFormContainer" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-2xl hidden dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="text-sm font-semibold text-slate-800 mb-5 dark:text-slate-100" id="shiftFormTitle">Create New Shift Schedule</h2>
+        
+        <form id="shiftForm" onsubmit="event.preventDefault(); saveShiftSchedule();">
+            <input type="hidden" id="edit_shift_id">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Shift Name</label>
+                    <input type="text" id="shift_name" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="e.g., General Shift, Alternate Days" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Schedule Recurrence Type</label>
+                    <select id="shift_schedule_type" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" onchange="toggleScheduleTypeInputs()">
+                        <option value="weekly">📅 Weekly (Mon-Sun)</option>
+                        <option value="cyclic">🔄 Cyclic (Alternate / Rotations)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Start Time</label>
+                    <input type="time" id="shift_start_time" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="08:00" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">End Time</label>
+                    <input type="time" id="shift_end_time" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="17:00" required>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Grace Minutes</label>
+                    <input type="number" id="shift_grace_minutes" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="15" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Min Work Hours</label>
+                    <input type="number" step="0.1" id="shift_min_work_hours" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="8.0" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">OT After Hours</label>
+                    <input type="number" step="0.1" id="shift_overtime_after_hours" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="9.0" required>
+                </div>
+            </div>
+
+            <!-- WEEKLY OPTIONS -->
+            <div id="weeklyOptionsContainer" class="mb-5 p-4 rounded-xl bg-slate-50 border border-slate-200 dark:bg-slate-800/40 dark:border-slate-800">
+                <label class="block text-sm font-semibold text-slate-700 mb-3 dark:text-slate-300">Work Days of Week</label>
+                <div class="flex flex-wrap gap-x-6 gap-y-3">
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" name="weekly_day" value="1" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400"> Monday
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" name="weekly_day" value="2" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400"> Tuesday
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" name="weekly_day" value="3" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400"> Wednesday
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" name="weekly_day" value="4" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400"> Thursday
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" name="weekly_day" value="5" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400"> Friday
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" name="weekly_day" value="6" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400"> Saturday
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">
+                        <input type="checkbox" name="weekly_day" value="7" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400"> Sunday
+                    </label>
+                </div>
+            </div>
+
+            <!-- CYCLIC OPTIONS -->
+            <div id="cyclicOptionsContainer" class="mb-5 p-4 rounded-xl bg-slate-50 border border-slate-200 hidden dark:bg-slate-800/40 dark:border-slate-800">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Cycle Length (Days)</label>
+                        <input type="number" id="shift_interval_days" min="2" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="e.g. 2 for alternating" oninput="generateCyclicDaysCheckboxes()">
+                        <small class="text-xs text-slate-400 mt-1 block dark:text-slate-500">Number of total days before rotation repeats.</small>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Start / Anchor Date</label>
+                        <input type="date" id="shift_anchor_date" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                        <small class="text-xs text-slate-400 mt-1 block dark:text-slate-500">Day 1 of the cycle. Cycle math calculates rotations forward/backward from this date.</small>
+                    </div>
+                </div>
+                
+                <div class="mb-2">
+                    <label class="block text-sm font-semibold text-slate-700 mb-2 dark:text-slate-300">Select Working Days in the Cycle</label>
+                    <div id="cyclicDaysGrid" class="flex flex-wrap gap-4">
+                        <p class="text-sm text-slate-400 italic">Enter a cycle length above to see days.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Set as Default Shift -->
+            <div class="mb-6">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="shift_is_default" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400">
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Set as Global Default Shift Schedule</span>
+                </label>
+            </div>
+
+            <div class="flex gap-4">
+                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm" id="saveShiftBtn">
+                    💾 Save Shift Schedule
+                </button>
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/40" onclick="hideShiftForm()">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

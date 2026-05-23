@@ -2077,8 +2077,6 @@ async def get_shift_schedules(
     admin: AdminUser = Depends(get_current_admin)
 ):
     return db.query(ShiftSchedule).order_by(ShiftSchedule.name).all()
-
-
 @router.post("/ui/shift-schedules", response_model=ShiftScheduleResponse)
 async def create_shift_schedule(
     payload: ShiftScheduleCreate,
@@ -2098,7 +2096,10 @@ async def create_shift_schedule(
         min_work_hours=payload.min_work_hours,
         overtime_after_hours=payload.overtime_after_hours,
         working_days=payload.working_days,
-        is_default=payload.is_default
+        is_default=payload.is_default,
+        schedule_type=payload.schedule_type,
+        interval_days=payload.interval_days,
+        anchor_date=payload.anchor_date
     )
     db.add(schedule)
     db.commit()
@@ -2141,6 +2142,12 @@ async def update_shift_schedule(
         schedule.overtime_after_hours = payload.overtime_after_hours
     if payload.working_days is not None:
         schedule.working_days = payload.working_days
+    if payload.schedule_type is not None:
+        schedule.schedule_type = payload.schedule_type
+    if payload.interval_days is not None:
+        schedule.interval_days = payload.interval_days
+    if payload.anchor_date is not None:
+        schedule.anchor_date = payload.anchor_date
         
     db.commit()
     db.refresh(schedule)
