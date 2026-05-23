@@ -2780,30 +2780,5 @@
             }
         });
     }
-</script>    await loadEmployees();
-                } else {
-                    notify(data.detail || 'Clear from ADMS failed', 'error');
-                }
-            } catch(e) {
-                notify('Network error clearing from ADMS', 'error');
-            }
-        });
-    }
-
-    async function deleteEmployee(pin) {
-        showConfirm(`Are you sure you want to delete employee <b>${pin}</b>?<br><br><span class="text-red-500 font-semibold">⚠️ Warning:</span> This will:<br>1. Soft-delete them locally (hiding them from active lists).<br>2. Cascade delete all their mobile app <b>Device Bindings</b> (instantly revoking their app login).<br>3. Remove their supervisor mappings.<br><br><i>Note: Their record is left intact in ADMS for payroll, and historical clock-ins are preserved.</i>`, async () => {
-            try {
-                const res = await fetch(`/ui/employees/${pin}`, { method: 'DELETE' });
-                const data = await res.json();
-                if (res.ok) {
-                    notify(`Employee ${pin} soft-deleted. Mobile app access revoked!`);
-                    await loadEmployees();
-                } else {
-                    notify(data.detail || 'Failed to delete employee', 'error');
-                }
-            } catch(e) {
-                notify('Network error deleting employee', 'error');
-            }
-        });
-    }
 </script>
+
