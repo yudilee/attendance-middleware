@@ -2537,7 +2537,7 @@
             const res = await fetch('/ui/employees');
             if (!res.ok) throw new Error('Failed to fetch');
             currentEmployees = await res.json();
-            renderEmployeesTable(currentEmployees);
+            filterEmployeesTab();
         } catch(e) {
             tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-sm text-red-500">Failed to load employees. Please retry.</td></tr>';
             notify('Error loading employees: ' + e.message, 'error');
@@ -2610,11 +2610,12 @@
             renderEmployeesTable(currentEmployees);
             return;
         }
-        const filtered = currentEmployees.filter(e => 
-            e.full_name.toLowerCase().includes(q) || 
-            e.employee_id.includes(q) || 
-            (e.department && e.department.toLowerCase().includes(q))
-        );
+        const filtered = currentEmployees.filter(e => {
+            const name = (e.full_name || '').toLowerCase();
+            const pin = (e.employee_id || '');
+            const dept = (e.department || '').toLowerCase();
+            return name.includes(q) || pin.includes(q) || dept.includes(q);
+        });
         renderEmployeesTable(filtered);
     }
 
