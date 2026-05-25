@@ -320,7 +320,6 @@ async def generate_onboard_qr(
             label=req.key_label.strip(),
             key_value=key_value,
             is_active=True,
-            created_by=admin.username,
         )
         db.add(new_key)
         db.flush()
