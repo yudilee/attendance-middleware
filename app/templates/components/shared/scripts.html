@@ -145,6 +145,26 @@
                 try {
                     const data = JSON.parse(event.data);
                     
+                    // Handle device onboarding events
+                    if (data.type === 'device_onboarded') {
+                        // Close the onboarding modal
+                        const onboardM = document.getElementById('onboardModal');
+                        if (onboardM) {
+                            onboardM.classList.add('hidden');
+                            onboardM.style.display = 'none';
+                        }
+                        
+                        // Reset views back to device list
+                        resetAllViews();
+                        
+                        // Refresh the device table via AJAX
+                        refreshDevicesTable();
+                        
+                        // Show notification
+                        notify(`Device registered: ${data.employee_name} (${data.employee_id}) is now active!`, 'success');
+                        return;
+                    }
+                    
                     if (liveTickerPlaceholder) liveTickerPlaceholder.classList.add('hidden');
                     if (liveTickerList) liveTickerList.classList.remove('hidden');
                     
@@ -436,6 +456,32 @@
         } finally {
             btn.innerText = '🔄 Sync Now';
             btn.disabled = false;
+        }
+    }
+
+    // ── Device List AJAX Refresh (no page reload) ──────────────────────────────
+    async function refreshDevicesTable() {
+        try {
+            const res = await fetch('/ui/devices/list');
+            if (!res.ok) throw new Error('Failed to fetch devices');
+            const data = await res.json();
+            
+            const tbody = document.querySelector('#devicesTableBody');
+            if (!tbody) return;
+            
+            // Re-render the device table rows using the same template as initial render
+            // We need to fetch the full page context, so we'll do a targeted AJAX call
+            // that returns just the device rows HTML
+            const listRes = await fetch('/ui/devices/rows');
+            if (!listRes.ok) throw new Error('Failed to fetch device rows');
+            const rowsHtml = await listRes.text();
+            tbody.innerHTML = rowsHtml;
+            
+            notify('Device list refreshed!');
+        } catch(e) {
+            console.error('Failed to refresh device list:', e);
+            // Fallback: full reload if AJAX fails
+            location.reload();
         }
     }
 

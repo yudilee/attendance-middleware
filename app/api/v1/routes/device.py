@@ -382,6 +382,22 @@ async def onboard_device(
         binding.approved_by = "System (QR)"
         db.commit()
 
+    # Broadcast WebSocket event to notify admin dashboard of new registration
+    try:
+        from app.api.v1.routes.punch import manager as ws_manager
+        onboard_event = json.dumps({
+            "type": "device_onboarded",
+            "device_uuid": binding.device_uuid,
+            "employee_id": employee_id,
+            "employee_name": employee_name or "",
+            "status": "active",
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+        import asyncio
+        await ws_manager.broadcast(onboard_event)
+    except Exception:
+        pass  # Non-critical, don't fail registration if WebSocket fails
+
     # Assign branch
     existing_branch = db.query(BindingBranch).filter(
         BindingBranch.binding_id == binding.id,

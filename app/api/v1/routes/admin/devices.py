@@ -2,13 +2,82 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.database.models import DeviceBinding, BindingBranch, AppConfig, AdminUser
+from app.database.models import DeviceBinding, BindingBranch, AppConfig, AdminUser, Branch, Employee, ADMSRegisteredEmployee, ApiKey
 from app.services.auth_ui import get_current_admin
 from app.api.v1.schemas import DeviceLabelRequest
 from app.cache import invalidate_cache
 from app.api.v1.routes.admin.base import get_db, log_audit_action
 
 router = APIRouter(tags=["Admin UI - Device Management"])
+
+MAX_DEVICES_DEFAULT = 5
+
+def _get_max_devices(db):
+    max_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
+    return int(max_cfg.value) if max_cfg else MAX_DEVICES_DEFAULT
+
+def _serialize_device(binding, db, max_devices):
+    """Serialize a DeviceBinding row to a dict for the device list."""
+    # Employee info
+    employee_name = None
+    if binding.employee_id:
+        emp = db.query(Employee).filter(Employee.employee_id == binding.employee_id).first()
+        if emp and emp.full_name:
+            employee_name = emp.full_name
+        else:
+            adms_emp = db.query(ADMSRegisteredEmployee).filter(ADMSRegisteredEmployee.employee_id == binding.employee_id).first()
+            if adms_emp and adms_emp.employee_name:
+                employee_name = adms_emp.employee_name
+    
+    # Device count for this employee
+    device_count = 0
+    if binding.employee_id:
+        device_count = db.query(DeviceBinding).filter(
+            DeviceBinding.employee_id == binding.employee_id,
+            DeviceBinding.is_active == True,
+            DeviceBinding.registration_status.in_(["approved", "active"]),
+        ).count()
+    
+    # Branch list
+    branch_assignments = db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).all()
+    branch_list = []
+    for ba in branch_assignments:
+        branch = db.query(Branch).filter(Branch.id == ba.branch_id).first()
+        if branch:
+            branch_list.append({"id": branch.id, "name": branch.name})
+    
+    # API key label
+    api_key_label = ""
+    if binding.api_key_id:
+        api_key = db.query(ApiKey).filter(ApiKey.id == binding.api_key_id).first()
+        if api_key:
+            api_key_label = api_key.label
+    
+    return {
+        "id": binding.id,
+        "employee_id": binding.employee_id or "",
+        "employee_name": employee_name or "",
+        "device_label": binding.device_label or "",
+        "device_uuid": binding.device_uuid,
+        "device_count": device_count,
+        "max_devices": max_devices,
+        "is_active": binding.is_active,
+        "registration_status": binding.registration_status or "pending_approval",
+        "branch_list": branch_list,
+        "api_key_label": api_key_label,
+        "created_at": binding.created_at.isoformat() if binding.created_at else None,
+    }
+
+@router.get("/ui/devices/list")
+async def get_devices_list(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """Return device bindings as JSON for AJAX refresh."""
+    max_devices = _get_max_devices(db)
+    bindings = db.query(DeviceBinding).order_by(DeviceBinding.created_at.desc()).all()
+    return [_serialize_device(b, db, max_devices) for b in bindings]
 
 @router.post("/ui/devices/{binding_id}/approve")
 async def approve_device(
