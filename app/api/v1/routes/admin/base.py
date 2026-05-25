@@ -6,9 +6,9 @@ from app.database.models import SessionLocal, AuditLog
 
 # Setup templates directory absolute path
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# routes/admin -> routes -> v1 -> api -> app -> backend -> templates
-backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))))
-template_path = os.path.join(backend_dir, "templates")
+# routes/admin -> routes -> v1 -> api -> app -> templates
+app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
+template_path = os.path.join(app_dir, "templates")
 templates = Jinja2Templates(directory=template_path)
 
 # Global ARQ pool reference
