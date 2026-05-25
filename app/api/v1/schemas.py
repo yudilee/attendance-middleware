@@ -208,7 +208,8 @@ class SupervisorAssignment(BaseModel):
 class OnboardGenerateRequest(BaseModel):
     employee_id: str
     branch_id: int
-    api_key_id: int
+    api_key_id: Optional[int] = None
+    key_label: Optional[str] = None
 
 class OnboardDeviceRequest(BaseModel):
     device_uuid: str

@@ -2270,23 +2270,21 @@
         document.getElementById('onboard_emp_search').value = '';
         document.getElementById('onboard_emp_dropdown').innerHTML = '<div class="p-2.5 text-sm text-slate-400 dark:text-slate-500">Loading employees...</div>';
         
+        document.getElementById('onboard_key_label').value = '';
         document.getElementById('onboard_branch_id').innerHTML = '<option value="">Loading branch sites...</option>';
-        document.getElementById('onboard_key_id').innerHTML = '<option value="">Loading API keys...</option>';
         
         document.getElementById('onboardModal').classList.remove('hidden');
         document.getElementById('onboardModal').style.display = 'flex';
 
         try {
-            const [empRes, branchRes, keyRes] = await Promise.all([
+            const [empRes, branchRes] = await Promise.all([
                 fetch('/ui/employees/list'),
-                fetch('/ui/branches'),
-                fetch('/ui/api-keys')
+                fetch('/ui/branches')
             ]);
 
-            const [employees, branches, keys] = await Promise.all([
+            const [employees, branches] = await Promise.all([
                 empRes.json(),
-                branchRes.json(),
-                keyRes.json()
+                branchRes.json()
             ]);
 
             onboardEmployees = employees || [];
@@ -2299,24 +2297,6 @@
                 document.getElementById('onboard_branch_id').innerHTML = branches.map(b => `
                     <option value="${b.id}">${b.name}</option>
                 `).join('');
-            }
-
-            let activeKeys = keys.filter(k => k.is_active && k.expiry_status !== 'expired');
-            if (activeKeys.length === 0) {
-                const genRes = await fetch('/ui/api-keys?label=Default%20Mobile%20Key', {method: 'POST'});
-                if (genRes.ok) {
-                    const updatedRes = await fetch('/ui/api-keys');
-                    const updatedKeys = await updatedRes.json();
-                    activeKeys = updatedKeys.filter(k => k.is_active && k.expiry_status !== 'expired');
-                }
-            }
-
-            if (activeKeys.length > 0) {
-                document.getElementById('onboard_key_id').innerHTML = activeKeys.map((k, i) => `
-                    <option value="${k.id}" ${i === 0 ? 'selected' : ''}>${k.label} (${k.key_preview})</option>
-                `).join('');
-            } else {
-                document.getElementById('onboard_key_id').innerHTML = '<option value="">Failed to auto-provision key</option>';
             }
         } catch(e) {
             notify('Failed to load onboarding options', 'error');
@@ -2398,10 +2378,10 @@
     async function generateOnboardQR() {
         const empId = document.getElementById('onboard_emp_id').value;
         const branchId = document.getElementById('onboard_branch_id').value;
-        const keyId = document.getElementById('onboard_key_id').value;
+        const keyLabel = document.getElementById('onboard_key_label').value.trim();
         
-        if (!empId || !branchId || !keyId) {
-            notify('Please select all required options', 'error');
+        if (!empId || !branchId || !keyLabel) {
+            notify('Please fill in all required fields', 'error');
             return;
         }
         
@@ -2412,7 +2392,7 @@
                 body: JSON.stringify({
                     employee_id: empId,
                     branch_id: parseInt(branchId),
-                    api_key_id: parseInt(keyId)
+                    key_label: keyLabel
                 })
             });
             if (!response.ok) throw new Error('Failed to generate QR');
@@ -2424,8 +2404,12 @@
 
             document.getElementById('onboardQrImg').src = qrUrl;
             document.getElementById('onboardQrContainer').style.display = 'block';
+            
+            if (data.api_key) {
+                notify(`QR generated! API Key: ${data.api_key.substring(0, 20)}...`);
+            }
         } catch(err) {
-            notify(err.message);
+            notify(err.message || 'Failed to generate QR');
         }
     }
 

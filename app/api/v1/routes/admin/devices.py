@@ -46,12 +46,21 @@ def _serialize_device(binding, db, max_devices):
         if branch:
             branch_list.append({"id": branch.id, "name": branch.name})
     
-    # API key label
+    # API key info
     api_key_label = ""
+    api_key_preview = ""
+    is_unique_key = False
     if binding.api_key_id:
         api_key = db.query(ApiKey).filter(ApiKey.id == binding.api_key_id).first()
         if api_key:
             api_key_label = api_key.label
+            api_key_preview = api_key.key_value[:20] + "..." if len(api_key.key_value) > 20 else api_key.key_value
+            # Check if this key is used by only one device (unique key from QR onboarding)
+            key_device_count = db.query(DeviceBinding).filter(
+                DeviceBinding.api_key_id == binding.api_key_id,
+                DeviceBinding.is_active == True,
+            ).count()
+            is_unique_key = key_device_count == 1
     
     return {
         "id": binding.id,
@@ -65,6 +74,8 @@ def _serialize_device(binding, db, max_devices):
         "registration_status": binding.registration_status or "pending_approval",
         "branch_list": branch_list,
         "api_key_label": api_key_label,
+        "api_key_preview": api_key_preview,
+        "is_unique_key": is_unique_key,
         "created_at": binding.created_at.isoformat() if binding.created_at else None,
     }
 
@@ -170,7 +181,25 @@ async def unbind_device(
     if binding:
         device_name = binding.device_label or binding.device_uuid
         employee_id = binding.employee_id
+        api_key_id = binding.api_key_id
         await invalidate_cache(f"device_config:{binding.api_key_id}:{binding.device_uuid}")
+        
+        # Revoke the API key associated with this device
+        if api_key_id:
+            api_key = db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
+            if api_key:
+                # Check if this key is used by any other active device
+                other_device = db.query(DeviceBinding).filter(
+                    DeviceBinding.api_key_id == api_key_id,
+                    DeviceBinding.id != binding_id,
+                    DeviceBinding.is_active == True,
+                    DeviceBinding.registration_status.in_(["approved", "active"]),
+                ).first()
+                if not other_device:
+                    # No other device uses this key, revoke it
+                    api_key.is_active = False
+                    db.commit()
+        
         db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).delete()
         db.delete(binding)
         db.commit()

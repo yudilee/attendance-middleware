@@ -302,11 +302,39 @@ async def generate_onboard_qr(
     db: Session = Depends(get_db),
     admin=Depends(get_current_admin),
 ):
-    """Generates a secure QR payload for device onboarding."""
+    """Generates a secure QR payload for device onboarding.
+    
+    If key_label is provided, auto-creates a unique API key for this device.
+    Otherwise uses the existing api_key_id (legacy behavior).
+    """
+    import secrets
+    
+    # Determine api_key_id: use provided key or create new one
+    api_key_id = req.api_key_id
+    created_api_key = None
+    
+    if req.key_label and req.key_label.strip():
+        # Create a new unique API key for this device
+        key_value = f"mob_{secrets.token_hex(32)}"
+        new_key = ApiKey(
+            label=req.key_label.strip(),
+            key_value=key_value,
+            is_active=True,
+            created_by=admin.username,
+        )
+        db.add(new_key)
+        db.flush()
+        db.refresh(new_key)
+        api_key_id = new_key.id
+        created_api_key = key_value
+        logger.info("auto_created_api_key", key_id=new_key.id, label=req.key_label.strip())
+    elif not api_key_id:
+        raise HTTPException(status_code=400, detail="Either api_key_id or key_label must be provided")
+    
     payload = {
         "emp": req.employee_id,
         "branch": req.branch_id,
-        "key_id": req.api_key_id,
+        "key_id": api_key_id,
         "exp": datetime.utcnow() + timedelta(hours=24),
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
@@ -320,7 +348,12 @@ async def generate_onboard_qr(
         host = request.headers.get("x-forwarded-host", request.url.netloc)
         server_url = f"{scheme}://{host}"
 
-    return {"url": server_url, "token": token}
+    result = {"url": server_url, "token": token}
+    if created_api_key:
+        result["api_key"] = created_api_key
+        result["key_label"] = req.key_label.strip()
+    
+    return result
 
 
 @router.post("/api/v1/device-onboard")
