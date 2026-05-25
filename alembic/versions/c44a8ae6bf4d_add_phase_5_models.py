@@ -65,7 +65,7 @@ def upgrade() -> None:
     
     # Add columns to existing tables
     op.add_column('branches', sa.Column('timezone_name', sa.String(length=50), nullable=True))
-    op.add_column('punch_logs', sa.Column('is_auto_generated', sa.Boolean(), server_default=sa.text('0'), nullable=True))
+    op.add_column('punch_logs', sa.Column('is_auto_generated', sa.Boolean(), server_default=sa.text('false'), nullable=True))
     
     op.add_column('shift_schedules', sa.Column('overtime_multiplier_1', sa.Float(), nullable=True))
     op.add_column('shift_schedules', sa.Column('overtime_multiplier_2', sa.Float(), nullable=True))
@@ -73,7 +73,7 @@ def upgrade() -> None:
     op.add_column('shift_schedules', sa.Column('weekend_overtime_multiplier', sa.Float(), nullable=True))
     op.add_column('shift_schedules', sa.Column('holiday_overtime_multiplier', sa.Float(), nullable=True))
     op.add_column('shift_schedules', sa.Column('monthly_overtime_cap_hours', sa.Float(), nullable=True))
-    op.add_column('shift_schedules', sa.Column('auto_clockout_enabled', sa.Boolean(), server_default=sa.text('0'), nullable=True))
+    op.add_column('shift_schedules', sa.Column('auto_clockout_enabled', sa.Boolean(), server_default=sa.text('false'), nullable=True))
     op.add_column('shift_schedules', sa.Column('auto_clockout_buffer_minutes', sa.Integer(), server_default=sa.text('60'), nullable=True))
 
 
