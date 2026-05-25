@@ -458,6 +458,7 @@ def run_alembic_migrations():
     import logging
     from alembic.config import Config
     from alembic import command
+    from sqlalchemy import inspect
     
     logger = logging.getLogger("alembic")
     try:
@@ -471,6 +472,22 @@ def run_alembic_migrations():
         db_url = os.environ.get("DATABASE_URL")
         if db_url:
             alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+            
+        # Self-healing legacy database stamp check
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        if "alembic_version" not in tables:
+            if "admin_users" in tables:
+                logger.info("Legacy database detected. Stamping Alembic version baseline...")
+                # Determine baseline based on existing tables
+                if "system_error_logs" in tables:
+                    baseline = "79db5f5796e0"
+                elif "shift_schedules" in tables:
+                    baseline = "9d6887d52a33"
+                else:
+                    baseline = "4c757a619595"
+                logger.info(f"Stamping database with baseline revision: {baseline}")
+                command.stamp(alembic_cfg, baseline)
             
         # Run upgrade head
         command.upgrade(alembic_cfg, "head")
