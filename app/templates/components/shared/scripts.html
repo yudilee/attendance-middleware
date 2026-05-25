@@ -2395,7 +2395,17 @@
                     key_label: keyLabel
                 })
             });
-            if (!response.ok) throw new Error('Failed to generate QR');
+            
+            if (!response.ok) {
+                let errorMsg = 'Failed to generate QR';
+                try {
+                    const errData = await response.json();
+                    errorMsg = errData.detail || errorMsg;
+                } catch(_) {
+                    errorMsg = `Server error ${response.status}`;
+                }
+                throw new Error(errorMsg);
+            }
             
             const data = await response.json();
             
@@ -2409,6 +2419,7 @@
                 notify(`QR generated! API Key: ${data.api_key.substring(0, 20)}...`);
             }
         } catch(err) {
+            console.error('QR generation error:', err);
             notify(err.message || 'Failed to generate QR');
         }
     }
