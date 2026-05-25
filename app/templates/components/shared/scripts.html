@@ -464,18 +464,86 @@
         try {
             const res = await fetch('/ui/devices/list');
             if (!res.ok) throw new Error('Failed to fetch devices');
-            const data = await res.json();
+            const devices = await res.json();
             
             const tbody = document.querySelector('#devicesTableBody');
             if (!tbody) return;
             
-            // Re-render the device table rows using the same template as initial render
-            // We need to fetch the full page context, so we'll do a targeted AJAX call
-            // that returns just the device rows HTML
-            const listRes = await fetch('/ui/devices/rows');
-            if (!listRes.ok) throw new Error('Failed to fetch device rows');
-            const rowsHtml = await listRes.text();
-            tbody.innerHTML = rowsHtml;
+            // Get max_devices from the first device or use default
+            const maxDevices = devices.length > 0 ? (devices[0].max_devices || 5) : 5;
+            
+            if (devices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-sm text-slate-400 dark:text-slate-500">No devices registered yet.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = devices.map(device => {
+                const statusClass = device.registration_status === 'pending_approval' ? 'bg-amber-50/50 dark:bg-amber-950/20' :
+                                   device.registration_status === 'suspended' ? 'bg-red-50/50 dark:bg-red-950/20 opacity-80' : '';
+                
+                const employeeHtml = device.employee_id ? `
+                    <strong class="text-slate-800 dark:text-slate-100">${device.employee_name || 'Unknown'}</strong><br>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">
+                        ID: ${device.employee_id} | ${device.device_label || '(no label)'}
+                    </span><br>
+                    <span class="text-xs font-semibold text-indigo-500 dark:text-indigo-400">
+                        🔑 Key: ${device.api_key_label || 'N/A'}
+                    </span>
+                ` : `
+                    <div class="bg-amber-50 p-2 border border-dashed border-amber-400 rounded-lg dark:bg-amber-950/30 dark:border-amber-800/50">
+                        <span class="text-xs text-amber-700 block mb-1 dark:text-amber-400">⚠️ No Employee Assigned</span>
+                        <button type="button" class="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white border-0 cursor-pointer hover:bg-amber-600" onclick="openAssignDialog(${device.id}, '${(device.device_label || 'New Device').replace(/'/g, "\\'")}')">➕ Assign Employee</button>
+                    </div>
+                `;
+                
+                const deviceCountHtml = device.device_count ? `
+                    <span class="font-semibold ${device.device_count >= maxDevices ? 'text-red-500' : 'text-slate-700'}">
+                        ${device.device_count}/${maxDevices}
+                    </span>
+                ` : '—';
+                
+                const isActiveHtml = device.is_active ?
+                    '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">Active</span>' :
+                    '<span class="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400">Inactive</span>';
+                
+                const statusHtml = device.registration_status === 'pending_approval' ?
+                    '<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">⏳ Pending</span>' :
+                    (device.registration_status === 'approved' || device.registration_status === 'active') ?
+                    '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">✅ Approved</span>' :
+                    device.registration_status === 'suspended' ?
+                    '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-400">🚫 Suspended</span>' :
+                    `<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">${device.registration_status}</span>`;
+                
+                const branchesHtml = device.branch_list.length > 0 ?
+                    device.branch_list.map(b => `<span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400">${b.name}</span>`).join('') :
+                    '<span class="text-xs text-slate-400 dark:text-slate-500">Any (No restriction)</span>';
+                
+                const actionsHtml = device.registration_status === 'pending_approval' ?
+                    `<button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400" onclick="approveDevice(${device.id})">✅ Approve</button>` :
+                    (device.registration_status === 'approved' || device.registration_status === 'active') ?
+                    `<button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/30" onclick="suspendDevice(${device.id})">🚫 Suspend</button>` :
+                    device.registration_status === 'suspended' ?
+                    `<button class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400" onclick="approveDevice(${device.id})">↩ Re-approve</button>` : '';
+                
+                return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${statusClass}">
+                    <td class="px-5 py-4">${employeeHtml}</td>
+                    <td class="px-5 py-4 font-mono text-xs text-indigo-600 dark:text-indigo-400">
+                        ${device.device_uuid.substring(0, 16)}...
+                    </td>
+                    <td class="px-5 py-4 text-center">${deviceCountHtml}</td>
+                    <td class="px-5 py-4">${isActiveHtml}</td>
+                    <td class="px-5 py-4">${statusHtml}</td>
+                    <td class="px-5 py-4">
+                        <div class="flex flex-wrap gap-1 items-center">${branchesHtml}</div>
+                    </td>
+                    <td class="px-5 py-4 text-right whitespace-nowrap">
+                        ${actionsHtml}
+                        <button class="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400" onclick="openDeviceModal(${device.id}, '${(device.device_label || '').replace(/'/g, "\\'")}')">✏️ Edit</button>
+                        <button class="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/30" onclick="unbindDevice(${device.id})">Unbind</button>
+                    </td>
+                </tr>`;
+            }).join('');
             
             notify('Device list refreshed!');
         } catch(e) {
