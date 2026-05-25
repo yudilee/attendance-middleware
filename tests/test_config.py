@@ -6,10 +6,11 @@ from app.database.models import ApiKey
 def test_get_device_config(client, db_session):
     """Device config should return branch and punch type info."""
     from app.database.models import Branch, PunchType, DeviceBinding, Employee, BindingBranch
+    from app.services.auth import hash_api_key
     
     # Setup
     api_key = "config-test-key"
-    db_session.add(ApiKey(key_value=api_key, label="config-test", is_active=True))
+    db_session.add(ApiKey(key_value=hash_api_key(api_key), label="config-test", is_active=True))
     emp = Employee(employee_id="CFG001", full_name="Config Test", is_active=True)
     db_session.add(emp)
     binding = DeviceBinding(
@@ -90,8 +91,9 @@ def test_smtp_settings(client, db_session):
     assert post_res2.status_code == 200
     
     # Verify password was preserved
+    from app.services.crypto import decrypt_value
     pwd_cfg = db_session.query(AppConfig).filter(AppConfig.key == "smtp_password").first()
-    assert pwd_cfg.value == "supersecretpassword"
+    assert decrypt_value(pwd_cfg.value) == "supersecretpassword"
     
     # Verify other values updated
     get_res2 = client.get("/ui/app-settings/smtp")

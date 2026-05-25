@@ -34,6 +34,8 @@ class DeviceBinding(Base):
     is_active = Column(Boolean, default=True)  # Admin can toggle per-device
     # ── Push Notifications ──────────────────────────────────────────────────
     fcm_token = Column(String(500), nullable=True)                 # Firebase Cloud Messaging token
+    # ── Security ────────────────────────────────────────────────────────────
+    device_secret = Column(String(100), nullable=True)             # HMAC signature verification secret
 
 
 class ADMSTarget(Base):
@@ -70,6 +72,16 @@ class ShiftSchedule(Base):
     schedule_type = Column(String(50), default="weekly", nullable=True)  # "weekly", "cyclic"
     interval_days = Column(Integer, nullable=True)
     anchor_date = Column(Date, nullable=True)
+    # Tiered Overtime Policy Engine (Phase 5B)
+    overtime_multiplier_1 = Column(Float, default=1.5)
+    overtime_multiplier_2 = Column(Float, default=2.0)
+    overtime_threshold_2_hours = Column(Float, nullable=True)
+    weekend_overtime_multiplier = Column(Float, default=2.0)
+    holiday_overtime_multiplier = Column(Float, default=3.0)
+    monthly_overtime_cap_hours = Column(Float, nullable=True)
+    # Auto Clock-Out Configs (Phase 5C)
+    auto_clockout_enabled = Column(Boolean, default=False)
+    auto_clockout_buffer_minutes = Column(Integer, default=60)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -104,6 +116,7 @@ class Branch(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
     shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True)
     timezone_offset = Column(Integer, default=7)
+    timezone_name = Column(String(50), default="Asia/Jakarta", nullable=True)  # IANA timezone (Phase 5E)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     company = relationship("Company", foreign_keys=[company_id])
@@ -244,6 +257,37 @@ class LeaveRequest(Base):
     employee = relationship("Employee", foreign_keys=[employee_id])
 
 
+class LeaveBalance(Base):
+    __tablename__ = "leave_balances"
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(String(50), ForeignKey("employees.employee_id"), nullable=False, index=True)
+    annual_total = Column(Integer, default=12)
+    annual_used = Column(Integer, default=0)
+    sick_total = Column(Integer, default=12)
+    sick_used = Column(Integer, default=0)
+    year = Column(Integer, nullable=False)
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    
+    __table_args__ = (
+        UniqueConstraint('employee_id', 'year', name='uq_employee_leave_year'),
+    )
+
+
+class OvertimeRequest(Base):
+    __tablename__ = "overtime_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(String(50), ForeignKey("employees.employee_id"), nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    hours_requested = Column(Float, nullable=False)
+    reason = Column(String(500), nullable=True)
+    status = Column(String(20), default="pending")  # pending, approved, rejected
+    approved_by = Column(String(50), nullable=True)  # Admin / Supervisor username
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True, index=True)
@@ -303,6 +347,7 @@ class PunchLog(Base):
     synced_at = Column(DateTime, nullable=True)              # When it was successfully synced to ADMS
     sync_error = Column(String(500), nullable=True)          # Error message if sync failed
     sync_retry_count = Column(Integer, default=0)            # Number of retry attempts
+    is_auto_generated = Column(Boolean, default=False)       # Auto clock-out punch (Phase 5C)
 
 
 class EmployeeSupervisor(Base):
@@ -337,10 +382,54 @@ class AttendanceCorrection(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
+class SystemErrorLog(Base):
+    """Self-hosted log of unhandled exceptions and system failures."""
+    __tablename__ = "system_error_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    error_message = Column(String(500), nullable=False)
+    stack_trace = Column(Text, nullable=True)
+    component = Column(String(100), default="fastapi")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class ScheduleAssignment(Base):
+    """Maps employee roster shifts over specific date ranges (Phase 5D)."""
+    __tablename__ = "schedule_assignments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(String(50), ForeignKey("employees.employee_id"), nullable=False, index=True)
+    shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=False)
+    effective_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)  # NULL = indefinite roster assignment
+    created_by = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
     __table_args__ = (
-        Index('idx_correction_employee', 'employee_id'),
-        Index('idx_correction_status', 'status'),
+        Index('idx_schedule_assignment_lookup', 'employee_id', 'effective_date'),
     )
+
+class Webhook(Base):
+    """Webhook endpoints registered by admin to receive event notifications (Phase 5F)."""
+    __tablename__ = "webhooks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String(500), nullable=False)
+    events = Column(String(500))  # e.g., "punch.created,leave.approved"
+    secret = Column(String(200))  # HMAC signing secret
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class WebhookDelivery(Base):
+    """Delivery attempts of webhook payloads to endpoints (Phase 5F)."""
+    __tablename__ = "webhook_deliveries"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    webhook_id = Column(Integer, ForeignKey("webhooks.id"), nullable=False)
+    event = Column(String(100), nullable=False)
+    payload = Column(Text, nullable=False)
+    response_status = Column(Integer, nullable=True)
+    delivered_at = Column(DateTime, nullable=True)
+    error = Column(String(500), nullable=True)
 
 
 # ─── Database Setup ────────────────────────────────────────────────────────────
@@ -356,153 +445,58 @@ else:
         SQLALCHEMY_DATABASE_URL,
         pool_size=10,
         max_overflow=20,
-        pool_pre_ping=True
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        pool_timeout=30,
     )
     
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def run_alembic_migrations():
+    """Run Alembic migrations programmatically on startup."""
+    import logging
+    from alembic.config import Config
+    from alembic import command
+    
+    logger = logging.getLogger("alembic")
+    try:
+        # Get path to alembic.ini relative to this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        backend_dir = os.path.dirname(os.path.dirname(current_dir))
+        ini_path = os.path.join(backend_dir, "alembic.ini")
+        
+        # Load config and override URL from env
+        alembic_cfg = Config(ini_path)
+        db_url = os.environ.get("DATABASE_URL")
+        if db_url:
+            alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+            
+        # Run upgrade head
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Alembic database migrations applied successfully.")
+    except Exception as e:
+        logger.error(f"Failed to apply Alembic migrations: {e}")
+
+
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    if not SQLALCHEMY_DATABASE_URL.startswith("sqlite:///:memory:"):
+        try:
+            run_alembic_migrations()
+        except Exception as e:
+            print(f"Alembic startup migration warning: {e}")
+    else:
+        # Fallback for SQLite in-memory / testing
+        Base.metadata.create_all(bind=engine)
 
-    # ── Auto-Migration ────────────────────────────────────────────────────────
-    from sqlalchemy import text
-    migrations = [
-        "ALTER TABLE adms_targets ADD COLUMN timezone_offset INTEGER DEFAULT 7;",
-        "ALTER TABLE punch_logs ADD COLUMN tz_offset_minutes INTEGER DEFAULT 420;",
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS qr_code_enabled BOOLEAN DEFAULT FALSE;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN qr_code_enabled BOOLEAN DEFAULT 0;",
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS qr_code_data VARCHAR(256);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN qr_code_data VARCHAR(256);",
-        "ALTER TABLE punch_logs ADD COLUMN client_punch_id TEXT;",
-        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS gps_time_validated BOOLEAN DEFAULT FALSE;" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN gps_time_validated INTEGER DEFAULT 0;",
-        # Convert existing integer gps_time_validated to boolean in Postgres
-        "ALTER TABLE punch_logs ALTER COLUMN gps_time_validated DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE punch_logs ALTER COLUMN gps_time_validated TYPE BOOLEAN USING (gps_time_validated::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE punch_logs ALTER COLUMN gps_time_validated SET DEFAULT FALSE;" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS notes TEXT;" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN notes TEXT;",
-        "ALTER TABLE device_bindings ADD COLUMN device_label TEXT;",
-        "ALTER TABLE device_bindings ADD COLUMN registration_status TEXT DEFAULT 'pending_approval';",
-        "ALTER TABLE device_bindings ADD COLUMN approved_at TIMESTAMP;",
-        "ALTER TABLE device_bindings ADD COLUMN approved_by TEXT;",
-        "ALTER TABLE device_bindings ADD COLUMN notes TEXT;",
-        "ALTER TABLE device_bindings ADD COLUMN device_role TEXT DEFAULT 'primary';",
-        "ALTER TABLE device_bindings ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;" if engine.name != "sqlite" else "ALTER TABLE device_bindings ADD COLUMN is_active BOOLEAN DEFAULT 1;",
-        # Convert existing integer is_active to boolean in Postgres with explicit casting
-        "ALTER TABLE device_bindings ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE device_bindings ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE device_bindings ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
-        "DROP INDEX IF EXISTS ix_device_bindings_employee_id;",
-        # Branch & ApiKey updates
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN updated_at TIMESTAMP;",
-        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE api_keys ADD COLUMN last_used_at TIMESTAMP;",
-        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_ip VARCHAR(45);" if engine.name != "sqlite" else "ALTER TABLE api_keys ADD COLUMN last_used_ip VARCHAR(45);",
-        "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE api_keys ADD COLUMN expires_at TIMESTAMP;",
-        "ALTER TABLE branches ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE branches ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE branches ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
-        
-        "ALTER TABLE punch_types ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE punch_types ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE punch_types ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
-        
-        "ALTER TABLE employees ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE employees ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE employees ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0;",
-        
-        "ALTER TABLE api_keys ALTER COLUMN is_active DROP DEFAULT;" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE api_keys ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean);" if engine.name != "sqlite" else "SELECT 1;",
-        "ALTER TABLE api_keys ALTER COLUMN is_active SET DEFAULT TRUE;" if engine.name != "sqlite" else "SELECT 1;",
-        # ADMS ARQ sync tracking fields
-        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS server_sync_status VARCHAR(20) DEFAULT 'pending';" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN server_sync_status VARCHAR(20) DEFAULT 'pending';",
-        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS synced_at TIMESTAMP;" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN synced_at TIMESTAMP;",
-        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS sync_error VARCHAR(500);" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN sync_error VARCHAR(500);",
-        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS sync_retry_count INTEGER DEFAULT 0;" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN sync_retry_count INTEGER DEFAULT 0;",
-        # Selfie / Face Verification
-        "ALTER TABLE punch_logs ADD COLUMN IF NOT EXISTS selfie_filename VARCHAR(500);" if engine.name != "sqlite" else "ALTER TABLE punch_logs ADD COLUMN selfie_filename VARCHAR(500);",
-        # Push Notifications (FCM)
-        "ALTER TABLE device_bindings ADD COLUMN IF NOT EXISTS fcm_token VARCHAR(500);" if engine.name != "sqlite" else "ALTER TABLE device_bindings ADD COLUMN fcm_token VARCHAR(500);",
-        # Phase 5b: Supervisor tables
-        "CREATE TABLE IF NOT EXISTS employee_supervisors (id SERIAL PRIMARY KEY, supervisor_id VARCHAR(50) NOT NULL, employee_id VARCHAR(50) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(supervisor_id, employee_id));",
-        "CREATE INDEX IF NOT EXISTS idx_supervisor_mapping ON employee_supervisors(supervisor_id, employee_id);",
-        "CREATE INDEX IF NOT EXISTS idx_emp_supervisor ON employee_supervisors(supervisor_id);",
-        "CREATE INDEX IF NOT EXISTS idx_emp_employee ON employee_supervisors(employee_id);",
-        "CREATE TABLE IF NOT EXISTS attendance_corrections (id SERIAL PRIMARY KEY, employee_id VARCHAR(50) NOT NULL, original_punch_id INTEGER REFERENCES punch_logs(id), correction_type VARCHAR(50) NOT NULL, description VARCHAR(500) NOT NULL, proposed_timestamp TIMESTAMP, proposed_punch_type VARCHAR(10), status VARCHAR(20) DEFAULT 'pending', reviewed_by VARCHAR(50), reviewed_at TIMESTAMP, review_notes VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
-        "CREATE INDEX IF NOT EXISTS idx_correction_employee ON attendance_corrections(employee_id);",
-        "CREATE INDEX IF NOT EXISTS idx_correction_status ON attendance_corrections(status);",
-        # Phase 6: NFC check-in support
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS nfc_enabled BOOLEAN NOT NULL DEFAULT FALSE;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN nfc_enabled BOOLEAN NOT NULL DEFAULT 0;",
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS nfc_tag_data VARCHAR(256);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN nfc_tag_data VARCHAR(256);",
-        "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'admin';" if engine.name != "sqlite" else "ALTER TABLE admin_users ADD COLUMN role VARCHAR(50) DEFAULT 'admin';",
-        "UPDATE admin_users SET role = 'superadmin' WHERE username = 'admin';",
-        # Custom Polygon / Free-Select geofencing support
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS geofence_type VARCHAR(20) DEFAULT 'circle';" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN geofence_type VARCHAR(20) DEFAULT 'circle';",
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS polygon_coordinates TEXT;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN polygon_coordinates TEXT;",
-        "ALTER TABLE branch_checkpoints ADD COLUMN IF NOT EXISTS geofence_type VARCHAR(20) DEFAULT 'circle';" if engine.name != "sqlite" else "ALTER TABLE branch_checkpoints ADD COLUMN geofence_type VARCHAR(20) DEFAULT 'circle';",
-        "ALTER TABLE branch_checkpoints ADD COLUMN IF NOT EXISTS polygon_coordinates TEXT;" if engine.name != "sqlite" else "ALTER TABLE branch_checkpoints ADD COLUMN polygon_coordinates TEXT;",
-        # Phase 7: Shift Schedule, Company, Employee Group, Holiday, Leave Request, Audit Log support
-        "CREATE TABLE IF NOT EXISTS shift_schedules (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(100) NOT NULL, start_time VARCHAR(5) DEFAULT '08:00', end_time VARCHAR(5) DEFAULT '17:00', grace_minutes INTEGER DEFAULT 15, min_work_hours REAL DEFAULT 8.0, overtime_after_hours REAL DEFAULT 9.0, working_days VARCHAR(50) DEFAULT '1,2,3,4,5', is_default INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS shift_schedules (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, start_time VARCHAR(5) DEFAULT '08:00', end_time VARCHAR(5) DEFAULT '17:00', grace_minutes INTEGER DEFAULT 15, min_work_hours REAL DEFAULT 8.0, overtime_after_hours REAL DEFAULT 9.0, working_days VARCHAR(50) DEFAULT '1,2,3,4,5', is_default BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
-        "ALTER TABLE shift_schedules ADD COLUMN IF NOT EXISTS schedule_type VARCHAR(50) DEFAULT 'weekly';" if engine.name != "sqlite" else "ALTER TABLE shift_schedules ADD COLUMN schedule_type VARCHAR(50) DEFAULT 'weekly';",
-        "ALTER TABLE shift_schedules ADD COLUMN IF NOT EXISTS interval_days INTEGER;" if engine.name != "sqlite" else "ALTER TABLE shift_schedules ADD COLUMN interval_days INTEGER;",
-        "ALTER TABLE shift_schedules ADD COLUMN IF NOT EXISTS anchor_date DATE;" if engine.name != "sqlite" else "ALTER TABLE shift_schedules ADD COLUMN anchor_date DATE;",
-        "CREATE TABLE IF NOT EXISTS companies (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(150) NOT NULL, code VARCHAR(50) UNIQUE NOT NULL, is_active INTEGER DEFAULT 1, shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS companies (id SERIAL PRIMARY KEY, name VARCHAR(150) NOT NULL, code VARCHAR(50) UNIQUE NOT NULL, is_active BOOLEAN DEFAULT TRUE, shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
-        "CREATE TABLE IF NOT EXISTS employee_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(100) NOT NULL, branch_id INTEGER NOT NULL REFERENCES branches(id), shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS employee_groups (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, branch_id INTEGER NOT NULL REFERENCES branches(id), shift_schedule_id INTEGER REFERENCES shift_schedules(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
-        "CREATE TABLE IF NOT EXISTS holidays (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(200) NOT NULL, date DATE UNIQUE NOT NULL, is_recurring INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS holidays (id SERIAL PRIMARY KEY, name VARCHAR(200) NOT NULL, date DATE UNIQUE NOT NULL, is_recurring BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
-        "CREATE TABLE IF NOT EXISTS leave_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id VARCHAR(50) NOT NULL REFERENCES employees(employee_id), leave_type VARCHAR(50) NOT NULL, start_date DATE NOT NULL, end_date DATE NOT NULL, reason VARCHAR(500), status VARCHAR(20) DEFAULT 'pending', approved_by VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS leave_requests (id SERIAL PRIMARY KEY, employee_id VARCHAR(50) NOT NULL REFERENCES employees(employee_id), leave_type VARCHAR(50) NOT NULL, start_date DATE NOT NULL, end_date DATE NOT NULL, reason VARCHAR(500), status VARCHAR(20) DEFAULT 'pending', approved_by VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
-        "CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_username VARCHAR(100) NOT NULL, action VARCHAR(150) NOT NULL, target_type VARCHAR(50), target_id VARCHAR(50), details TEXT, ip_address VARCHAR(45), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" if engine.name == "sqlite" else "CREATE TABLE IF NOT EXISTS audit_logs (id SERIAL PRIMARY KEY, admin_username VARCHAR(100) NOT NULL, action VARCHAR(150) NOT NULL, target_type VARCHAR(50), target_id VARCHAR(50), details TEXT, ip_address VARCHAR(45), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);",
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN company_id INTEGER REFERENCES companies(id);",
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift_schedule_id INTEGER REFERENCES shift_schedules(id);" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN shift_schedule_id INTEGER REFERENCES shift_schedules(id);",
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS timezone_offset INTEGER DEFAULT 7;" if engine.name != "sqlite" else "ALTER TABLE branches ADD COLUMN timezone_offset INTEGER DEFAULT 7;",
-        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS employee_type VARCHAR(50) DEFAULT 'regular';" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN employee_type VARCHAR(50) DEFAULT 'regular';",
-        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id);" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN company_id INTEGER REFERENCES companies(id);",
-        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES employee_groups(id);" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN group_id INTEGER REFERENCES employee_groups(id);",
-        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS shift_schedule_id INTEGER REFERENCES shift_schedules(id);" if engine.name != "sqlite" else "ALTER TABLE employees ADD COLUMN shift_schedule_id INTEGER REFERENCES shift_schedules(id);",
-    ]
-    # Phase 2 migration: BranchCheckpoint table
-    migrations.append(
-        "CREATE TABLE IF NOT EXISTS branch_checkpoints ("
-        "id SERIAL PRIMARY KEY, "
-        "branch_id INTEGER NOT NULL REFERENCES branches(id), "
-        "name VARCHAR(200) NOT NULL, "
-        "latitude DOUBLE PRECISION NOT NULL, "
-        "longitude DOUBLE PRECISION NOT NULL, "
-        "radius_meters DOUBLE PRECISION DEFAULT 50.0, "
-        "is_active BOOLEAN DEFAULT TRUE, "
-        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
-        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-        ");"
-    )
-    if engine.name == "sqlite":
-        migrations[-1] = (
-            "CREATE TABLE IF NOT EXISTS branch_checkpoints ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "branch_id INTEGER NOT NULL REFERENCES branches(id), "
-            "name VARCHAR(200) NOT NULL, "
-            "latitude REAL NOT NULL, "
-            "longitude REAL NOT NULL, "
-            "radius_meters REAL DEFAULT 50.0, "
-            "is_active INTEGER DEFAULT 1, "
-            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
-            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-            ");"
-        )
-    migrations.append("CREATE INDEX IF NOT EXISTS idx_checkpoint_branch ON branch_checkpoints(branch_id);")
-
+    # Migrate existing branch_id to device_branch_assignments
     with engine.connect() as conn:
-        for sql in migrations:
-            try:
-                conn.execute(text(sql))
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                print(f"Migration notice: {sql[:50]}... skipped: {str(e)[:100]}")
-                pass 
-
-        # Migrate existing branch_id to device_branch_assignments
+        from sqlalchemy import text
         try:
             if engine.name == "sqlite":
                 insert_stmt = "INSERT OR IGNORE"
             else:
-                insert_stmt = "INSERT" # For Postgres we'll use a safer approach below without ON CONFLICT to keep it simple
+                insert_stmt = "INSERT"
 
             if engine.name == "sqlite":
                 conn.execute(text(f"""
@@ -563,5 +557,20 @@ def init_db():
                 description="Maximum number of devices an employee can register",
             ))
             db.commit()
+
+        # One-time API key hashing migration
+        import hashlib
+        keys = db.query(ApiKey).all()
+        for key in keys:
+            if not key.key_value.startswith("sha256:"):
+                if key.key_value.startswith("atk_"):
+                    hashed = hashlib.sha256(key.key_value.encode("utf-8")).hexdigest()
+                    key.key_value = "sha256:" + hashed
+                elif len(key.key_value) == 64:
+                    key.key_value = "sha256:" + key.key_value
+                else:
+                    hashed = hashlib.sha256(key.key_value.encode("utf-8")).hexdigest()
+                    key.key_value = "sha256:" + hashed
+        db.commit()
     finally:
         db.close()

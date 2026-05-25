@@ -28,7 +28,9 @@ def get_db():
 
 def hash_api_key(api_key: str) -> str:
     """Hash the API key using SHA-256 for secure storage and comparison."""
-    return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+    if api_key.startswith("sha256:"):
+        return api_key
+    return "sha256:" + hashlib.sha256(api_key.encode("utf-8")).hexdigest()
 
 
 def verify_api_key(api_key: str = Security(API_KEY_HEADER), db: Session = Depends(get_db), request: Request = None):
@@ -44,7 +46,7 @@ def verify_api_key(api_key: str = Security(API_KEY_HEADER), db: Session = Depend
     hashed_key = hash_api_key(api_key)
 
     key_record = db.query(ApiKey).filter(
-        ApiKey.key_value.in_([api_key, hashed_key]), # Allow both plain and hashed temporarily for migration
+        ApiKey.key_value == hashed_key,
         ApiKey.is_active == True
     ).first()
 

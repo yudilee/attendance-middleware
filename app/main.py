@@ -143,11 +143,51 @@ app.add_middleware(
 )
 
 
-# ── Rate Limiter Setup ─────────────────────────────────────────────────
+# ── Exception Handler & Rate Limiter Setup ─────────────────────────────
 from app.limiter import limiter
+from app.errors import AppError
+from fastapi.responses import JSONResponse
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "details": exc.details
+            }
+        }
+    )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    import traceback
+    from app.database.models import SessionLocal, SystemErrorLog
+    db = SessionLocal()
+    try:
+        error_log = SystemErrorLog(
+            error_message=str(exc)[:500],
+            stack_trace=traceback.format_exc(),
+            component="fastapi"
+        )
+        db.add(error_log)
+        db.commit()
+    except Exception as e:
+        logger.error("failed_to_log_unhandled_exception", error=str(e))
+    finally:
+        db.close()
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred."}
+    )
+
+
 
 # ── Static Files & Templates ───────────────────────────────────────────
 static_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")

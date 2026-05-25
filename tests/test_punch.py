@@ -8,10 +8,11 @@ from fastapi.testclient import TestClient
 def auth_headers(client, db_session):
     """Create test API key and return auth headers."""
     from app.database.models import ApiKey, DeviceBinding, Employee, PunchType, Branch, BindingBranch
+    from app.services.auth import hash_api_key
     
     api_key = "punch-test-key"
     api_key_obj = ApiKey(
-        key_value=api_key,
+        key_value=hash_api_key(api_key),
         label="punch-test",
         is_active=True
     )
@@ -252,4 +253,99 @@ def test_submit_punch_geofencing_with_checkpoints(client, db_session, auth_heade
         headers=auth_headers
     )
     assert res3.status_code == 200
+
+
+def test_submit_punch_signature_verification(client, db_session, auth_headers):
+    """Test HMAC signature verification for punch requests."""
+    import hmac
+    import hashlib
+    from app.database.models import DeviceBinding, PunchLog
+
+    # Clear punch logs
+    db_session.query(PunchLog).delete()
+    db_session.commit()
+
+    # Get device binding and assign a secret
+    binding = db_session.query(DeviceBinding).filter(DeviceBinding.device_uuid == "test-uuid-123").first()
+    binding.device_secret = "sec_testsecret12345"
+    db_session.commit()
+
+    now_str = datetime.utcnow().isoformat() + "Z"
+    
+    # 1. Valid signature should succeed
+    payload_string = f"TEST001:test-uuid-123:{now_str}:in:sig-test-001"
+    valid_sig = hmac.new(
+        b"sec_testsecret12345",
+        payload_string.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+    res1 = client.post(
+        "/api/v1/punch",
+        json={
+            "employee_id": "TEST001",
+            "timestamp": now_str,
+            "punch_type": "in",
+            "latitude": -6.2,
+            "longitude": 106.8,
+            "device_uuid": "test-uuid-123",
+            "client_punch_id": "sig-test-001",
+            "biometric_verified": True,
+            "is_mock_location": False,
+            "gps_time_validated": True,
+            "tz_offset_minutes": 0,
+            "signature": valid_sig,
+        },
+        headers=auth_headers
+    )
+    assert res1.status_code == 200
+    assert res1.json()["status"] == "success"
+
+    # 2. Invalid signature should be rejected with 403
+    res2 = client.post(
+        "/api/v1/punch",
+        json={
+            "employee_id": "TEST001",
+            "timestamp": now_str,
+            "punch_type": "in",
+            "latitude": -6.2,
+            "longitude": 106.8,
+            "device_uuid": "test-uuid-123",
+            "client_punch_id": "sig-test-002",
+            "biometric_verified": True,
+            "is_mock_location": False,
+            "gps_time_validated": True,
+            "tz_offset_minutes": 0,
+            "signature": "invalid_sig_value",
+        },
+        headers=auth_headers
+    )
+    assert res2.status_code == 403
+    assert "invalid request signature" in res2.json()["detail"].lower()
+
+    # 3. Signature when device has no secret should be rejected with 403
+    binding.device_secret = None
+    db_session.commit()
+
+    res3 = client.post(
+        "/api/v1/punch",
+        json={
+            "employee_id": "TEST001",
+            "timestamp": now_str,
+            "punch_type": "in",
+            "latitude": -6.2,
+            "longitude": 106.8,
+            "device_uuid": "test-uuid-123",
+            "client_punch_id": "sig-test-003",
+            "biometric_verified": True,
+            "is_mock_location": False,
+            "gps_time_validated": True,
+            "tz_offset_minutes": 0,
+            "signature": valid_sig,
+        },
+        headers=auth_headers
+    )
+    assert res3.status_code == 403
+    assert "device secret not configured" in res3.json()["detail"].lower()
+
 

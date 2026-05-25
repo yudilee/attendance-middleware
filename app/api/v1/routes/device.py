@@ -345,6 +345,7 @@ async def onboard_device(
     max_cfg = db.query(AppConfig).filter(AppConfig.key == "max_devices_per_employee").first()
     max_devices = int(max_cfg.value) if max_cfg else 5
 
+    import secrets
     binding = db.query(DeviceBinding).filter(DeviceBinding.device_uuid == req.device_uuid).first()
     if not binding:
         existing_count = db.query(DeviceBinding).filter(
@@ -355,6 +356,7 @@ async def onboard_device(
         if existing_count >= max_devices:
             raise HTTPException(status_code=400, detail="Maximum devices reached")
 
+        device_secret = f"sec_{secrets.token_hex(32)}"
         binding = DeviceBinding(
             employee_id=employee_id,
             device_uuid=req.device_uuid,
@@ -364,11 +366,14 @@ async def onboard_device(
             api_key_id=api_key_id,
             approved_at=datetime.utcnow(),
             approved_by="System (QR)",
+            device_secret=device_secret,
         )
         db.add(binding)
         db.commit()
         db.refresh(binding)
     else:
+        if not binding.device_secret:
+            binding.device_secret = f"sec_{secrets.token_hex(32)}"
         binding.employee_id = employee_id
         binding.registration_status = "active"
         binding.api_key_id = api_key_id
@@ -448,4 +453,5 @@ async def onboard_device(
     ).model_dump()
 
     resp["api_key"] = api_key.key_value if api_key else ""
+    resp["device_secret"] = binding.device_secret or ""
     return resp

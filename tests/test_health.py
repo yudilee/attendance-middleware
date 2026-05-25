@@ -14,5 +14,5 @@ def test_health_response_structure(client):
     """Health response should have correct structure."""
     response = client.get("/health")
     data = response.json()
-    assert data["status"] in ["healthy", "degraded"]
+    assert data["status"] in ["healthy", "degraded", "unhealthy"]
     assert data["database"] in ["connected", "disconnected"]

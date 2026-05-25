@@ -4,12 +4,13 @@ Punch pairing, shift schedule resolution, and openpyxl Excel report generation s
 import datetime
 from datetime import timedelta, date, datetime as dt_class
 from typing import List, Dict, Any, Optional, Tuple
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 
 from app.database.models import (
     Employee, PunchLog, Branch, Company, EmployeeGroup,
-    ShiftSchedule, Holiday, LeaveRequest, AuditLog
+    ShiftSchedule, Holiday, LeaveRequest, AuditLog, DeviceBinding, BindingBranch
 )
 
 import openpyxl
@@ -17,63 +18,138 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 
-def resolve_employee_shift(db: Session, employee: Employee, target_date: date) -> ShiftSchedule:
+def resolve_employee_shift(
+    db: Session,
+    employee: Employee,
+    target_date: date,
+    preloaded_shifts: Optional[Dict[int, ShiftSchedule]] = None,
+    preloaded_groups: Optional[Dict[int, EmployeeGroup]] = None,
+    preloaded_branches: Optional[Dict[int, Branch]] = None,
+    preloaded_companies: Optional[Dict[int, Company]] = None,
+    preloaded_bindings: Optional[Dict[str, DeviceBinding]] = None,
+    preloaded_binding_branches: Optional[Dict[int, BindingBranch]] = None,
+    preloaded_default_shift: Optional[ShiftSchedule] = None,
+    preloaded_assignments: Optional[Dict[str, List[Any]]] = None,
+) -> ShiftSchedule:
     """
-    Resolves the active shift schedule for an employee on a target date based on a 5-tier hierarchy:
+    Resolves the active shift schedule for an employee on a target date based on a 6-tier hierarchy:
+    0. Roster Assignments Calendar
     1. Employee Override
     2. Group Schedule
     3. Branch Default
     4. Company Default
     5. Global Fallback
     """
+    # 0. Roster / Schedule Assignment Calendar
+    if preloaded_assignments is not None:
+        emp_assignments = preloaded_assignments.get(employee.employee_id, [])
+        active_assignment = None
+        for a in emp_assignments:
+            if a.effective_date <= target_date and (a.end_date is None or a.end_date >= target_date):
+                active_assignment = a
+                break
+        if active_assignment:
+            if preloaded_shifts is not None:
+                schedule = preloaded_shifts.get(active_assignment.shift_schedule_id)
+            else:
+                schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == active_assignment.shift_schedule_id).first()
+            if schedule:
+                return schedule
+    else:
+        from app.database.models import ScheduleAssignment
+        assignment = db.query(ScheduleAssignment).filter(
+            ScheduleAssignment.employee_id == employee.employee_id,
+            ScheduleAssignment.effective_date <= target_date,
+            or_(ScheduleAssignment.end_date >= target_date, ScheduleAssignment.end_date.is_(None))
+        ).order_by(ScheduleAssignment.effective_date.desc()).first()
+        if assignment:
+            schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == assignment.shift_schedule_id).first()
+            if schedule:
+                return schedule
+
     # 1. Employee Override
     if employee.shift_schedule_id:
-        schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == employee.shift_schedule_id).first()
+        if preloaded_shifts is not None:
+            schedule = preloaded_shifts.get(employee.shift_schedule_id)
+        else:
+            schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == employee.shift_schedule_id).first()
         if schedule:
             return schedule
 
     # 2. Group Schedule
     if employee.group_id:
-        group = db.query(EmployeeGroup).filter(EmployeeGroup.id == employee.group_id).first()
+        if preloaded_groups is not None:
+            group = preloaded_groups.get(employee.group_id)
+        else:
+            group = db.query(EmployeeGroup).filter(EmployeeGroup.id == employee.group_id).first()
         if group and group.shift_schedule_id:
-            schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == group.shift_schedule_id).first()
+            if preloaded_shifts is not None:
+                schedule = preloaded_shifts.get(group.shift_schedule_id)
+            else:
+                schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == group.shift_schedule_id).first()
             if schedule:
                 return schedule
 
     # 3. Branch Default (We use their primary branch checkpoint or assigned branches)
     # Get any active branch assignment for the employee's device/bindings
     from app.database.models import DeviceBinding, BindingBranch
-    binding = db.query(DeviceBinding).filter(
-        DeviceBinding.employee_id == employee.employee_id,
-        DeviceBinding.is_active == True
-    ).first()
+    if preloaded_bindings is not None:
+        binding = preloaded_bindings.get(employee.employee_id)
+    else:
+        binding = db.query(DeviceBinding).filter(
+            DeviceBinding.employee_id == employee.employee_id,
+            DeviceBinding.is_active == True
+        ).first()
     if binding:
-        branch_assignment = db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).first()
+        if preloaded_binding_branches is not None:
+            branch_assignment = preloaded_binding_branches.get(binding.id)
+        else:
+            branch_assignment = db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).first()
         if branch_assignment:
-            branch = db.query(Branch).filter(Branch.id == branch_assignment.branch_id).first()
+            if preloaded_branches is not None:
+                branch = preloaded_branches.get(branch_assignment.branch_id)
+            else:
+                branch = db.query(Branch).filter(Branch.id == branch_assignment.branch_id).first()
             if branch:
                 # Check branch shift
                 if branch.shift_schedule_id:
-                    schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == branch.shift_schedule_id).first()
+                    if preloaded_shifts is not None:
+                        schedule = preloaded_shifts.get(branch.shift_schedule_id)
+                    else:
+                        schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == branch.shift_schedule_id).first()
                     if schedule:
                         return schedule
                 # 4. Company Default (from Branch's company)
                 if branch.company_id:
-                    company = db.query(Company).filter(Company.id == branch.company_id).first()
+                    if preloaded_companies is not None:
+                        company = preloaded_companies.get(branch.company_id)
+                    else:
+                        company = db.query(Company).filter(Company.id == branch.company_id).first()
                     if company and company.shift_schedule_id:
-                        schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == company.shift_schedule_id).first()
+                        if preloaded_shifts is not None:
+                            schedule = preloaded_shifts.get(company.shift_schedule_id)
+                        else:
+                            schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == company.shift_schedule_id).first()
                         if schedule:
                             return schedule
 
     # 4. Company Default (from Employee's company direct)
     if employee.company_id:
-        company = db.query(Company).filter(Company.id == employee.company_id).first()
+        if preloaded_companies is not None:
+            company = preloaded_companies.get(employee.company_id)
+        else:
+            company = db.query(Company).filter(Company.id == employee.company_id).first()
         if company and company.shift_schedule_id:
-            schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == company.shift_schedule_id).first()
+            if preloaded_shifts is not None:
+                schedule = preloaded_shifts.get(company.shift_schedule_id)
+            else:
+                schedule = db.query(ShiftSchedule).filter(ShiftSchedule.id == company.shift_schedule_id).first()
             if schedule:
                 return schedule
 
     # 5. Global Fallback
+    if preloaded_default_shift is not None:
+        return preloaded_default_shift
     fallback = db.query(ShiftSchedule).filter(ShiftSchedule.is_default == True).first()
     if fallback:
         return fallback
@@ -97,42 +173,84 @@ def pair_employee_punches(
     db: Session,
     employee: Employee,
     start_date: date,
-    end_date: date
+    end_date: date,
+    preloaded_shifts: Optional[Dict[int, ShiftSchedule]] = None,
+    preloaded_groups: Optional[Dict[int, EmployeeGroup]] = None,
+    preloaded_branches: Optional[Dict[int, Branch]] = None,
+    preloaded_companies: Optional[Dict[int, Company]] = None,
+    preloaded_bindings: Optional[Dict[str, DeviceBinding]] = None,
+    preloaded_binding_branches: Optional[Dict[int, BindingBranch]] = None,
+    preloaded_default_shift: Optional[ShiftSchedule] = None,
+    preloaded_holidays: Optional[List[Holiday]] = None,
+    preloaded_leaves: Optional[List[LeaveRequest]] = None,
+    preloaded_punches: Optional[List[PunchLog]] = None,
+    preloaded_assignments: Optional[Dict[str, List[Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Pairs In/Out punches for an employee daily in a specific date range,
     resolving shift schedules and detecting absences, lates, holidays, leaves, and anomalies.
     """
     # Fetch all punches in range (expanded by 1 day to catch timezone offset overlaps safely)
-    db_start = datetime.datetime.combine(start_date - timedelta(days=1), datetime.time.min)
-    db_end = datetime.datetime.combine(end_date + timedelta(days=1), datetime.time.max)
-
-    punches = db.query(PunchLog).filter(
-        PunchLog.employee_id == employee.employee_id,
-        PunchLog.timestamp >= db_start,
-        PunchLog.timestamp <= db_end
-    ).order_by(PunchLog.timestamp).all()
+    if preloaded_punches is not None:
+        punches = preloaded_punches
+    else:
+        db_start = datetime.datetime.combine(start_date - timedelta(days=1), datetime.time.min)
+        db_end = datetime.datetime.combine(end_date + timedelta(days=1), datetime.time.max)
+        punches = db.query(PunchLog).filter(
+            PunchLog.employee_id == employee.employee_id,
+            PunchLog.timestamp >= db_start,
+            PunchLog.timestamp <= db_end
+        ).order_by(PunchLog.timestamp).all()
 
     # Determine primary branch offset or default
     offset_hours = 7.0
     from app.database.models import DeviceBinding, BindingBranch
-    binding = db.query(DeviceBinding).filter(
-        DeviceBinding.employee_id == employee.employee_id,
-        DeviceBinding.is_active == True
-    ).first()
+    if preloaded_bindings is not None:
+        binding = preloaded_bindings.get(employee.employee_id)
+    else:
+        binding = db.query(DeviceBinding).filter(
+            DeviceBinding.employee_id == employee.employee_id,
+            DeviceBinding.is_active == True
+        ).first()
     if binding:
-        ba = db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).first()
+        if preloaded_binding_branches is not None:
+            ba = preloaded_binding_branches.get(binding.id)
+        else:
+            ba = db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).first()
         if ba:
-            branch = db.query(Branch).filter(Branch.id == ba.branch_id).first()
+            if preloaded_branches is not None:
+                branch = preloaded_branches.get(ba.branch_id)
+            else:
+                branch = db.query(Branch).filter(Branch.id == ba.branch_id).first()
             if branch and branch.timezone_offset is not None:
                 offset_hours = float(branch.timezone_offset)
 
     # Group punches by local date
     punches_by_date: Dict[date, List[PunchLog]] = {}
     for p in punches:
-        # Convert UTC punch timestamp to local branch time
-        tz_offset = p.tz_offset_minutes if p.tz_offset_minutes is not None else int(offset_hours * 60)
-        local_time = p.timestamp + timedelta(minutes=tz_offset)
+        # Convert UTC punch timestamp to local branch time (Phase 5E IANA timezone)
+        if p.tz_offset_minutes is not None:
+            local_time = p.timestamp + timedelta(minutes=p.tz_offset_minutes)
+        else:
+            tz = None
+            if branch and getattr(branch, "timezone_name", None):
+                try:
+                    tz = ZoneInfo(branch.timezone_name)
+                except Exception:
+                    tz = ZoneInfo("Asia/Jakarta")
+            else:
+                # Use offset hours if available
+                tz_offset_val = int(offset_hours * 60)
+                if tz_offset_val == 420:
+                    tz = ZoneInfo("Asia/Jakarta")
+            
+            if tz:
+                # Assume stored timestamp is naive UTC
+                utc_dt = p.timestamp.replace(tzinfo=ZoneInfo("UTC"))
+                local_time = utc_dt.astimezone(tz).replace(tzinfo=None)
+            else:
+                local_time = p.timestamp + timedelta(hours=offset_hours)
+
         local_date = local_time.date()
         
         if start_date <= local_date <= end_date:
@@ -141,16 +259,22 @@ def pair_employee_punches(
             punches_by_date[local_date].append(p)
 
     # Fetch holidays in range
-    holidays = db.query(Holiday).filter(Holiday.date >= start_date, Holiday.date <= end_date).all()
+    if preloaded_holidays is not None:
+        holidays = preloaded_holidays
+    else:
+        holidays = db.query(Holiday).filter(Holiday.date >= start_date, Holiday.date <= end_date).all()
     holiday_dates = {h.date: h.name for h in holidays}
 
     # Fetch approved leave requests in range
-    leaves = db.query(LeaveRequest).filter(
-        LeaveRequest.employee_id == employee.employee_id,
-        LeaveRequest.status == "approved",
-        LeaveRequest.start_date <= end_date,
-        LeaveRequest.end_date >= start_date
-    ).all()
+    if preloaded_leaves is not None:
+        leaves = preloaded_leaves
+    else:
+        leaves = db.query(LeaveRequest).filter(
+            LeaveRequest.employee_id == employee.employee_id,
+            LeaveRequest.status == "approved",
+            LeaveRequest.start_date <= end_date,
+            LeaveRequest.end_date >= start_date
+        ).all()
     
     leave_dates = {}
     for l in leaves:
@@ -160,6 +284,7 @@ def pair_employee_punches(
                 leave_dates[curr] = l.leave_type
             curr += timedelta(days=1)
 
+    cumulative_ot_by_month = {}
     daily_records = []
     total_present = 0
     total_absent = 0
@@ -170,7 +295,17 @@ def pair_employee_punches(
 
     curr_date = start_date
     while curr_date <= end_date:
-        shift = resolve_employee_shift(db, employee, curr_date)
+        shift = resolve_employee_shift(
+            db, employee, curr_date,
+            preloaded_shifts=preloaded_shifts,
+            preloaded_groups=preloaded_groups,
+            preloaded_branches=preloaded_branches,
+            preloaded_companies=preloaded_companies,
+            preloaded_bindings=preloaded_bindings,
+            preloaded_binding_branches=preloaded_binding_branches,
+            preloaded_default_shift=preloaded_default_shift,
+            preloaded_assignments=preloaded_assignments,
+        )
         day_punches = punches_by_date.get(curr_date, [])
 
         # Parse shift details
@@ -206,6 +341,7 @@ def pair_employee_punches(
             "shift_end": shift.end_time,
             "first_in": None,
             "last_out": None,
+            "break_hours": 0.0,
             "work_hours": 0.0,
             "overtime_hours": 0.0,
             "status": "Absent",  # Default status
@@ -231,6 +367,24 @@ def pair_employee_punches(
             first_in_log = in_punches[0] if in_punches else None
             last_out_log = out_punches[-1] if out_punches else None
 
+            # Calculate break hours from Break_Start and Break_End pairs
+            break_hours = 0.0
+            break_start_time = None
+            for p in day_punches:
+                p_code = p.punch_type.lower()
+                if p_code in ["break_start", "break start", "break_in", "breakin"]:
+                    tz = p.tz_offset_minutes if p.tz_offset_minutes is not None else int(offset_hours * 60)
+                    break_start_time = p.timestamp + timedelta(minutes=tz)
+                elif p_code in ["break_end", "break end", "break_out", "breakout"] and break_start_time is not None:
+                    tz = p.tz_offset_minutes if p.tz_offset_minutes is not None else int(offset_hours * 60)
+                    end_time = p.timestamp + timedelta(minutes=tz)
+                    duration = (end_time - break_start_time).total_seconds() / 3600.0
+                    if duration > 0:
+                        break_hours += duration
+                    break_start_time = None
+            
+            record["break_hours"] = round(break_hours, 2)
+
             # Get local datetime values
             if first_in_log:
                 tz_in = first_in_log.tz_offset_minutes if first_in_log.tz_offset_minutes is not None else int(offset_hours * 60)
@@ -250,12 +404,54 @@ def pair_employee_punches(
                 # Proper pairing
                 delta = record["last_out"] - record["first_in"]
                 work_duration = max(0.0, delta.total_seconds() / 3600.0)
-                record["work_hours"] = round(work_duration, 2)
+                net_work_duration = max(0.0, work_duration - break_hours)
+                record["work_hours"] = round(net_work_duration, 2)
                 
-                # Overtime
-                if work_duration > shift.overtime_after_hours:
-                    record["overtime_hours"] = round(work_duration - shift.overtime_after_hours, 2)
-                    total_overtime += record["overtime_hours"]
+                # Overtime Policy Engine (Phase 5B)
+                raw_ot = 0.0
+                weighted_ot = 0.0
+                
+                if is_holiday:
+                    raw_ot = net_work_duration
+                    mult = getattr(shift, "holiday_overtime_multiplier", 3.0) or 3.0
+                    weighted_ot = raw_ot * mult
+                    record["status"] = "Present (Holiday)"
+                elif not is_working_day:
+                    raw_ot = net_work_duration
+                    mult = getattr(shift, "weekend_overtime_multiplier", 2.0) or 2.0
+                    weighted_ot = raw_ot * mult
+                    record["status"] = "Present (Rest Day)"
+                else:
+                    if net_work_duration > shift.overtime_after_hours:
+                        raw_ot = net_work_duration - shift.overtime_after_hours
+                        threshold = getattr(shift, "overtime_threshold_2_hours", 1.0)
+                        if threshold is None:
+                            threshold = 1.0
+                        mult1 = getattr(shift, "overtime_multiplier_1", 1.5) or 1.5
+                        mult2 = getattr(shift, "overtime_multiplier_2", 2.0) or 2.0
+                        
+                        ot1 = min(raw_ot, threshold)
+                        ot2 = max(0.0, raw_ot - threshold)
+                        weighted_ot = (ot1 * mult1) + (ot2 * mult2)
+                
+                # Apply Monthly Overtime Cap (Phase 5B)
+                cap = getattr(shift, "monthly_overtime_cap_hours", None)
+                if cap is not None and cap > 0:
+                    current_month_total = cumulative_ot_by_month.get((curr_date.year, curr_date.month), 0.0)
+                    if current_month_total >= cap:
+                        weighted_ot = 0.0
+                        if "overtime_cap_exceeded" not in record["anomalies"]:
+                            record["anomalies"].append("overtime_cap_exceeded")
+                    elif current_month_total + weighted_ot > cap:
+                        weighted_ot = max(0.0, cap - current_month_total)
+                        if "overtime_cap_exceeded" not in record["anomalies"]:
+                            record["anomalies"].append("overtime_cap_exceeded")
+                
+                # Update running total for month
+                cumulative_ot_by_month[(curr_date.year, curr_date.month)] = cumulative_ot_by_month.get((curr_date.year, curr_date.month), 0.0) + weighted_ot
+                
+                record["overtime_hours"] = round(weighted_ot, 2)
+                total_overtime += record["overtime_hours"]
 
                 total_hours += record["work_hours"]
                 record["status"] = "Present"
@@ -290,6 +486,7 @@ def pair_employee_punches(
         daily_records.append(record)
         curr_date += timedelta(days=1)
 
+    total_break_hours = sum(r.get("break_hours", 0.0) for r in daily_records)
     return {
         "employee_id": employee.employee_id,
         "full_name": employee.full_name,
@@ -299,6 +496,7 @@ def pair_employee_punches(
         "absent_days": total_absent,
         "late_days": total_late,
         "total_hours": round(total_hours, 2),
+        "total_break_hours": round(total_break_hours, 2),
         "total_overtime": round(total_overtime, 2),
         "anomalies_count": anomalies_count,
         "daily_records": daily_records
@@ -341,10 +539,83 @@ def generate_excel_report(
 
     employees = query.order_by(Employee.full_name).all()
 
-    # Pre-calculate data for each employee
+    # Pre-calculate data for each employee with optimized pre-loading to fix N+1 queries
+    all_shifts = {s.id: s for s in db.query(ShiftSchedule).all()}
+    all_groups = {g.id: g for g in db.query(EmployeeGroup).all()}
+    all_branches = {b.id: b for b in db.query(Branch).all()}
+    all_companies = {c.id: c for c in db.query(Company).all()}
+    default_shift = db.query(ShiftSchedule).filter(ShiftSchedule.is_default == True).first()
+    
+    # Preload bindings and active branches
+    bindings_raw = db.query(DeviceBinding).filter(DeviceBinding.is_active == True).all()
+    preloaded_bindings = {b.employee_id: b for b in bindings_raw if b.employee_id}
+    
+    # We want binding_id -> BindingBranch
+    binding_branches_raw = db.query(BindingBranch).all()
+    preloaded_binding_branches = {bb.binding_id: bb for bb in binding_branches_raw}
+    
+    # Preload all holidays for this range
+    preloaded_holidays = db.query(Holiday).filter(Holiday.date >= start_date, Holiday.date <= end_date).all()
+    
+    # Preload all approved leaves for this range
+    leaves_raw = db.query(LeaveRequest).filter(
+        LeaveRequest.status == "approved",
+        LeaveRequest.start_date <= end_date,
+        LeaveRequest.end_date >= start_date
+    ).all()
+    preloaded_leaves_by_emp = {}
+    for l in leaves_raw:
+        preloaded_leaves_by_emp.setdefault(l.employee_id, []).append(l)
+
+    # Preload all schedule assignments for the target employees and range (Phase 5D)
+    emp_ids = [emp.employee_id for emp in employees]
+    preloaded_assignments_by_emp = {}
+    if emp_ids:
+        from app.database.models import ScheduleAssignment
+        assignments_raw = db.query(ScheduleAssignment).filter(
+            ScheduleAssignment.employee_id.in_(emp_ids),
+            ScheduleAssignment.effective_date <= end_date,
+            or_(ScheduleAssignment.end_date >= start_date, ScheduleAssignment.end_date.is_(None))
+        ).order_by(ScheduleAssignment.effective_date.desc()).all()
+        for a in assignments_raw:
+            preloaded_assignments_by_emp.setdefault(a.employee_id, []).append(a)
+        
+    # Preload all punches for this range for all selected employees
+    db_start = datetime.datetime.combine(start_date - timedelta(days=1), datetime.time.min)
+    db_end = datetime.datetime.combine(end_date + timedelta(days=1), datetime.time.max)
+    
+    if emp_ids:
+        punches_raw = db.query(PunchLog).filter(
+            PunchLog.employee_id.in_(emp_ids),
+            PunchLog.timestamp >= db_start,
+            PunchLog.timestamp <= db_end
+        ).order_by(PunchLog.timestamp).all()
+    else:
+        punches_raw = []
+    
+    preloaded_punches_by_emp = {}
+    for p in punches_raw:
+        preloaded_punches_by_emp.setdefault(p.employee_id, []).append(p)
+
     summaries = []
     for emp in employees:
-        summaries.append(pair_employee_punches(db, emp, start_date, end_date))
+        emp_punches = preloaded_punches_by_emp.get(emp.employee_id, [])
+        emp_leaves = preloaded_leaves_by_emp.get(emp.employee_id, [])
+        emp_assignments = preloaded_assignments_by_emp.get(emp.employee_id, [])
+        summaries.append(pair_employee_punches(
+            db, emp, start_date, end_date,
+            preloaded_shifts=all_shifts,
+            preloaded_groups=all_groups,
+            preloaded_branches=all_branches,
+            preloaded_companies=all_companies,
+            preloaded_bindings=preloaded_bindings,
+            preloaded_binding_branches=preloaded_binding_branches,
+            preloaded_default_shift=default_shift,
+            preloaded_holidays=preloaded_holidays,
+            preloaded_leaves=emp_leaves,
+            preloaded_punches=emp_punches,
+            preloaded_assignments=emp_assignments,
+        ))
 
     # ── Styling Configs ──
     font_family = "Segoe UI"
@@ -379,7 +650,7 @@ def generate_excel_report(
     ws_summary.row_dimensions[2].height = 18
 
     # Headers
-    headers_summary = ["PIN / ID", "Full Name", "Department", "Type", "Days Present", "Days Absent", "Days Late", "Total Hours", "Overtime (Hrs)", "Anomalies"]
+    headers_summary = ["PIN / ID", "Full Name", "Department", "Type", "Days Present", "Days Absent", "Days Late", "Break (Hrs)", "Total Hours", "Overtime (Hrs)", "Anomalies"]
     for col_idx, h in enumerate(headers_summary, 1):
         cell = ws_summary.cell(row=4, column=col_idx, value=h)
         cell.font = header_font
@@ -400,9 +671,10 @@ def generate_excel_report(
             ws_summary.cell(row=row_num, column=5, value=s["present_days"]),
             ws_summary.cell(row=row_num, column=6, value=s["absent_days"]),
             ws_summary.cell(row=row_num, column=7, value=s["late_days"]),
-            ws_summary.cell(row=row_num, column=8, value=s["total_hours"]),
-            ws_summary.cell(row=row_num, column=9, value=s["total_overtime"]),
-            ws_summary.cell(row=row_num, column=10, value=s["anomalies_count"])
+            ws_summary.cell(row=row_num, column=8, value=s["total_break_hours"]),
+            ws_summary.cell(row=row_num, column=9, value=s["total_hours"]),
+            ws_summary.cell(row=row_num, column=10, value=s["total_overtime"]),
+            ws_summary.cell(row=row_num, column=11, value=s["anomalies_count"])
         ]
 
         # Apply basic fonts and borders
@@ -416,7 +688,7 @@ def generate_excel_report(
             if cell.column == 7 and s["late_days"] > 0:
                 cell.font = bold_font
                 cell.fill = warning_fill
-            if cell.column == 10 and s["anomalies_count"] > 0:
+            if cell.column == 11 and s["anomalies_count"] > 0:
                 cell.font = red_bold_font
                 cell.fill = alert_fill
 
@@ -431,7 +703,7 @@ def generate_excel_report(
     ws_summary.cell(row=total_row, column=2).border = thin_border
     
     # Formulas
-    for col_idx, col_name in [(5, "E"), (6, "F"), (7, "G"), (8, "H"), (9, "I"), (10, "J")]:
+    for col_idx, col_name in [(5, "E"), (6, "F"), (7, "G"), (8, "H"), (9, "I"), (10, "J"), (11, "K")]:
         cell = ws_summary.cell(row=total_row, column=col_idx, value=f"=SUM({col_name}5:{col_name}{total_row-1})")
         cell.font = bold_font
         cell.border = thin_border
@@ -450,7 +722,7 @@ def generate_excel_report(
     ws_daily.row_dimensions[1].height = 28
     ws_daily.row_dimensions[2].height = 18
 
-    headers_daily = ["Date", "PIN / ID", "Full Name", "Department", "Shift Schedule", "First IN", "Last OUT", "Hours", "Overtime", "Status", "Late?", "Anomalies"]
+    headers_daily = ["Date", "PIN / ID", "Full Name", "Department", "Shift Schedule", "First IN", "Last OUT", "Break (Hrs)", "Hours", "Overtime", "Status", "Late?", "Anomalies"]
     for col_idx, h in enumerate(headers_daily, 1):
         cell = ws_daily.cell(row=4, column=col_idx, value=h)
         cell.font = header_font
@@ -475,11 +747,12 @@ def generate_excel_report(
                 ws_daily.cell(row=daily_row_idx, column=5, value=r["shift_name"]),
                 ws_daily.cell(row=daily_row_idx, column=6, value=in_time_str),
                 ws_daily.cell(row=daily_row_idx, column=7, value=out_time_str),
-                ws_daily.cell(row=daily_row_idx, column=8, value=r["work_hours"]),
-                ws_daily.cell(row=daily_row_idx, column=9, value=r["overtime_hours"]),
-                ws_daily.cell(row=daily_row_idx, column=10, value=r["status"]),
-                ws_daily.cell(row=daily_row_idx, column=11, value="LATE" if r["is_late"] else "—"),
-                ws_daily.cell(row=daily_row_idx, column=12, value=anom_str.upper())
+                ws_daily.cell(row=daily_row_idx, column=8, value=r["break_hours"]),
+                ws_daily.cell(row=daily_row_idx, column=9, value=r["work_hours"]),
+                ws_daily.cell(row=daily_row_idx, column=10, value=r["overtime_hours"]),
+                ws_daily.cell(row=daily_row_idx, column=11, value=r["status"]),
+                ws_daily.cell(row=daily_row_idx, column=12, value="LATE" if r["is_late"] else "—"),
+                ws_daily.cell(row=daily_row_idx, column=13, value=anom_str.upper())
             ]
 
             for cell in r_cells:
@@ -491,7 +764,7 @@ def generate_excel_report(
                     cell.fill = stripe_fill
 
                 # Highlights lates, leaves, missing
-                if cell.column == 10:
+                if cell.column == 11:
                     if r["status"] == "Absent":
                         cell.fill = alert_fill
                         cell.font = red_bold_font
@@ -502,10 +775,10 @@ def generate_excel_report(
                         cell.fill = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid") # Emerald 50
                         cell.font = Font(name=font_family, size=10, color="047857", bold=True)
 
-                if cell.column == 11 and r["is_late"]:
+                if cell.column == 12 and r["is_late"]:
                     cell.fill = warning_fill
                     cell.font = bold_font
-                if cell.column == 12 and r["missing_punch"]:
+                if cell.column == 13 and r["missing_punch"]:
                     cell.fill = alert_fill
                     cell.font = red_bold_font
 

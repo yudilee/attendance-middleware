@@ -17,6 +17,7 @@ from app.api.v1.schemas import (
     BatchPunchResponse, BatchPunchResult, PunchTypeResponse,
 )
 from app.services.punch_service import validate_and_prepare_punch, create_punch_log
+from app.services.webhook_service import fire_webhook
 from app.cache import get_cache, set_cache
 from app.config import settings
 from slowapi import Limiter
@@ -141,6 +142,23 @@ async def create_punch(
     log = create_punch_log(db, data)
     await broadcast_punch(db, log)
 
+    # Trigger webhook
+    background_tasks.add_task(
+        fire_webhook,
+        db,
+        "punch.created",
+        {
+            "id": log.id,
+            "employee_id": log.employee_id,
+            "punch_type": log.punch_type,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+            "latitude": log.latitude,
+            "longitude": log.longitude,
+            "is_auto_generated": getattr(log, "is_auto_generated", False)
+        },
+        arq_pool
+    )
+
     # Enqueue ADMS sync via ARQ worker
     if arq_pool:
         try:
@@ -191,6 +209,22 @@ async def create_batch_punch(
                     await arq_pool.enqueue_job("sync_punches_to_adms", log.id)
                 except Exception:
                     pass
+
+            background_tasks.add_task(
+                fire_webhook,
+                db,
+                "punch.created",
+                {
+                    "id": log.id,
+                    "employee_id": log.employee_id,
+                    "punch_type": log.punch_type,
+                    "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+                    "latitude": log.latitude,
+                    "longitude": log.longitude,
+                    "is_auto_generated": getattr(log, "is_auto_generated", False)
+                },
+                arq_pool
+            )
 
             results.append(BatchPunchResult(
                 client_punch_id=punch.client_punch_id,

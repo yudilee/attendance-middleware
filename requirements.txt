@@ -22,4 +22,5 @@ pytest-asyncio==0.24.0
 pytest-cov==5.0.0
 openpyxl==3.1.2
 matplotlib==3.8.2
+google-auth==2.29.0
 

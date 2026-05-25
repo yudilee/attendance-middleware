@@ -83,8 +83,6 @@ def sync_employees_from_adms(db: Session):
             adms_id = str(row[0])
             pin = str(row[1])
             name = str(row[2]).strip()
-            if not name:
-                name = f"Employee {pin}"
             dept = str(row[4])
 
             # Update or Create
@@ -99,13 +97,17 @@ def sync_employees_from_adms(db: Session):
                     logger.debug(f"Skipping local-only employee {pin} ({emp.employee_type}) from ADMS sync")
                     continue
                 emp.adms_id = adms_id
-                emp.full_name = name
+                # Only overwrite with a non-empty name
+                if name:
+                    emp.full_name = name
+                elif not emp.full_name:
+                    emp.full_name = f"Employee {pin}"
                 emp.department = dept
             else:
                 emp = Employee(
                     adms_id=adms_id,
                     employee_id=pin,
-                    full_name=name,
+                    full_name=name or f"Employee {pin}",
                     department=dept
                 )
                 db.add(emp)

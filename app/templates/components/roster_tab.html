@@ -1,0 +1,64 @@
+<div id="roster" class="tab-content hidden">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1 dark:text-slate-400">Roster & Shift Planner</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Plan and assign custom shift overrides to employees on specific dates. Overrides take highest precedence.
+                </p>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <button class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800" onclick="changeRosterMonth(-1)">
+                    ◀ Prev Month
+                </button>
+                <span id="rosterMonthLabel" class="text-sm font-bold text-slate-800 dark:text-slate-100">May 2026</span>
+                <button class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800" onclick="changeRosterMonth(1)">
+                    Next Month ▶
+                </button>
+            </div>
+        </div>
+
+        <!-- Assign Shift Section -->
+        <div class="mb-6 p-4 rounded-xl bg-indigo-50/40 border border-indigo-100 dark:bg-slate-800/40 dark:border-slate-850 flex flex-wrap gap-4 items-end">
+            <div class="w-full sm:w-auto">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">1. Select Employee</label>
+                <select id="rosterEmployeeSelect" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <div class="w-full sm:w-auto">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">2. Assign Shift</label>
+                <select id="rosterShiftSelect" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <div class="w-full sm:w-auto">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">3. Start Date</label>
+                <input type="date" id="rosterStartDate" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+            </div>
+            <div class="w-full sm:w-auto">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">4. End Date (Optional)</label>
+                <input type="date" id="rosterEndDate" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="Indefinite">
+            </div>
+            <button class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm h-[38px] dark:bg-indigo-600 dark:hover:bg-indigo-700" onclick="assignRosterShift()">
+                Assign Roster Shift
+            </button>
+        </div>
+
+        <!-- Interactive Grid Planner -->
+        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table class="w-full text-sm border-collapse" id="rosterPlannerTable">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 dark:bg-slate-800/50 dark:border-slate-800 text-slate-650 dark:text-slate-400 font-semibold" id="rosterHeaderRow">
+                        <th class="px-4 py-3 text-left min-w-[200px] border-r border-slate-200 dark:border-slate-800">Employee</th>
+                        <!-- Dates header columns will be generated dynamically -->
+                    </tr>
+                </thead>
+                <tbody id="rosterTbody" class="divide-y divide-slate-150 dark:divide-slate-800/50 text-slate-700 dark:text-slate-300">
+                    <!-- Dynamically populated -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -41,7 +41,9 @@ def get_adms_config():
         if url and not url.startswith(('http://', 'https://')):
             url = f"http://{url}"
             
-        return url, config.serial_number, config.device_name
+        from app.services.crypto import decrypt_value
+        decrypted_sn = decrypt_value(config.serial_number) if config.serial_number else ""
+        return url, decrypted_sn, config.device_name
     finally:
         db.close()
 
@@ -267,25 +269,110 @@ async def delete_employee_from_adms(client: httpx.AsyncClient, server_url: str, 
         return False
 
 
+async def sync_all_employees_to_adms(db: SessionLocal) -> tuple[bool, str]:
+    """
+    Push all active regular employees from our local DB to the ADMS server.
+    This writes/restores their names on the ADMS server using OPERLOG commands.
+    """
+    from app.database.models import Employee, ADMSRegisteredEmployee
+    
+    server_url, sn, _ = get_adms_config()
+    if not server_url:
+        return False, "ADMS server is not configured."
+        
+    employees = db.query(Employee).filter(
+        Employee.is_active == True,
+        Employee.is_deleted == False,
+        Employee.employee_type == "regular"
+    ).all()
+    
+    if not employees:
+        return True, "No active regular employees to sync."
+        
+    logger.info(f"Syncing {len(employees)} employees to ADMS...")
+    
+    # We will send them in chunks of 50 to prevent huge payloads
+    chunk_size = 50
+    success_count = 0
+    failed_count = 0
+    
+    headers = {
+        "Content-Type": "text/plain",
+        "User-Agent": ICLOCK_USER_AGENT
+    }
+    
+    url = f"{server_url}/iclock/cdata"
+    params = {"SN": sn, "table": "OPERLOG", "Stamp": "0"}
+    
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        for i in range(0, len(employees), chunk_size):
+            chunk = employees[i:i + chunk_size]
+            payload_lines = []
+            
+            for emp in chunk:
+                name = emp.full_name or f"Employee {emp.employee_id}"
+                # Format ZKTeco USER OPERLOG line
+                user_line = (
+                    f"USER PIN={emp.employee_id}\t"
+                    f"Name={name}\t"
+                    f"Pri=0\t"
+                    f"Passwd=\t"
+                    f"Card=\t"
+                    f"Grp=1\t"
+                    f"TZ=0000000100000000\t"
+                    f"Verify=0\t"
+                    f"VStyle=0\r\n"
+                )
+                payload_lines.append(user_line)
+                
+            payload = "".join(payload_lines)
+            
+            try:
+                resp = await client.post(url, params=params, content=payload, headers=headers)
+                if resp.status_code == 200:
+                    success_count += len(chunk)
+                    # Mark as registered in ADMSRegisteredEmployee so we don't try to re-register on individual punch
+                    for emp in chunk:
+                        existing = db.query(ADMSRegisteredEmployee).filter(
+                            ADMSRegisteredEmployee.employee_id == emp.employee_id
+                        ).first()
+                        if not existing:
+                            reg = ADMSRegisteredEmployee(employee_id=emp.employee_id, employee_name=emp.full_name)
+                            db.add(reg)
+                    db.commit()
+                else:
+                    logger.warning(f"Failed to sync chunk of {len(chunk)} employees: HTTP {resp.status_code}")
+                    failed_count += len(chunk)
+            except Exception as e:
+                logger.error(f"Error syncing employee chunk: {e}")
+                failed_count += len(chunk)
+                
+    return success_count > 0, f"Successfully synced {success_count} employees to ADMS. Failed: {failed_count}."
+
+
 async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch_type: str, tz_offset_minutes: int | None = None, employee_name: str | None = None):
     """
     Format and push a single attendance log to the ADMS Server.
     Auto-registers the employee on the ADMS server if not already registered.
     Updates PunchLog.adms_status to 'uploaded' or 'failed'.
     """
+    # Fetch employee details from DB
     db = SessionLocal()
+    db_employee_name = None
     try:
         from app.database.models import Employee
         emp = db.query(Employee).filter(Employee.employee_id == employee_id).first()
-        if emp and emp.employee_type != "regular":
-            logger.info(f"Bypassing ADMS push for local-only employee {employee_id} ({emp.employee_type})")
-            log = db.query(PunchLog).filter(PunchLog.id == log_id).first()
-            if log:
-                log.adms_status = "local_only"
-                log.server_sync_status = "local_only"
-                log.synced_at = datetime.utcnow()
-                db.commit()
-            return True
+        if emp:
+            if emp.employee_type != "regular":
+                logger.info(f"Bypassing ADMS push for local-only employee {employee_id} ({emp.employee_type})")
+                log = db.query(PunchLog).filter(PunchLog.id == log_id).first()
+                if log:
+                    log.adms_status = "local_only"
+                    log.server_sync_status = "local_only"
+                    log.synced_at = datetime.utcnow()
+                    db.commit()
+                return True
+            db_employee_name = emp.full_name
     finally:
         db.close()
 
@@ -318,7 +405,7 @@ async def push_to_adms(log_id: int, employee_id: str, timestamp: datetime, punch
     # ADMS silently drops attendance records for unknown PINs
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as reg_client:
-            await register_employee_on_adms(reg_client, server_url, sn, employee_id, employee_name or "Mobile User")
+            await register_employee_on_adms(reg_client, server_url, sn, employee_id, employee_name or db_employee_name or "Mobile User")
     except Exception as e:
         logger.warning(f"Employee pre-registration attempt for {employee_id} failed (non-fatal): {e}")
         # Don't abort the ATTLOG push — the server may still accept it

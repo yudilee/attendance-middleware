@@ -66,6 +66,56 @@
                 </div>
             </div>
 
+            <!-- OVERTIME ENGINE CONFIGS -->
+            <div class="mb-5 p-4 rounded-xl bg-slate-50 border border-slate-200 dark:bg-slate-800/40 dark:border-slate-800">
+                <h3 class="text-sm font-semibold text-slate-700 mb-3 dark:text-slate-300">💰 Tiered Overtime Policy Engine</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5 dark:text-slate-300">OT Multiplier 1 (First Tier)</label>
+                        <input type="number" step="0.1" id="shift_overtime_multiplier_1" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="1.5" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5 dark:text-slate-300">OT Multiplier 2 (Second Tier)</label>
+                        <input type="number" step="0.1" id="shift_overtime_multiplier_2" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="2.0" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5 dark:text-slate-300">Tier 2 Threshold (OT Hours)</label>
+                        <input type="number" step="0.1" id="shift_overtime_threshold_2_hours" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="e.g. 1.0">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5 dark:text-slate-300">Weekend Override Mult</label>
+                        <input type="number" step="0.1" id="shift_weekend_overtime_multiplier" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="2.0" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5 dark:text-slate-300">Holiday Override Mult</label>
+                        <input type="number" step="0.1" id="shift_holiday_overtime_multiplier" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="3.0" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5 dark:text-slate-300">Monthly Overtime Cap (Hrs)</label>
+                        <input type="number" step="0.1" id="shift_monthly_overtime_cap_hours" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="e.g. 40.0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- AUTO CLOCK-OUT CONFIGS -->
+            <div class="mb-5 p-4 rounded-xl bg-slate-50 border border-slate-200 dark:bg-slate-800/40 dark:border-slate-800">
+                <h3 class="text-sm font-semibold text-slate-700 mb-3 dark:text-slate-300">🤖 Automatic Nightly Clock-Out</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="flex items-center">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="shift_auto_clockout_enabled" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 dark:border-slate-700 dark:text-indigo-400">
+                            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Enable Auto Clock-Out at Shift End</span>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5 dark:text-slate-300">Auto Clock-Out Buffer (Minutes)</label>
+                        <input type="number" id="shift_auto_clockout_buffer_minutes" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value="60" required>
+                    </div>
+                </div>
+            </div>
+
             <!-- WEEKLY OPTIONS -->
             <div id="weeklyOptionsContainer" class="mb-5 p-4 rounded-xl bg-slate-50 border border-slate-200 dark:bg-slate-800/40 dark:border-slate-800">
                 <label class="block text-sm font-semibold text-slate-700 mb-3 dark:text-slate-300">Work Days of Week</label>

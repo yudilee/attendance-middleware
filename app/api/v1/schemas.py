@@ -16,6 +16,7 @@ class PunchRequest(BaseModel):
     gps_time_validated: bool = False    # Whether timestamp was cross-validated with GPS
     client_punch_id: Optional[str] = None  # UUID for idempotency (from mobile)
     selfie_base64: Optional[str] = None  # Base64-encoded selfie image
+    signature: Optional[str] = None      # HMAC signature of request payload
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -160,6 +161,7 @@ class BranchRequest(BaseModel):
     company_id: Optional[int] = None
     shift_schedule_id: Optional[int] = None
     timezone_offset: Optional[int] = 7
+    timezone_name: Optional[str] = "Asia/Jakarta"
 
 
 class PunchTypePayload(BaseModel):
@@ -304,6 +306,16 @@ class ShiftScheduleCreate(BaseModel):
     schedule_type: Optional[str] = "weekly"
     interval_days: Optional[int] = None
     anchor_date: Optional[date] = None
+    # Tiered Overtime Policy Engine (Phase 5B)
+    overtime_multiplier_1: float = 1.5
+    overtime_multiplier_2: float = 2.0
+    overtime_threshold_2_hours: Optional[float] = None
+    weekend_overtime_multiplier: float = 2.0
+    holiday_overtime_multiplier: float = 3.0
+    monthly_overtime_cap_hours: Optional[float] = None
+    # Auto Clock-Out Configs (Phase 5C)
+    auto_clockout_enabled: bool = False
+    auto_clockout_buffer_minutes: int = 60
 
 
 class ShiftScheduleUpdate(BaseModel):
@@ -318,6 +330,16 @@ class ShiftScheduleUpdate(BaseModel):
     schedule_type: Optional[str] = None
     interval_days: Optional[int] = None
     anchor_date: Optional[date] = None
+    # Tiered Overtime Policy Engine (Phase 5B)
+    overtime_multiplier_1: Optional[float] = None
+    overtime_multiplier_2: Optional[float] = None
+    overtime_threshold_2_hours: Optional[float] = None
+    weekend_overtime_multiplier: Optional[float] = None
+    holiday_overtime_multiplier: Optional[float] = None
+    monthly_overtime_cap_hours: Optional[float] = None
+    # Auto Clock-Out Configs (Phase 5C)
+    auto_clockout_enabled: Optional[bool] = None
+    auto_clockout_buffer_minutes: Optional[int] = None
 
 
 class ShiftScheduleResponse(BaseModel):
@@ -334,6 +356,16 @@ class ShiftScheduleResponse(BaseModel):
     interval_days: Optional[int]
     anchor_date: Optional[date]
     created_at: datetime
+    # Tiered Overtime Policy Engine (Phase 5B)
+    overtime_multiplier_1: float
+    overtime_multiplier_2: float
+    overtime_threshold_2_hours: Optional[float]
+    weekend_overtime_multiplier: float
+    holiday_overtime_multiplier: float
+    monthly_overtime_cap_hours: Optional[float]
+    # Auto Clock-Out Configs (Phase 5C)
+    auto_clockout_enabled: bool
+    auto_clockout_buffer_minutes: int
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -443,6 +475,37 @@ class AuditLogResponse(BaseModel):
     target_id: Optional[str] = None
     details: Optional[str] = None
     ip_address: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════ Pagination Schemas ═══════════════════
+class PaginationMeta(BaseModel):
+    page: int
+    per_page: int
+    total: int
+    total_pages: int
+
+class PaginatedResponse(BaseModel):
+    data: list
+    pagination: PaginationMeta
+
+
+# ═══════════════════ Roster Schedule Assignment Schemas (Phase 5D) ═══════════════════
+class ScheduleAssignmentCreate(BaseModel):
+    employee_id: str
+    shift_schedule_id: int
+    effective_date: date
+    end_date: Optional[date] = None
+
+class ScheduleAssignmentResponse(BaseModel):
+    id: int
+    employee_id: str
+    shift_schedule_id: int
+    effective_date: date
+    end_date: Optional[date] = None
+    created_by: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -1,4 +1,7 @@
 """Test fixtures and configuration."""
+import os
+os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -46,7 +49,7 @@ def client():
     from app.api.v1.routes.punch import get_db as punch_get_db
     from app.api.v1.routes.device import get_db as device_get_db
     from app.api.v1.routes.supervisor import get_db as supervisor_get_db
-    from app.api.v1.routes.admin_ui import get_db as admin_ui_get_db
+    from app.api.v1.routes.admin.base import get_db as admin_ui_get_db
     from app.api.v1.routes.summary import get_db as summary_get_db
     from app.api.v1.routes.portal import get_db as portal_get_db
     from app.services.auth import get_db as auth_get_db

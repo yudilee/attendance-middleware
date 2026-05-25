@@ -11,7 +11,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.database.models import SessionLocal, Employee, PunchLog, LeaveRequest, AttendanceCorrection, DeviceBinding, Branch, Company
+from app.database.models import (
+    SessionLocal, Employee, PunchLog, LeaveRequest, AttendanceCorrection, 
+    DeviceBinding, Branch, Company, LeaveBalance, OvertimeRequest
+)
 from app.services.report_service import pair_employee_punches
 
 router = APIRouter(tags=["Employee Portal"])
@@ -198,3 +201,123 @@ async def portal_submit_correction(
     db.add(correction)
     db.commit()
     return RedirectResponse(url="/portal/dashboard?success=Punch correction submitted successfully", status_code=302)
+
+
+# ─── Employee Portal Phase 6 Enhancements ───────────────────────────────────
+
+@router.get("/portal/leave-balance")
+async def get_leave_balance(
+    db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee)
+):
+    """Retrieve or create leave balance for current employee and current year."""
+    current_year = datetime.now().year
+    balance = db.query(LeaveBalance).filter(
+        LeaveBalance.employee_id == employee.employee_id,
+        LeaveBalance.year == current_year
+    ).first()
+    
+    if not balance:
+        # Create default balance
+        balance = LeaveBalance(
+            employee_id=employee.employee_id,
+            year=current_year,
+            annual_total=12,
+            annual_used=0,
+            sick_total=12,
+            sick_used=0
+        )
+        db.add(balance)
+        db.commit()
+        db.refresh(balance)
+        
+    return {
+        "year": balance.year,
+        "annual_total": balance.annual_total,
+        "annual_used": balance.annual_used,
+        "annual_remaining": balance.annual_total - balance.annual_used,
+        "sick_total": balance.sick_total,
+        "sick_used": balance.sick_used,
+        "sick_remaining": balance.sick_total - balance.sick_used
+    }
+
+
+@router.get("/portal/attendance-export")
+async def get_attendance_export(
+    db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee)
+):
+    """Export employee's attendance history for the last 30 days as a CSV file."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+    
+    today = date.today()
+    start_d = today - timedelta(days=30)
+    end_d = today
+    
+    paired_data = pair_employee_punches(db, employee, start_d, end_d)
+    records = paired_data.get("daily_records", [])
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow([
+        "Date", "Roster/Shift", "First In", "Last Out", 
+        "Work Duration (hrs)", "Break Duration (hrs)", 
+        "Overtime (hrs)", "Status", "Notes"
+    ])
+    
+    for rec in records:
+        writer.writerow([
+            rec["date"].isoformat() if isinstance(rec["date"], date) else str(rec["date"]),
+            rec.get("shift_name", "Off Day"),
+            rec.get("first_in").strftime("%H:%M:%S") if rec.get("first_in") else "-",
+            rec.get("last_out").strftime("%H:%M:%S") if rec.get("last_out") else "-",
+            round(rec.get("work_duration_hours", 0.0), 2),
+            round(rec.get("break_duration_hours", 0.0), 2),
+            round(rec.get("overtime_hours", 0.0), 2),
+            rec.get("status", "Present"),
+            rec.get("notes", "")
+        ])
+    
+    output.seek(0)
+    
+    filename = f"attendance_history_{employee.employee_id}_{today.isoformat()}.csv"
+    headers = {
+        'Content-Disposition': f'attachment; filename="{filename}"'
+    }
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers=headers)
+
+
+@router.post("/portal/overtime-request")
+async def submit_overtime_request(
+    overtime_date: str = Form(...),
+    hours_requested: float = Form(...),
+    reason: str = Form(""),
+    db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee)
+):
+    """File a pre-approved overtime request to supervisor."""
+    try:
+        ot_date = date.fromisoformat(overtime_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD.")
+        
+    if hours_requested <= 0:
+        raise HTTPException(status_code=400, detail="Hours requested must be greater than zero.")
+        
+    ot_request = OvertimeRequest(
+        employee_id=employee.employee_id,
+        date=ot_date,
+        hours_requested=hours_requested,
+        reason=reason,
+        status="pending"
+    )
+    db.add(ot_request)
+    db.commit()
+    return RedirectResponse(
+        url="/portal/dashboard?success=Overtime request submitted successfully", 
+        status_code=302
+    )

@@ -14,6 +14,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__))))
 # this is the Alembic Config object
 config = context.config
 
+# Overwrite the url from DATABASE_URL env var if available
+db_url = os.environ.get("DATABASE_URL")
+if db_url:
+    config.set_main_option("sqlalchemy.url", db_url)
+
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

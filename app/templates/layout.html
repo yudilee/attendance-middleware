@@ -123,6 +123,10 @@
                     <i class="ph ph-calendar-blank text-lg w-5 text-center flex-shrink-0"></i>
                     <span>Shifts & Schedules</span>
                 </a>
+                <a href="/ui/#roster" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100 transition-all duration-150" data-tab="roster">
+                    <i class="ph ph-calendar text-lg w-5 text-center flex-shrink-0"></i>
+                    <span>Roster Planner</span>
+                </a>
                 <a href="/ui/#employees" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100 transition-all duration-150" data-tab="employees">
                     <i class="ph ph-identification-card text-lg w-5 text-center flex-shrink-0"></i>
                     <span>Employees</span>
@@ -357,6 +361,7 @@
                 if (tabId === 'profile') loadUsers();
                 if (tabId === 'punch-types') loadPunchTypes();
                 if (tabId === 'shift-schedules') loadShiftSchedules();
+                if (tabId === 'roster') loadRosterPlanner();
                 if (tabId === 'settings') loadAdmsSyncSettings();
                 if (tabId === 'employees') loadEmployees();
             }

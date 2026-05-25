@@ -19,11 +19,12 @@ def test_invalid_api_key(client):
 def test_valid_api_key(client, db_session):
     """Request with valid API key should succeed."""
     from app.database.models import ApiKey
+    from app.services.auth import hash_api_key
     
     # Create a test API key (plain key_value, matching verify_api_key logic)
     api_key = "test-api-key-12345"
     api_key_obj = ApiKey(
-        key_value=api_key,
+        key_value=hash_api_key(api_key),
         label="test-key",
         is_active=True
     )
@@ -39,10 +40,11 @@ def test_valid_api_key(client, db_session):
 def test_revoked_api_key(client, db_session):
     """Revoked (inactive) API key should be rejected."""
     from app.database.models import ApiKey
+    from app.services.auth import hash_api_key
     
     api_key = "revoked-key-123"
     api_key_obj = ApiKey(
-        key_value=api_key,
+        key_value=hash_api_key(api_key),
         label="revoked-test",
         is_active=False  # Revoked
     )

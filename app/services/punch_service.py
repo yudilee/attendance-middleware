@@ -101,6 +101,23 @@ def validate_and_prepare_punch(
     if not binding.is_active:
         raise PunchValidationError("Device has been deactivated. Contact admin.", status_code=403)
 
+    # ── HMAC Request Signature Verification ──
+    if punch.signature:
+        if not binding.device_secret:
+            raise PunchValidationError("Device secret not configured for signing.", status_code=403)
+        import hmac
+        import hashlib
+        payload_string = (
+            f"{punch.employee_id or ''}:"
+            f"{punch.device_uuid}:"
+            f"{punch.timestamp}:"
+            f"{punch.punch_type}:"
+            f"{punch.client_punch_id or ''}"
+        )
+        expected = hmac.new(binding.device_secret.encode('utf-8'), payload_string.encode('utf-8'), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(punch.signature, expected):
+            raise PunchValidationError("Invalid request signature.", status_code=403)
+
     # ── 5. Branch assignment + geofencing ──────────────────────────────
     branch_assignments = db.query(BindingBranch).filter(
         BindingBranch.binding_id == binding.id,

@@ -72,6 +72,7 @@
             if (tabId === 'punch-types') loadPunchTypes();
             if (tabId === 'settings') loadAdmsSyncSettings();
             if (tabId === 'employees') loadEmployees();
+            if (tabId === 'roster') loadRosterPlanner();
         }
     }
 
@@ -1162,6 +1163,7 @@
         document.getElementById('branch_company_id').value = '';
         document.getElementById('branch_shift_schedule_id').value = '';
         document.getElementById('branch_timezone_offset').value = '7';
+        document.getElementById('branch_timezone_name').value = 'Asia/Jakarta';
 
         document.getElementById('checkpointNewBranchAlert').style.display = 'block';
         document.getElementById('checkpointContainer').style.display = 'none';
@@ -1213,6 +1215,7 @@
         document.getElementById('branch_company_id').value = branch.company_id || '';
         document.getElementById('branch_shift_schedule_id').value = branch.shift_schedule_id || '';
         document.getElementById('branch_timezone_offset').value = branch.timezone_offset !== null ? branch.timezone_offset : '7';
+        document.getElementById('branch_timezone_name').value = branch.timezone_name || 'Asia/Jakarta';
 
         const gType = branch.geofence_type || 'circle';
         document.getElementById('branch_geofence_type').value = gType;
@@ -1348,6 +1351,7 @@
         const companyIdVal = document.getElementById('branch_company_id').value;
         const shiftIdVal = document.getElementById('branch_shift_schedule_id').value;
         const tzVal = document.getElementById('branch_timezone_offset').value;
+        const tzNameVal = document.getElementById('branch_timezone_name').value;
 
         const payload = {
             name: document.getElementById('branch_name').value.trim(),
@@ -1362,7 +1366,8 @@
             nfc_tag_data: nfcEnabled ? document.getElementById('branch_nfc_data').value.trim() : null,
             company_id: companyIdVal ? parseInt(companyIdVal) : null,
             shift_schedule_id: shiftIdVal ? parseInt(shiftIdVal) : null,
-            timezone_offset: tzVal ? parseInt(tzVal) : 7
+            timezone_offset: tzVal ? parseInt(tzVal) : 7,
+            timezone_name: tzNameVal || "Asia/Jakarta"
         };
         if (!payload.name || isNaN(payload.latitude) || isNaN(payload.longitude)) {
             notify('Please select location on map and enter branch name', 'error'); return;
@@ -2902,6 +2907,14 @@
                                 <span class="text-slate-400 block mb-0.5">🔥 Overtime Limit</span>
                                 <span class="font-bold text-slate-700 dark:text-slate-300 text-sm">${s.overtime_after_hours} hrs</span>
                             </div>
+                            <div>
+                                <span class="text-slate-400 block mb-0.5">💰 OT Multipliers</span>
+                                <span class="font-bold text-slate-700 dark:text-slate-300 text-sm">${s.overtime_multiplier_1 || 1.5}x / ${s.overtime_multiplier_2 || 2.0}x</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block mb-0.5">🤖 Auto Clock-Out</span>
+                                <span class="font-bold text-slate-700 dark:text-slate-300 text-sm">${s.auto_clockout_enabled ? 'Enabled (' + (s.auto_clockout_buffer_minutes || 60) + 'm)' : 'Disabled'}</span>
+                            </div>
                         </div>
 
                         <div class="mt-2.5">
@@ -3000,6 +3013,15 @@
         document.getElementById('shift_overtime_after_hours').value = s.overtime_after_hours;
         document.getElementById('shift_is_default').checked = s.is_default;
         
+        document.getElementById('shift_overtime_multiplier_1').value = s.overtime_multiplier_1 !== undefined ? s.overtime_multiplier_1 : 1.5;
+        document.getElementById('shift_overtime_multiplier_2').value = s.overtime_multiplier_2 !== undefined ? s.overtime_multiplier_2 : 2.0;
+        document.getElementById('shift_overtime_threshold_2_hours').value = s.overtime_threshold_2_hours !== null && s.overtime_threshold_2_hours !== undefined ? s.overtime_threshold_2_hours : '';
+        document.getElementById('shift_weekend_overtime_multiplier').value = s.weekend_overtime_multiplier !== undefined ? s.weekend_overtime_multiplier : 2.0;
+        document.getElementById('shift_holiday_overtime_multiplier').value = s.holiday_overtime_multiplier !== undefined ? s.holiday_overtime_multiplier : 3.0;
+        document.getElementById('shift_monthly_overtime_cap_hours').value = s.monthly_overtime_cap_hours !== null && s.monthly_overtime_cap_hours !== undefined ? s.monthly_overtime_cap_hours : '';
+        document.getElementById('shift_auto_clockout_enabled').checked = !!s.auto_clockout_enabled;
+        document.getElementById('shift_auto_clockout_buffer_minutes').value = s.auto_clockout_buffer_minutes !== undefined && s.auto_clockout_buffer_minutes !== null ? s.auto_clockout_buffer_minutes : 60;
+        
         const type = s.schedule_type || 'weekly';
         document.getElementById('shift_schedule_type').value = type;
         
@@ -3065,6 +3087,17 @@
             workingDays = checkedDays.join(',');
         }
 
+        const overtimeMultiplier1 = parseFloat(document.getElementById('shift_overtime_multiplier_1').value || 1.5);
+        const overtimeMultiplier2 = parseFloat(document.getElementById('shift_overtime_multiplier_2').value || 2.0);
+        const otThreshold2Val = document.getElementById('shift_overtime_threshold_2_hours').value;
+        const overtimeThreshold2Hours = otThreshold2Val !== '' ? parseFloat(otThreshold2Val) : null;
+        const weekendOvertimeMultiplier = parseFloat(document.getElementById('shift_weekend_overtime_multiplier').value || 2.0);
+        const holidayOvertimeMultiplier = parseFloat(document.getElementById('shift_holiday_overtime_multiplier').value || 3.0);
+        const otCapVal = document.getElementById('shift_monthly_overtime_cap_hours').value;
+        const monthlyOvertimeCapHours = otCapVal !== '' ? parseFloat(otCapVal) : null;
+        const autoClockoutEnabled = document.getElementById('shift_auto_clockout_enabled').checked;
+        const autoClockoutBufferMinutes = parseInt(document.getElementById('shift_auto_clockout_buffer_minutes').value || 60);
+
         const payload = {
             name,
             start_time: startTime,
@@ -3076,7 +3109,15 @@
             working_days: workingDays,
             schedule_type: type,
             interval_days: intervalDays,
-            anchor_date: anchorDate || null
+            anchor_date: anchorDate || null,
+            overtime_multiplier_1: overtimeMultiplier1,
+            overtime_multiplier_2: overtimeMultiplier2,
+            overtime_threshold_2_hours: overtimeThreshold2Hours,
+            weekend_overtime_multiplier: weekendOvertimeMultiplier,
+            holiday_overtime_multiplier: holidayOvertimeMultiplier,
+            monthly_overtime_cap_hours: monthlyOvertimeCapHours,
+            auto_clockout_enabled: autoClockoutEnabled,
+            auto_clockout_buffer_minutes: autoClockoutBufferMinutes
         };
 
         const method = id ? 'PUT' : 'POST';
@@ -3316,6 +3357,236 @@
                 }
             } catch(e) {
                 notify('Network error deleting company', 'error');
+            }
+        });
+    }
+
+    // ── Roster & Shift Planner ──────────────────────────────────────
+    let currentRosterYear = new Date().getFullYear();
+    let currentRosterMonth = new Date().getMonth(); // 0-indexed
+
+    async function loadRosterPlanner() {
+        // Update Month Label
+        const monthNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+        document.getElementById('rosterMonthLabel').innerText = `${monthNames[currentRosterMonth]} ${currentRosterYear}`;
+
+        // Populate Employee and Shift Select inputs
+        await populateRosterDropdowns();
+
+        // Load assignments and render grid
+        await renderRosterGrid();
+    }
+
+    async function changeRosterMonth(delta) {
+        currentRosterMonth += delta;
+        if (currentRosterMonth > 11) {
+            currentRosterMonth = 0;
+            currentRosterYear += 1;
+        } else if (currentRosterMonth < 0) {
+            currentRosterMonth = 11;
+            currentRosterYear -= 1;
+        }
+        await loadRosterPlanner();
+    }
+
+    async function populateRosterDropdowns() {
+        const empSelect = document.getElementById('rosterEmployeeSelect');
+        const shiftSelect = document.getElementById('rosterShiftSelect');
+
+        // Fetch employees
+        try {
+            const empRes = await fetch('/ui/employees');
+            if (empRes.ok) {
+                const employees = await empRes.json();
+                empSelect.innerHTML = '<option value="">-- Choose Employee --</option>';
+                employees.forEach(emp => {
+                    empSelect.innerHTML += `<option value="${emp.employee_id}">${emp.full_name} (${emp.employee_id})</option>`;
+                });
+            }
+        } catch (e) {
+            console.error("Error loading employees for roster dropdown", e);
+        }
+
+        // Fetch shifts
+        try {
+            const shiftRes = await fetch('/ui/shift-schedules');
+            if (shiftRes.ok) {
+                const shifts = await shiftRes.json();
+                shiftSelect.innerHTML = '<option value="">-- Choose Shift Override --</option>';
+                shifts.forEach(shift => {
+                    shiftSelect.innerHTML += `<option value="${shift.id}">${shift.name} (${shift.start_time}-${shift.end_time})</option>`;
+                });
+            }
+        } catch (e) {
+            console.error("Error loading shifts for roster dropdown", e);
+        }
+    }
+
+    async function renderRosterGrid() {
+        const headerRow = document.getElementById('rosterHeaderRow');
+        const tbody = document.getElementById('rosterTbody');
+
+        // Clear previous grid columns (keep first one "Employee")
+        headerRow.innerHTML = '<th class="px-4 py-3 text-left min-w-[200px] border-r border-slate-200 dark:border-slate-800">Employee</th>';
+        tbody.innerHTML = '';
+
+        // Get days in the selected month
+        const daysInMonth = new Date(currentRosterYear, currentRosterMonth + 1, 0).getDate();
+
+        // 1. Render Table Headers for each date
+        const dateStrings = []; // YYYY-MM-DD
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${currentRosterYear}-${String(currentRosterMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            dateStrings.push(dateStr);
+
+            const th = document.createElement('th');
+            th.className = "px-2 py-2 text-center border-r border-slate-200 dark:border-slate-800 min-w-[65px]";
+            // Show day name abbreviation + day number
+            const dateObj = new Date(currentRosterYear, currentRosterMonth, day);
+            const dayAbbrev = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+            th.innerHTML = `<span class="block text-[10px] uppercase font-normal text-slate-400 dark:text-slate-500">${dayAbbrev}</span><span class="text-xs font-bold text-slate-800 dark:text-slate-200">${day}</span>`;
+            headerRow.appendChild(th);
+        }
+
+        // 2. Fetch employees and shifts to match assignments
+        try {
+            const [empRes, shiftRes, assignRes] = await Promise.all([
+                fetch('/ui/employees'),
+                fetch('/ui/shift-schedules'),
+                fetch(`/ui/schedule-assignments?start_date=${dateStrings[0]}&end_date=${dateStrings[daysInMonth - 1]}`)
+            ]);
+
+            if (!empRes.ok || !shiftRes.ok || !assignRes.ok) {
+                tbody.innerHTML = '<tr><td colspan="100%" class="px-4 py-8 text-center text-red-500">Failed to fetch roster data</td></tr>';
+                return;
+            }
+
+            const employees = await empRes.json();
+            const shifts = await shiftRes.json();
+            const assignments = await assignRes.json();
+
+            // Create mappings
+            const shiftMap = {};
+            shifts.forEach(s => shiftMap[s.id] = s);
+
+            if (employees.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="100%" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No employees available to schedule.</td></tr>';
+                return;
+            }
+
+            // 3. Render a row per employee
+            employees.forEach(emp => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors";
+
+                // First cell: employee name
+                const tdName = document.createElement('td');
+                tdName.className = "px-4 py-3 font-medium text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800";
+                tdName.innerHTML = `<div class="font-bold">${emp.full_name}</div><div class="text-[10px] text-slate-550 dark:text-slate-400">${emp.employee_id}</div>`;
+                tr.appendChild(tdName);
+
+                // Render each calendar day cell for this employee
+                dateStrings.forEach(dateStr => {
+                    const tdDay = document.createElement('td');
+                    tdDay.className = "px-1 py-2 text-center border-r border-slate-200 dark:border-slate-800 relative group";
+
+                    // Find active assignment for this employee on this date
+                    const activeAssign = assignments.find(a => {
+                        if (a.employee_id !== emp.employee_id) return false;
+                        const effDate = a.effective_date;
+                        const endDate = a.end_date;
+                        return dateStr >= effDate && (!endDate || dateStr <= endDate);
+                    });
+
+                    if (activeAssign) {
+                        const shift = shiftMap[activeAssign.shift_schedule_id];
+                        if (shift) {
+                            tdDay.innerHTML = `
+                                <div class="inline-flex flex-col items-center justify-center rounded-lg bg-indigo-50 border border-indigo-150 px-2 py-1 text-[10px] text-indigo-750 font-bold dark:bg-indigo-950/40 dark:border-indigo-900/60 dark:text-indigo-300 shadow-xs w-full max-w-[80px]" title="${shift.name} (${shift.start_time} - ${shift.end_time})">
+                                    <span class="truncate block max-w-full">${shift.name}</span>
+                                    <span class="text-[8px] opacity-75 font-semibold block">${shift.start_time}-${shift.end_time}</span>
+                                    <button class="absolute -top-1.5 -right-1.5 rounded-full bg-red-100 text-red-700 hover:bg-red-200 h-4 w-4 flex items-center justify-center text-[9px] shadow-sm hidden group-hover:flex transition-all border border-red-200 dark:bg-red-950/80 dark:text-red-300 dark:border-red-900" onclick="deleteRosterAssignment(${activeAssign.id})">
+                                        &times;
+                                    </button>
+                                </div>
+                            `;
+                        } else {
+                            tdDay.innerHTML = `<span class="text-xs text-slate-400 font-mono">ID:${activeAssign.shift_schedule_id}</span>`;
+                        }
+                    } else {
+                        // Empty cell (default schedule)
+                        tdDay.innerHTML = `
+                            <div class="text-[10px] text-slate-400 italic">Default</div>
+                        `;
+                    }
+
+                    tr.appendChild(tdDay);
+                });
+
+                tbody.appendChild(tr);
+            });
+
+        } catch (e) {
+            console.error("Error rendering roster planner grid", e);
+            tbody.innerHTML = '<tr><td colspan="100%" class="px-4 py-8 text-center text-red-500">Error loading planner grid.</td></tr>';
+        }
+    }
+
+    async function assignRosterShift() {
+        const employeeId = document.getElementById('rosterEmployeeSelect').value;
+        const shiftId = document.getElementById('rosterShiftSelect').value;
+        const startDate = document.getElementById('rosterStartDate').value;
+        const endDate = document.getElementById('rosterEndDate').value;
+
+        if (!employeeId || !shiftId || !startDate) {
+            notify('Please specify Employee, Shift, and Start Date.', 'error');
+            return;
+        }
+
+        const payload = {
+            employee_id: employeeId,
+            shift_schedule_id: parseInt(shiftId),
+            effective_date: startDate,
+            end_date: endDate || null
+        };
+
+        try {
+            const res = await fetch('/ui/schedule-assignments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                notify('Shift assignment successfully scheduled!');
+                // Reset inputs
+                document.getElementById('rosterStartDate').value = '';
+                document.getElementById('rosterEndDate').value = '';
+                await renderRosterGrid();
+            } else {
+                const data = await res.json();
+                notify(data.detail || 'Failed to assign roster shift.', 'error');
+            }
+        } catch (e) {
+            notify('Network error when creating roster assignment.', 'error');
+        }
+    }
+
+    async function deleteRosterAssignment(id) {
+        showConfirm('Are you sure you want to delete this roster shift assignment? It will revert to the default shift schedule for that day.', async () => {
+            try {
+                const res = await fetch(`/ui/schedule-assignments/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    notify('Roster shift assignment successfully deleted.');
+                    await renderRosterGrid();
+                } else {
+                    notify('Failed to delete assignment.', 'error');
+                }
+            } catch (e) {
+                notify('Network error when deleting assignment.', 'error');
             }
         });
     }

@@ -72,6 +72,33 @@ def test_portal_login_and_dashboard(client, db_session):
     assert response.status_code == 302
     assert "success" in response.headers["location"]
 
+    # 6. Get leave balance
+    response = client.get("/portal/leave-balance", cookies=cookies)
+    assert response.status_code == 200
+    bal_data = response.json()
+    assert bal_data["annual_total"] == 12
+    assert bal_data["sick_total"] == 12
+
+    # 7. Get attendance export
+    response = client.get("/portal/attendance-export", cookies=cookies)
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    assert "Date,Roster/Shift" in response.text
+
+    # 8. File an overtime request
+    response = client.post(
+        "/portal/overtime-request",
+        data={
+            "overtime_date": "2026-05-25",
+            "hours_requested": 2.5,
+            "reason": "Production hotfix deployment."
+        },
+        cookies=cookies,
+        follow_redirects=False
+    )
+    assert response.status_code == 302
+    assert "success" in response.headers["location"]
+
 
 def test_ui_analytics_endpoint(client, db_session):
     """Verify that the /ui/analytics endpoint calculates correct attendance stats."""
@@ -84,9 +111,11 @@ def test_ui_analytics_endpoint(client, db_session):
     token = create_access_token({"sub": "admin"})
     cookies = {"dashboard_session": token}
 
-    # Create dummy admin user in database
-    admin = AdminUser(username="admin", hashed_password="dummy_password", role="superadmin")
-    db_session.add(admin)
+    # Create dummy admin user in database if not exists
+    admin = db_session.query(AdminUser).filter(AdminUser.username == "admin").first()
+    if not admin:
+        admin = AdminUser(username="admin", hashed_password="dummy_password", role="superadmin")
+        db_session.add(admin)
     
     # Create basic data
     company = Company(name="Analytics Corp", code="AC")

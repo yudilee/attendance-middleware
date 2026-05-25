@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     api_key_salt: str = "change-this-too"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
+    encryption_key: str = "change-this-encryption-key-to-32-bytes-urlsafe-base64-key="
     
     # App
     min_app_version: str = "1.0.0"

@@ -15,14 +15,16 @@ if DATABASE_URL.startswith("sqlite"):
 else:
     engine = create_engine(
         DATABASE_URL,
-        pool_size=5,
-        max_overflow=10,
-        pool_pre_ping=True
+        pool_size=3,
+        max_overflow=5,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+        pool_timeout=20,
     )
 SessionLocal = sessionmaker(bind=engine)
 
 async def sync_punches_to_adms(ctx, punch_log_id: int) -> dict:
-    """Push a single punch log to ADMS server. Retries with exponential backoff."""
+    """Push a single punch log to ADMS server. Retries with exponential backoff and dead-letter auditing."""
     from app.services.adms_service import push_to_adms as do_push
     db = SessionLocal()
     try:
@@ -41,9 +43,36 @@ async def sync_punches_to_adms(ctx, punch_log_id: int) -> dict:
             punch.server_sync_status = "failed"
             punch.sync_error = "ADMS push returned failure"
             punch.sync_retry_count = (punch.sync_retry_count or 0) + 1
+            if punch.sync_retry_count >= 5:
+                from app.database.models import AuditLog
+                log_entry = AuditLog(
+                    admin_username="arq_worker",
+                    action="job_dead_letter",
+                    target_type="PunchLog",
+                    target_id=str(punch_log_id),
+                    details="Permanent failure pushing punch to ADMS. Retries exhausted (5/5). Error: ADMS push returned failure",
+                )
+                db.add(log_entry)
             db.commit()
             return {"status": "failed", "punch_id": punch_log_id, "error": "ADMS push returned failure"}
     except Exception as e:
+        from app.database.models import PunchLog
+        punch = db.query(PunchLog).filter(PunchLog.id == punch_log_id).first()
+        if punch:
+            punch.server_sync_status = "failed"
+            punch.sync_error = str(e)
+            punch.sync_retry_count = (punch.sync_retry_count or 0) + 1
+            if punch.sync_retry_count >= 5:
+                from app.database.models import AuditLog
+                log_entry = AuditLog(
+                    admin_username="arq_worker",
+                    action="job_dead_letter",
+                    target_type="PunchLog",
+                    target_id=str(punch_log_id),
+                    details=f"Permanent failure pushing punch to ADMS. Retries exhausted (5/5). Error: {e}",
+                )
+                db.add(log_entry)
+            db.commit()
         return {"status": "error", "punch_id": punch_log_id, "error": str(e)}
     finally:
         db.close()
@@ -197,7 +226,7 @@ async def nightly_missing_punch_scan(ctx):
     Nightly scan running at 23:30.
     1. Resolves employee shifts for today.
     2. Identifies missing punches (only one punch or no punches on a working day).
-    3. Auto-creates a pending AttendanceCorrection entry if a check-in is unpaired.
+    3. Auto-creates a pending AttendanceCorrection entry in a single batch commit if a check-in is unpaired.
     4. Dispatches an FCM notification.
     """
     from datetime import date
@@ -212,6 +241,9 @@ async def nightly_missing_punch_scan(ctx):
         employees = db.query(Employee).filter(Employee.is_deleted == False, Employee.is_active == True).all()
         
         flagged_count = 0
+        corrections_to_add = []
+        notifications_to_send = []
+
         for emp in employees:
             # Pair punches for today
             paired = pair_employee_punches(db, emp, today, today)
@@ -223,44 +255,98 @@ async def nightly_missing_punch_scan(ctx):
             
             # Check if this has an unpaired check-in
             if record.get("first_in") and not record.get("last_out"):
-                # Missing punch! Check if we already created a correction request for this date
-                existing = db.query(AttendanceCorrection).filter(
-                    AttendanceCorrection.employee_id == emp.employee_id,
-                    AttendanceCorrection.correction_type == "missing_punch",
-                    AttendanceCorrection.created_at >= datetime.combine(today, datetime.time.min)
-                ).first()
-                
-                if not existing:
-                    # Auto-create correction
-                    correction = AttendanceCorrection(
-                        employee_id=emp.employee_id,
-                        correction_type="missing_punch",
-                        description=f"Auto-flagged missing check-out punch on {today}.",
-                        status="pending"
-                    )
-                    db.add(correction)
-                    db.commit()
+                shift = resolve_employee_shift(db, emp, today)
+                if getattr(shift, "auto_clockout_enabled", False):
+                    # Auto clock-out is enabled! Generate a clock-out punch instead of raising correction
+                    try:
+                        sh_hour, sh_min = map(int, shift.end_time.split(":"))
+                        # Fetch today's punches to resolve tz offset
+                        db_start = datetime.combine(today - timedelta(days=1), datetime.min.time())
+                        db_end = datetime.combine(today + timedelta(days=1), datetime.max.time())
+                        day_punches = db.query(PunchLog).filter(
+                            PunchLog.employee_id == emp.employee_id,
+                            PunchLog.timestamp >= db_start,
+                            PunchLog.timestamp <= db_end
+                        ).all()
+                        
+                        in_punches = [p for p in day_punches if p.punch_type.lower() in ["in", "check in"]]
+                        first_in_log = in_punches[0] if in_punches else None
+                        tz_offset = 420
+                        if first_in_log and first_in_log.tz_offset_minutes is not None:
+                            tz_offset = first_in_log.tz_offset_minutes
+                            
+                        local_end_dt = datetime.combine(today, datetime.time(sh_hour, sh_min))
+                        utc_timestamp = local_end_dt - timedelta(minutes=tz_offset)
+                        
+                        auto_punch = PunchLog(
+                            employee_id=emp.employee_id,
+                            device_uuid="auto_clockout_system",
+                            timestamp=utc_timestamp,
+                            latitude=0.0,
+                            longitude=0.0,
+                            is_mock_location=False,
+                            biometric_verified=False,
+                            punch_type="Out",
+                            tz_offset_minutes=tz_offset,
+                            adms_status="local_only",
+                            is_auto_generated=True,
+                            notes=f"Auto-generated clock-out punch at shift end ({shift.end_time})."
+                        )
+                        db.add(auto_punch)
+                    except Exception:
+                        # Fallback to manual correction if error
+                        correction = AttendanceCorrection(
+                            employee_id=emp.employee_id,
+                            correction_type="missing_punch",
+                            description=f"Auto-flagged missing check-out punch on {today}.",
+                            status="pending"
+                        )
+                        corrections_to_add.append(correction)
+                        flagged_count += 1
+                else:
+                    # Missing punch! Check if we already created a correction request for this date
+                    existing = db.query(AttendanceCorrection).filter(
+                        AttendanceCorrection.employee_id == emp.employee_id,
+                        AttendanceCorrection.correction_type == "missing_punch",
+                        AttendanceCorrection.created_at >= datetime.combine(today, datetime.time.min)
+                    ).first()
                     
-                    flagged_count += 1
-                    
-                    # Fire FCM push notification to employee's devices
-                    devices = db.query(DeviceBinding).filter(
-                        DeviceBinding.employee_id == emp.employee_id,
-                        DeviceBinding.is_active == True,
-                        DeviceBinding.fcm_token.isnot(None),
-                        DeviceBinding.fcm_token != ""
-                    ).all()
-                    
-                    for dev in devices:
-                        try:
-                            send_push_notification(
-                                fcm_token=dev.fcm_token,
-                                title="⏰ Missing Clock-Out Detected",
-                                body=f"Hi {emp.full_name}, we noticed you missed clocking out today ({today}). Please file a correction in the Employee Portal.",
-                                data={"type": "missing_punch_alert"}
-                            )
-                        except Exception:
-                            pass
+                    if not existing:
+                        # Auto-create correction and queue for bulk insert
+                        correction = AttendanceCorrection(
+                            employee_id=emp.employee_id,
+                            correction_type="missing_punch",
+                            description=f"Auto-flagged missing check-out punch on {today}.",
+                            status="pending"
+                        )
+                        corrections_to_add.append(correction)
+                        flagged_count += 1
+                        
+                        # Store information to trigger notification sending later
+                        devices = db.query(DeviceBinding).filter(
+                            DeviceBinding.employee_id == emp.employee_id,
+                            DeviceBinding.is_active == True,
+                            DeviceBinding.fcm_token.isnot(None),
+                            DeviceBinding.fcm_token != ""
+                        ).all()
+                        for dev in devices:
+                            notifications_to_send.append((dev.fcm_token, emp.full_name))
+
+        if corrections_to_add:
+            db.add_all(corrections_to_add)
+            db.commit()
+
+        # Fire FCM push notifications to employee's devices
+        for fcm_token, full_name in notifications_to_send:
+            try:
+                send_push_notification(
+                    fcm_token=fcm_token,
+                    title="⏰ Missing Clock-Out Detected",
+                    body=f"Hi {full_name}, we noticed you missed clocking out today ({today}). Please file a correction in the Employee Portal.",
+                    data={"type": "missing_punch_alert"}
+                )
+            except Exception:
+                pass
                             
         return {"status": "success", "flagged_missing_punches": flagged_count}
     except Exception as e:
@@ -295,7 +381,8 @@ async def email_scheduled_reports(ctx):
         SMTP_PORT_STR = get_config_val("smtp_port", "")
         SMTP_PORT = int(SMTP_PORT_STR) if SMTP_PORT_STR else int(os.getenv("SMTP_PORT", "587"))
         SMTP_USER = get_config_val("smtp_user", os.getenv("SMTP_USER", ""))
-        SMTP_PASSWORD = get_config_val("smtp_password", os.getenv("SMTP_PASSWORD", ""))
+        from app.services.crypto import decrypt_value
+        SMTP_PASSWORD = decrypt_value(get_config_val("smtp_password", os.getenv("SMTP_PASSWORD", "")))
         HR_RECIPIENTS = get_config_val("hr_email_recipients", os.getenv("HR_EMAIL_RECIPIENTS", ""))
 
         if not SMTP_HOST or not HR_RECIPIENTS:
@@ -355,8 +442,85 @@ async def email_scheduled_reports(ctx):
         db.close()
 
 
+async def deliver_webhook(ctx, webhook_id: int, event: str, payload: dict):
+    """Deliver webhook payload asynchronously to endpoint with HMAC signing (Phase 5F)."""
+    import httpx
+    import hmac
+    import hashlib
+    import json
+    from datetime import datetime
+    from app.database.models import SessionLocal, Webhook, WebhookDelivery
+
+    db = SessionLocal()
+    try:
+        webhook = db.query(Webhook).filter(Webhook.id == webhook_id, Webhook.is_active == True).first()
+        if not webhook:
+            return {"status": "skipped", "reason": "webhook_not_found_or_inactive"}
+
+        body = {
+            "event": event,
+            "timestamp": datetime.utcnow().isoformat(),
+            "data": payload
+        }
+        body_str = json.dumps(body)
+        body_bytes = body_str.encode("utf-8")
+
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Attendance-Webhook-Dispatcher/1.0"
+        }
+
+        if webhook.secret:
+            signature = hmac.new(webhook.secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
+            headers["X-Webhook-Signature"] = signature
+
+        # Perform POST request
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                response = await client.post(webhook.url, content=body_bytes, headers=headers)
+                status_code = response.status_code
+                error_msg = None if 200 <= status_code < 300 else f"HTTP {status_code}: {response.text[:200]}"
+            except Exception as e:
+                status_code = None
+                error_msg = str(e)
+
+        # Log delivery attempt
+        delivery = WebhookDelivery(
+            webhook_id=webhook_id,
+            event=event,
+            payload=body_str,
+            response_status=status_code,
+            delivered_at=datetime.utcnow() if error_msg is None else None,
+            error=error_msg
+        )
+        db.add(delivery)
+        db.commit()
+
+        if error_msg:
+            # Raise exception to trigger ARQ worker retry mechanism
+            raise RuntimeError(f"Webhook delivery failed: {error_msg}")
+
+        return {"status": "success", "status_code": status_code}
+
+    finally:
+        db.close()
+
+
+async def startup(ctx):
+    """ARQ worker startup hook — verify DB and Redis connectivity."""
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+        print("worker_startup_db_ok: Backing database connectivity is verified.")
+    except Exception as e:
+        print(f"worker_startup_db_failed: Backing database connectivity verified error: {e}")
+    finally:
+        db.close()
+
+
 # Worker settings
 class WorkerSettings:
+    on_startup = startup
     functions = [
         sync_punches_to_adms,
         retry_failed_punches,
@@ -365,7 +529,8 @@ class WorkerSettings:
         send_clock_in_reminders,
         cleanup_stale_selfies,
         nightly_missing_punch_scan,
-        email_scheduled_reports
+        email_scheduled_reports,
+        deliver_webhook
     ]
     redis_settings = arq.connections.RedisSettings(
         host=os.getenv("REDIS_HOST", "redis"),

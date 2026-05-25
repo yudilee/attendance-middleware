@@ -109,7 +109,7 @@
                         <input type="text" id="branch_name" class="block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="E.g. Main Office" required onfocus="setMapMode('primary')">
                     </div>
                     
-                    <div class="grid grid-cols-3 gap-3 mt-3">
+                    <div class="grid grid-cols-4 gap-3 mt-3">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Company</label>
                             <select id="branch_company_id" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
@@ -123,12 +123,23 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Timezone Offset</label>
+                            <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Offset (GMT)</label>
                             <select id="branch_timezone_offset" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                                 <option value="7">GMT+7 (WIB)</option>
                                 <option value="8">GMT+8 (WITA)</option>
                                 <option value="9">GMT+9 (WIT)</option>
                                 <option value="0">GMT+0 (UTC)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1.5 dark:text-slate-300">Timezone (IANA)</label>
+                            <select id="branch_timezone_name" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                                <option value="Asia/Jakarta">Asia/Jakarta (WIB)</option>
+                                <option value="Asia/Makassar">Asia/Makassar (WITA)</option>
+                                <option value="Asia/Jayapura">Asia/Jayapura (WIT)</option>
+                                <option value="UTC">UTC / GMT</option>
+                                <option value="Asia/Singapore">Asia/Singapore</option>
+                                <option value="Asia/Kuala_Lumpur">Asia/Kuala_Lumpur</option>
                             </select>
                         </div>
                     </div>

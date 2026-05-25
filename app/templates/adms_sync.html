@@ -63,6 +63,9 @@
                 <button onclick="triggerFullSync()" class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm">
                     <i class="ph ph-sync"></i> Trigger Full Sync
                 </button>
+                <button onclick="triggerNamesSyncToADMS()" class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm">
+                    <i class="ph ph-user-list"></i> Sync Local Names to ADMS Server
+                </button>
             </div>
         </div>
 
@@ -154,6 +157,25 @@ async function triggerFullSync() {
         if (res.ok) {
             notify('Full sync triggered');
             setTimeout(() => location.reload(), 2000);
+        }
+    } catch (e) {
+        notify('Failed to trigger sync', 'error');
+    }
+}
+
+async function triggerNamesSyncToADMS() {
+    if (!confirm('This will push all local employee names to the ADMS server to update/restore their names. Continue?')) return;
+    try {
+        const res = await fetch('/ui/adms-sync-to-server', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await res.json();
+        if (res.ok) {
+            notify(data.message || 'Sync successful');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            notify(data.detail || 'Failed to sync names', 'error');
         }
     } catch (e) {
         notify('Failed to trigger sync', 'error');
