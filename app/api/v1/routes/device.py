@@ -295,6 +295,43 @@ async def update_fcm_token(
     raise HTTPException(status_code=404, detail="Device not found")
 
 
+@router.get("/api/v1/admin/check-onboard-status")
+async def check_onboard_status(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Check if a device has been registered using this onboarding token.
+    Used by the admin UI to poll for device registration completion.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return {"registered": False, "error": "Invalid token"}
+    
+    api_key_id = payload.get("key_id")
+    if not api_key_id:
+        return {"registered": False, "error": "Invalid token payload"}
+    
+    # Check if any device binding was created with this API key
+    binding = db.query(DeviceBinding).filter(
+        DeviceBinding.api_key_id == api_key_id,
+        DeviceBinding.registration_status.in_(["active", "approved"]),
+    ).first()
+    
+    if binding:
+        employee_name = None
+        emp = db.query(Employee).filter(Employee.employee_id == binding.employee_id).first()
+        if emp and emp.full_name:
+            employee_name = emp.full_name
+        return {
+            "registered": True,
+            "device_uuid": binding.device_uuid,
+            "employee_id": binding.employee_id,
+            "employee_name": employee_name or "",
+        }
+    
+    return {"registered": False}
+
 @router.post("/api/v1/admin/generate-onboard-qr")
 async def generate_onboard_qr(
     req: OnboardGenerateRequest,

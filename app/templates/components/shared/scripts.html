@@ -2373,6 +2373,11 @@
     function closeOnboardingModal() {
         document.getElementById('onboardModal').classList.add('hidden');
         document.getElementById('onboardModal').style.display = 'none';
+        // Clear polling timer if active
+        if (_onboardPollTimer) {
+            clearInterval(_onboardPollTimer);
+            _onboardPollTimer = null;
+        }
     }
 
     async function generateOnboardQR() {
@@ -2418,10 +2423,52 @@
             if (data.api_key) {
                 notify(`QR generated! API Key: ${data.api_key.substring(0, 20)}...`);
             }
+            
+            // Start polling for device registration
+            pollOnboardStatus(data.token);
         } catch(err) {
             console.error('QR generation error:', err);
             notify(err.message || 'Failed to generate QR');
         }
+    }
+    
+    // ── Poll for QR onboarding completion ────────────────────────────────────────
+    let _onboardPollTimer = null;
+    
+    async function pollOnboardStatus(token) {
+        if (_onboardPollTimer) clearInterval(_onboardPollTimer);
+        
+        _onboardPollTimer = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/v1/admin/check-onboard-status?token=${encodeURIComponent(token)}`);
+                if (!res.ok) return;
+                const status = await res.json();
+                
+                if (status.registered) {
+                    clearInterval(_onboardPollTimer);
+                    _onboardPollTimer = null;
+                    
+                    // Close the onboarding modal
+                    const onboardM = document.getElementById('onboardModal');
+                    if (onboardM) {
+                        onboardM.classList.add('hidden');
+                        onboardM.style.display = 'none';
+                    }
+                    
+                    // Reset views back to device list
+                    resetAllViews();
+                    
+                    // Refresh the device table via AJAX
+                    refreshDevicesTable();
+                    
+                    // Show notification
+                    notify(`Device registered: ${status.employee_name || status.employee_id} is now active!`, 'success');
+                }
+            } catch(e) {
+                // Silently retry on error
+                console.warn('Poll onboard status error:', e);
+            }
+        }, 2000); // Poll every 2 seconds
     }
 
     // ── Employee Data Management ───────────────────────────────────────────────
