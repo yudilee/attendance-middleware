@@ -322,7 +322,7 @@ async def generate_onboard_qr(
             is_active=True,
         )
         db.add(new_key)
-        db.flush()
+        db.commit()
         db.refresh(new_key)
         api_key_id = new_key.id
         created_api_key = key_value
