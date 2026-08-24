@@ -67,15 +67,7 @@ def validate_and_prepare_punch(
     if not punch.biometric_verified:
         raise PunchValidationError("Biometric verification failed.")
 
-    # ── 3. Punch type validation ────────────────────────────────────────
-    valid_type = db.query(PunchType).filter(
-        PunchType.code == punch.punch_type,
-        PunchType.is_active == True
-    ).first()
-    if not valid_type:
-        raise PunchValidationError(f"Invalid punch type: '{punch.punch_type}'")
-
-    # ── 4. Device binding check ────────────────────────────────────────
+    # ── 3. Device binding check ────────────────────────────────────────
     if binding is None:
         binding = db.query(DeviceBinding).filter(
             DeviceBinding.device_uuid == punch.device_uuid
@@ -100,6 +92,56 @@ def validate_and_prepare_punch(
         raise PunchValidationError("Device suspended. Contact admin.", status_code=403)
     if not binding.is_active:
         raise PunchValidationError("Device has been deactivated. Contact admin.", status_code=403)
+
+    # ── 4. Punch type resolution & validation ────────────────────────────
+    requested_type = (punch.punch_type or "auto").strip().lower()
+    resolved_type = requested_type
+
+    # Smart sequence resolution: inspect employee's latest punch today
+    tz_offset = timedelta(minutes=punch.tz_offset_minutes if punch.tz_offset_minutes is not None else 420)
+    device_local_now = datetime.utcnow() + tz_offset
+    today_start_local = datetime(device_local_now.year, device_local_now.month, device_local_now.day)
+    today_start_utc = today_start_local - tz_offset
+    today_end_utc = today_start_utc + timedelta(days=1)
+
+    latest_today_punch = db.query(PunchLog).filter(
+        PunchLog.employee_id == effective_employee_id,
+        PunchLog.timestamp >= today_start_utc,
+        PunchLog.timestamp < today_end_utc
+    ).order_by(PunchLog.timestamp.desc()).first()
+
+    if requested_type in ["auto", "in"]:
+        if latest_today_punch:
+            last_type = (latest_today_punch.punch_type or "").strip().lower()
+            time_since_last = (datetime.utcnow() - (latest_today_punch.timestamp or datetime.utcnow())).total_seconds()
+            if last_type in ["in", "check in"]:
+                # If user already clocked in today and is punching again (after 2 min grace period), auto-resolve to 'out'
+                if time_since_last >= 120 or requested_type == "auto":
+                    resolved_type = "out"
+                else:
+                    resolved_type = "in"
+            elif last_type in ["out", "check out"]:
+                resolved_type = "in"
+            else:
+                resolved_type = "in"
+        else:
+            resolved_type = "in"
+
+    valid_type = db.query(PunchType).filter(
+        PunchType.code == resolved_type,
+        PunchType.is_active == True
+    ).first()
+
+    if not valid_type:
+        # Fallback to standard check
+        valid_type = db.query(PunchType).filter(
+            PunchType.code == punch.punch_type,
+            PunchType.is_active == True
+        ).first()
+        if not valid_type:
+            resolved_type = "in" if resolved_type == "auto" else punch.punch_type
+
+    effective_punch_type = resolved_type.capitalize() if resolved_type in ["in", "out"] else resolved_type
 
     # ── HMAC Request Signature Verification ──
     if punch.signature:
@@ -220,7 +262,7 @@ def validate_and_prepare_punch(
         "longitude": punch.longitude,
         "is_mock_location": punch.is_mock_location,
         "biometric_verified": punch.biometric_verified,
-        "punch_type": punch.punch_type,
+        "punch_type": effective_punch_type,
         "tz_offset_minutes": punch.tz_offset_minutes,
         "adms_status": "pending",
         "server_sync_status": "pending",

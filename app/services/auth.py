@@ -50,6 +50,13 @@ def verify_api_key(api_key: str = Security(API_KEY_HEADER), db: Session = Depend
         ApiKey.is_active == True
     ).first()
 
+    # Fallback: check if key is stored unhashed (e.g. legacy or freshly generated via onboarding)
+    if not key_record:
+        key_record = db.query(ApiKey).filter(
+            ApiKey.key_value == api_key,
+            ApiKey.is_active == True
+        ).first()
+
     if not key_record:
         raise HTTPException(status_code=401, detail="Invalid or inactive API Key.")
 

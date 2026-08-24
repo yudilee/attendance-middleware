@@ -98,6 +98,18 @@ async def lifespan(app: FastAPI):
             )
             db.add(default_admin)
             db.commit()
+
+        # Auto-migrate unhashed API keys if any exist
+        from app.database.models import ApiKey
+        from app.services.auth import hash_api_key
+        unhashed_keys = db.query(ApiKey).filter(~ApiKey.key_value.startswith("sha256:")).all()
+        if unhashed_keys:
+            for k in unhashed_keys:
+                k.key_value = hash_api_key(k.key_value)
+            db.commit()
+            logger.info("auto_migrated_api_keys", count=len(unhashed_keys))
+    except Exception as e:
+        logger.warning("startup_init_check_warning", error=str(e))
     finally:
         db.close()
 

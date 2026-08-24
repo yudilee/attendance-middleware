@@ -4,6 +4,7 @@ import os
 import uuid
 import structlog
 from datetime import datetime, timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import FileResponse
@@ -15,7 +16,7 @@ from app.database.models import (
     Employee, ADMSRegisteredEmployee, ApiKey, PunchLog,
     AppConfig, BranchCheckpoint,
 )
-from app.services.auth import verify_api_key
+from app.services.auth import verify_api_key, hash_api_key
 from app.services.auth_ui import SECRET_KEY, ALGORITHM, get_current_admin
 from app.api.v1.schemas import (
     DeviceConfigResponse, BranchInfo,
@@ -352,17 +353,17 @@ async def generate_onboard_qr(
     
     if req.key_label and req.key_label.strip():
         # Create a new unique API key for this device
-        key_value = f"mob_{secrets.token_hex(32)}"
+        plain_key = f"mob_{secrets.token_hex(32)}"
         new_key = ApiKey(
             label=req.key_label.strip(),
-            key_value=key_value,
+            key_value=hash_api_key(plain_key),
             is_active=True,
         )
         db.add(new_key)
         db.commit()
         db.refresh(new_key)
         api_key_id = new_key.id
-        created_api_key = key_value
+        created_api_key = plain_key
         logger.info("auto_created_api_key", key_id=new_key.id, label=req.key_label.strip())
     elif not api_key_id:
         raise HTTPException(status_code=400, detail="Either api_key_id or key_label must be provided")
@@ -540,3 +541,34 @@ async def onboard_device(
     resp["api_key"] = api_key.key_value if api_key else ""
     resp["device_secret"] = binding.device_secret or ""
     return resp
+
+
+@router.get("/api/v1/device/diagnostics")
+async def device_diagnostics(
+    device_uuid: str,
+    employee_id: Optional[str] = None,
+    api_key: ApiKey = Depends(verify_api_key),
+    db: Session = Depends(get_db),
+):
+    """
+    Self-test / diagnostics endpoint for mobile app.
+    Validates API key, device registration status, server clock, and branch connectivity.
+    """
+    binding = db.query(DeviceBinding).filter(DeviceBinding.device_uuid == device_uuid).first()
+    branches_count = 0
+    if binding:
+        branches_count = db.query(BindingBranch).filter(BindingBranch.binding_id == binding.id).count()
+
+    return {
+        "status": "ok",
+        "api_key_valid": True,
+        "api_key_label": api_key.label,
+        "device_registered": binding is not None,
+        "device_status": binding.registration_status if binding else "not_registered",
+        "device_active": binding.is_active if binding else False,
+        "assigned_branches_count": branches_count,
+        "employee_id": binding.employee_id if binding else employee_id,
+        "server_time_utc": datetime.utcnow().isoformat(),
+        "server_time_local": datetime.now().isoformat(),
+    }
+
