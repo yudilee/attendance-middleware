@@ -15,11 +15,11 @@ class Settings(BaseSettings):
     adms_device_name: Optional[str] = "AttendanceMiddleware"
     
     # Security
-    secret_key: str = "change-this-in-production"
-    api_key_salt: str = "change-this-too"
+    secret_key: Optional[str] = None
+    api_key_salt: Optional[str] = None
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
-    encryption_key: str = "change-this-encryption-key-to-32-bytes-urlsafe-base64-key="
+    encryption_key: Optional[str] = None
     
     # App
     min_app_version: str = "1.0.0"
